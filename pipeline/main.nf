@@ -116,7 +116,7 @@ process converter_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug=true --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
+    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
 
     echo "[${task.tag}] completed!"
     """
@@ -172,7 +172,7 @@ process motion_correction {
     cd capsule/code
     ls -la /data
     chmod +x run
-    ./run --debug
+    ./run
     echo "[${task.tag}] completed!"
     """
 }
@@ -275,7 +275,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug
+    ./run
 
     echo "[${task.tag}] completed!"
     """
