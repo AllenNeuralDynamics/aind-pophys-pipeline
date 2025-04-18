@@ -65,8 +65,6 @@ workflow {
             ophys_mount_jsons.collect()
         )
 
-        println "Oasis Event Detection Capsule"
-        oasis_event_detection_capsule.out.view()
     } else {
         println "Key does not contain 'multi'"
     }
