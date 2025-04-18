@@ -65,6 +65,25 @@ workflow {
             ophys_mount_jsons.collect()
         )
 
+        // Run Quality Control Aggregator
+        quality_control_aggregator(
+            motion_correction.out.motion_qc_json.collect(),
+            decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
+            extraction_suite2p_capsule.out.extraction_qc_json.collect(),
+            dff_capsule.out.dff_qc_json.collect(),
+            oasis_event_detection_capsule.out.events_qc_json.collect()
+        )
+
+        // Run Pipeline Processing Metadata Aggregator
+        pipeline_processing_metadata_aggregator(
+            motion_correction.out.motion_data_process_json.collect(),
+            decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
+            extraction_suite2p_capsule.out.extraction_data_process_json.collect(),
+            dff_capsule.out.dff_data_process_json.collect(),
+            oasis_event_detection_capsule.out.events_data_process_json.collect(),
+            ophys_mount_jsons.collect()
+        )
+        
     } else {
         println "Key does not contain 'multi'"
     }
@@ -139,6 +158,8 @@ process motion_correction {
     path 'capsule/results/*'
     path 'capsule/results/V*', emit: 'motion_results', optional: true
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
+    path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
+    path 'capsule/results/*/*/*.json', emit: 'motion_qc_json', optional: true
 
     script:
     """
@@ -192,6 +213,7 @@ process decrosstalk_split_json_capsule {
     output:
     path 'capsule/results/*', emit: 'capsule_results'
     
+    
     script:
     """
     #!/usr/bin/env bash
@@ -243,6 +265,8 @@ process decrosstalk_roi_images {
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
+    path 'capsule/results/*/*/*data_process.json', emit: 'decrosstalk_data_process_json', optional: true
+    path 'capsule/results/*/*/*.json', emit: 'decrosstalk_qc_json', optional: true
     
     script:
     """
@@ -294,6 +318,8 @@ process extraction_suite2p_capsule {
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
+    path 'capsule/results/*/*/*data_process.json', emit: 'extraction_data_process_json', optional: true
+    path 'capsule/results/*/*/*.json', emit: 'extraction_qc_json', optional: true
 
 
     script:
@@ -344,6 +370,8 @@ process dff_capsule {
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
+    path 'capsule/results/*/*/*data_process.json', emit: 'dff_data_process_json', optional: true
+    path 'capsule/results/*/*/*.json', emit: 'dff_qc_json', optional: true
 
     script:
     """
@@ -394,6 +422,8 @@ process oasis_event_detection_capsule {
 
     output:
     path 'capsule/results/*'
+    path 'capsule/results/*/*/*data_process.json', emit: 'events_data_process_json', optional: true
+    path 'capsule/results/*/*/*.json', emit: 'events_qc_json', optional: true
 
     script:
     """
@@ -425,4 +455,101 @@ process oasis_event_detection_capsule {
 
     echo "[${task.tag}] completed!"
     """
+}
+
+// capsule - aind-ophys-quality-control-aggregator
+process quality_control_aggregator {
+	tag 'capsule-4044810'
+	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v3"
+
+	cpus 1
+	memory '8 GB'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+	path motion_correction_results
+    path decrosstalk_results
+    path extraction_suite2p_results
+    path dff_results
+    path oasis_event_detection_results
+
+	output:
+	path 'capsule/results/*'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=4a698b5c-f5f6-4671-8234-dc728d049a68
+	export CO_CPUS=1
+	export CO_MEMORY=8589934592
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v3.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run
+
+	echo "[${task.tag}] completed!"
+	"""
+}
+
+// capsule - aind-pipeline-processing-metadata-aggregator
+process pipeline_processing_metadata_aggregator {
+	tag 'capsule-8250608'
+	container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v4"
+
+	cpus 2
+	memory '16 GB'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+    path motion_correction_results
+    path decrosstalk_results
+    path extraction_suite2p_results
+    path dff_results
+    path oasis_event_detection_results
+    path ophys_mount_jsons
+
+	output:
+	path 'capsule/results/*'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=d51df783-d892-4304-a129-238a9baea72a
+	export CO_CPUS=2
+	export CO_MEMORY=17179869184
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run --processor_full_name "Arielle Leon" --copy-ancillary-files True --derived-data-description True
+
+	echo "[${task.tag}] completed!"
+	"""
 }
