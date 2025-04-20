@@ -1,0 +1,20 @@
+{
+	"version": 1,
+	"named_parameters": true,
+	"parameters": [
+		{
+			"id": "ctwzhZAAH2W1iPIw",
+			"name": "Data Type",
+			"param_name": "data_type",
+			"description": "Indicate if this is a single or multiplane data asset",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "single",
+			"required": true,
+			"extra_data": [
+				"single",
+				"multiplane"
+			]
+		}
+	]
+}
