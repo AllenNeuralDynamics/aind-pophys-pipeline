@@ -3,7 +3,6 @@
 nextflow.enable.dsl = 2
 
 params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/multiplane-ophys_767018_2025-02-10_13-04-43'
-params.name = "multiplane"
 
 workflow {
     def data_description_fp = file("${params.ophys_mount_url}/data_description.json")
@@ -15,10 +14,8 @@ workflow {
     def data_description = parse_json(data_description_fp)
     def session_description = parse_json(session_fp)
 
-    def is_multiplane = data_description.platform.abbreviation.toString().contains("multi")
-
     // Run multiplane pipeline configuration
-    if (is_multiplane) {
+    if (params.data_type == "multiplane") {
         def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
 
         // Run converter
