@@ -3,22 +3,14 @@
 nextflow.enable.dsl = 2
 
 params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/multiplane-ophys_767018_2025-02-10_13-04-43'
-params.name = "multiplane"
 
 workflow {
-    def data_description_fp = file("${params.ophys_mount_url}/data_description.json")
-    def session_fp = file("${params.ophys_mount_url}/session.json")
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
     def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
 
-    def data_description = parse_json(data_description_fp)
-    def session_description = parse_json(session_fp)
-
-    def is_multiplane = data_description.platform.abbreviation.toString().contains("multi")
-
     // Run multiplane pipeline configuration
-    if (is_multiplane) {
+    if (params.data_type == "multiplane") {
         def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
 
         // Run converter
@@ -212,7 +204,6 @@ process decrosstalk_split_json_capsule {
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
-    
     
     script:
     """
