@@ -31,14 +31,14 @@ workflow {
         )
 
         // Run decrosstalk split to prep for decrosstalk_roi_images
-        decrosstalk_split_json_capsule(
+        decrosstalk_split_json(
             motion_correction.out.motion_results.collect(),
             ophys_mount_jsons.collect()
         )
 
         // Run decrosstalk using ROI images
         decrosstalk_roi_images(
-            decrosstalk_split_json_capsule.out.capsule_results.flatten(),
+            decrosstalk_split_json.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results.collect(),
@@ -46,27 +46,27 @@ workflow {
         )
 
         // Run extraction Suite2P
-        extraction_suite2p_capsule(
+        extraction_suite2p(
             decrosstalk_roi_images.out.capsule_results.flatten().combine(ophys_mount_jsons.collect())
         )
 
         // Run classification
         
-        classifier_capsule(
+        classifier(
             ophys_mount_jsons.collect()
             classifier_data.collect(),
-            extraction_suite2p_capsule.out.capsule_results,
+            extraction_suite2p.out.capsule_results,
         )
 
         // Run DF / F
         dff_capsule(
-            extraction_suite2p_capsule.out.capsule_results.flatten(),
+            extraction_suite2p.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
             motion_correction.out.motion_results_csv.collect()
         )
 
         // Run Oasis Event detection
-        oasis_event_detection_capsule(
+        oasis_event_detection(
             dff_capsule.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
@@ -77,18 +77,18 @@ workflow {
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
-            extraction_suite2p_capsule.out.extraction_qc_json.collect(),
+            extraction_suite2p.out.extraction_qc_json.collect(),
             dff_capsule.out.dff_qc_json.collect(),
-            oasis_event_detection_capsule.out.event_qc_png.collect()
+            oasis_event_detection.out.event_qc_png.collect()
         )
 
         // Run Pipeline Processing Metadata Aggregator
         pipeline_processing_metadata_aggregator(
             motion_correction.out.motion_data_process_json.collect(),
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
-            extraction_suite2p_capsule.out.extraction_data_process_json.collect(),
+            extraction_suite2p.out.extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
-            oasis_event_detection_capsule.out.events_data_process_json.collect(),
+            oasis_event_detection.out.events_data_process_json.collect(),
             ophys_mount_jsons.collect()
         )
         
@@ -251,7 +251,7 @@ process movie_qc {
 }
 
 // capsule - aind-ophys-decrosstalk-split-session-json
-process decrosstalk_split_json_capsule {
+process decrosstalk_split_json {
     tag 'capsule-4425001'
     container "$REGISTRY_HOST/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
 
@@ -357,7 +357,7 @@ process decrosstalk_roi_images {
 }
 
 // capsule - aind-ophys-extraction-suite2p
-process extraction_suite2p_capsule {
+process extraction_suite2p {
     tag 'capsule-9911715'
     container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v9"
 
@@ -460,7 +460,7 @@ process dff_capsule {
 }
 
 // capsule - aind-ophys-oasis-event-detection
-process oasis_event_detection_capsule {
+process oasis_event_detection {
     tag 'capsule-8957649'
     container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v6"
 
@@ -511,7 +511,7 @@ process oasis_event_detection_capsule {
 }
 
 // capsule - aind-ophys-classifier
-process classifier_capsule {
+process classifier {
 	tag 'capsule-0630574'
 	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
 
