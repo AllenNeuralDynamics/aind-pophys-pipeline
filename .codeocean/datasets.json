@@ -4,6 +4,10 @@
 		{
 			"id": "1d41a92d-2f10-40d1-830d-83ba23aca8bd",
 			"mount": "multiplane-ophys_767018_2025-02-10_13-04-43"
+		},
+		{
+			"id": "35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb",
+			"mount": "2p_roi_classifier"
 		}
 	]
 }

@@ -9,7 +9,7 @@ workflow {
     def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     def classifier_data = Channel.fromPath("../data/2p_roi_classifier/*", type: 'any', relative: true)
-    
+
     // Run multiplane pipeline configuration
     if (params.data_type == "multiplane") {
         def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
