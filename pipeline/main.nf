@@ -8,7 +8,8 @@ workflow {
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
     def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
-
+    def classifier_data = Channel.fromPath("../data/2p_roi_classifier/*", type: 'any', relative: true)
+    
     // Run multiplane pipeline configuration
     if (params.data_type == "multiplane") {
         def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
@@ -47,6 +48,14 @@ workflow {
         // Run extraction Suite2P
         extraction_suite2p_capsule(
             decrosstalk_roi_images.out.capsule_results.flatten().combine(ophys_mount_jsons.collect())
+        )
+
+        // Run classification
+        
+        classifier_capsule(
+            ophys_mount_jsons.collect()
+            classifier_data.collect(),
+            extraction_suite2p_capsule.out.capsule_results,
         )
 
         // Run DF / F
@@ -499,6 +508,64 @@ process oasis_event_detection_capsule {
 
     echo "[${task.tag}] completed!"
     """
+}
+
+// capsule - aind-ophys-classifier
+process classifier_capsule {
+	tag 'capsule-0630574'
+	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
+
+	cpus 4
+	memory '200 GB'
+	accelerator 1
+	label 'gpu'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+    path ophys_mount_jsons
+	path classifier_data
+	path extraction_results
+    
+	output:
+	path 'capsule/results/*/*/*.json', emit: 'classifier_jsons'
+	// path 'capsule/results/*/classification/*classification.h5' into capsule_aind_ophys_classifier_17_to_capsule_aind_ophys_nwb_12_27
+	path 'capsule/results/*/*/*.png', emit: 'classifier_png'
+	path 'capsule/results/*'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=3819d125-9f03-48f3-ba09-b44c84a7a2c7
+	export CO_CPUS=4
+	export CO_MEMORY=214748364800
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${ophys_mount_jsons} capsule/data
+    cp -r ${classifier_data} capsule/data
+    cp -r ${extraction_results} capsule/data
+
+	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run
+
+	echo "[${task.tag}] completed!"
+	"""
 }
 
 // capsule - aind-ophys-quality-control-aggregator
