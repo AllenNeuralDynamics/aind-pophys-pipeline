@@ -94,7 +94,6 @@ workflow {
         
     } else {
         println "Key does not contain 'multi'"
-    }
 }
 
 
