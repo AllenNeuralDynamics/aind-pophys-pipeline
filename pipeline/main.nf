@@ -24,6 +24,10 @@ workflow {
             ophys_mount_sync_file.collect()
         )
 
+        // Run movie qc
+        movie_qc(
+            motion_correction.out.motion_results
+        )
         // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json_capsule(
             motion_correction.out.motion_results.collect(),
@@ -60,6 +64,8 @@ workflow {
         // Run Quality Control Aggregator
         quality_control_aggregator(
             motion_correction.out.motion_qc_json.collect(),
+            movie_qc.out.movie_qc_json.collect(),
+            movie_qc.out.movie_qc_png.collect(),
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
             extraction_suite2p_capsule.out.extraction_qc_json.collect(),
             dff_capsule.out.dff_qc_json.collect(),
@@ -125,7 +131,7 @@ process converter_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
+    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch" --debug=True
 
     echo "[${task.tag}] completed!"
     """
@@ -183,9 +189,58 @@ process motion_correction {
     cd capsule/code
     ls -la /data
     chmod +x run
-    ./run
+    ./run --debug
     echo "[${task.tag}] completed!"
     """
+}
+
+// capsule - aind-ophys-movie-qc
+process movie_qc {
+	tag 'capsule-0300037'
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v6"
+
+	cpus 16
+	memory '128 GB'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+	path motion_results
+
+	output:
+	path 'capsule/results/*'
+	path 'capsule/results/*/*/*.json', emit:'movie_qc_json'
+	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=f52d9390-8569-49bb-9562-2d624b18ee56
+	export CO_CPUS=16
+	export CO_MEMORY=137438953472
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${motion_results} capsule/data
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run
+
+	echo "[${task.tag}] completed!"
+	"""
 }
 
 // capsule - aind-ophys-decrosstalk-split-session-json
@@ -231,7 +286,7 @@ process decrosstalk_split_json_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --debug
 
     echo "[${task.tag}] completed!"
     """
@@ -288,7 +343,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --debug
 
     echo "[${task.tag}] completed!"
     """
@@ -460,6 +515,8 @@ process quality_control_aggregator {
 
 	input:
 	path motion_correction_results
+    path movie_qc_json
+    path movie_qc_png
     path decrosstalk_results
     path extraction_suite2p_results
     path dff_results
@@ -481,6 +538,15 @@ process quality_control_aggregator {
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${motion_correction_results} capsule/data
+    cp -r ${movie_qc_json} capsule/data
+    cp -r ${movie_qc_png} capsule/data
+    cp -r ${decrosstalk_results} capsule/data
+    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${dff_results} capsule/data
+    cp -r ${oasis_event_detection_results} capsule/data
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone --branch v3.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
@@ -530,6 +596,14 @@ process pipeline_processing_metadata_aggregator {
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${motion_correction_results} capsule/data
+    cp -r ${decrosstalk_results} capsule/data
+    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${dff_results} capsule/data
+    cp -r ${oasis_event_detection_results} capsule/data
+    cp -r ${ophys_mount_jsons} capsule/data
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
