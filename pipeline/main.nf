@@ -28,6 +28,7 @@ workflow {
         movie_qc(
             motion_correction.out.motion_results
         )
+
         // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json_capsule(
             motion_correction.out.motion_results.collect(),
@@ -87,9 +88,6 @@ workflow {
     }
 }
 
-def parse_json(file) {
-    return new groovy.json.JsonSlurper().parseText(file.text)
-}
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
