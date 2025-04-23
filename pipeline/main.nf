@@ -79,6 +79,7 @@ workflow {
             extraction_suite2p.out.extraction_qc_json.collect(),
             dff_capsule.out.dff_qc_json.collect(),
             oasis_event_detection.out.event_qc_png.collect(),
+            oasis_event_detection.out.events_json.collect(),
             classifier.out.classifier_jsons.collect(),
             classifier.out.classifier_png.collect()
         )
@@ -89,7 +90,7 @@ workflow {
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
             extraction_suite2p.out.extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
-            oasis_event_detection.out.events_data_process_json.collect(),
+            oasis_event_detection.out.events_json.collect(),
             ophys_mount_jsons.collect(),
             classifier.out.classifier_jsons.collect()
         )
@@ -477,8 +478,8 @@ process oasis_event_detection {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*/*/*data_process.json', emit: 'events_data_process_json', optional: true
     path 'capsule/results/*/*/plots/*', emit: 'event_qc_png', optional: true
+    path 'capsule/results/*/*/*json', emit: 'events_json', optional: true
 
     script:
     """
@@ -572,7 +573,7 @@ process classifier {
 
 // capsule - aind-ophys-quality-control-aggregator
 process quality_control_aggregator {
-	tag 'capsule-4044810'
+	tag 'capsule-4691390'
 	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v3"
 
 	cpus 1
@@ -588,6 +589,7 @@ process quality_control_aggregator {
     path extraction_suite2p_results
     path dff_results
     path oasis_event_detection_results
+    path oasis_event_json
     path classifier_jsons
     path classifier_pngs
 
@@ -616,6 +618,7 @@ process quality_control_aggregator {
     cp -r ${extraction_suite2p_results} capsule/data
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
+    cp -r ${oasis_event_json} capsule/data
     cp -r ${classifier_jsons} capsule/data
     cp -r ${classifier_pngs} capsule/data
 
