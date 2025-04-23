@@ -70,7 +70,7 @@ workflow {
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
             extraction_suite2p_capsule.out.extraction_qc_json.collect(),
             dff_capsule.out.dff_qc_json.collect(),
-            oasis_event_detection_capsule.out.events_qc_json.collect()
+            oasis_event_detection_capsule.out.event_qc_png.collect()
         )
 
         // Run Pipeline Processing Metadata Aggregator
@@ -467,7 +467,7 @@ process oasis_event_detection_capsule {
     output:
     path 'capsule/results/*'
     path 'capsule/results/*/*/*data_process.json', emit: 'events_data_process_json', optional: true
-    path 'capsule/results/*/*/*.json', emit: 'events_qc_json', optional: true
+    path 'capsule/results/*/*/plots/*', emit: 'event_qc_png', optional: true
 
     script:
     """
