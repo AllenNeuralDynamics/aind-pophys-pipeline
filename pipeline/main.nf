@@ -54,7 +54,7 @@ workflow {
         classifier(
             ophys_mount_jsons.collect(),
             classifier_data.collect(),
-            extraction_suite2p.out.capsule_results.collect(),
+            extraction_suite2p.out.capsule_results.flatten(),
         )
 
         // Run DF / F
