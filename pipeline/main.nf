@@ -78,7 +78,9 @@ workflow {
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
             extraction_suite2p.out.extraction_qc_json.collect(),
             dff_capsule.out.dff_qc_json.collect(),
-            oasis_event_detection.out.event_qc_png.collect()
+            oasis_event_detection.out.event_qc_png.collect(),
+            classifier.out.classifier_jsons.collect(),
+            classifier.out.classifier_png.collect()
         )
 
         // Run Pipeline Processing Metadata Aggregator
@@ -88,7 +90,8 @@ workflow {
             extraction_suite2p.out.extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_data_process_json.collect(),
-            ophys_mount_jsons.collect()
+            ophys_mount_jsons.collect(),
+            classifier.out.classifier_jsons.collect()
         )
         
     } else {
@@ -585,6 +588,8 @@ process quality_control_aggregator {
     path extraction_suite2p_results
     path dff_results
     path oasis_event_detection_results
+    path classifier_jsons
+    path classifier_pngs
 
 	output:
 	path 'capsule/results/*'
@@ -611,6 +616,8 @@ process quality_control_aggregator {
     cp -r ${extraction_suite2p_results} capsule/data
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
+    cp -r ${classifier_jsons} capsule/data
+    cp -r ${classifier_pngs} capsule/data
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone --branch v3.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
@@ -643,6 +650,7 @@ process pipeline_processing_metadata_aggregator {
     path dff_results
     path oasis_event_detection_results
     path ophys_mount_jsons
+    path classifier_jsons
 
 	output:
 	path 'capsule/results/*'
@@ -668,6 +676,7 @@ process pipeline_processing_metadata_aggregator {
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${ophys_mount_jsons} capsule/data
+    cp -r ${classifier_jsons} capsule/data
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
