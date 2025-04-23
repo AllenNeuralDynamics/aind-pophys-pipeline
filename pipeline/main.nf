@@ -73,7 +73,6 @@ workflow {
         // Run Quality Control Aggregator
         quality_control_aggregator(
             motion_correction.out.motion_qc_json.collect(),
-            motion_correction.out.motion_results_all.collect(),
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
@@ -167,8 +166,7 @@ process motion_correction {
     path 'capsule/results/V*', emit: 'motion_results', optional: true
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
-    path 'capsule/results/*/*/*.json', emit: 'motion_qc_json', optional: true
-    path 'capsule/results/*/motion_correction/*', emit: 'motion_results_all'
+    path 'capsule/results/*/motion_correction/*', emit: 'motion_qc_json'
 
     script:
     """
@@ -584,7 +582,6 @@ process quality_control_aggregator {
 
 	input:
 	path motion_correction_results
-    path motion_results_all
     path movie_qc_json
     path movie_qc_png
     path decrosstalk_results
@@ -613,7 +610,6 @@ process quality_control_aggregator {
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_correction_results} capsule/data
-    cp -r ${motion_results_all} capsule/data
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
     cp -r ${decrosstalk_results} capsule/data
