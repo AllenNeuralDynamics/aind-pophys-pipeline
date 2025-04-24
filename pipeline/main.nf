@@ -14,29 +14,20 @@ workflow {
     
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
-    
+
     // Run motion correction
-    if (params.data_type == "multiplane"){
-        motion_correction(
-            converter_capsule.out.converter_results.flatten(),
-            ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
-            ophys_mount_sync_file.collect()
-        )
-    } else {
-        motion_correction(
-            converter_capsule.out.converter_results2,
-            ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
-            ophys_mount_sync_file.collect()
-        )
-    }
-    // Run movie qc
-    movie_qc(
-        motion_correction.out.motion_results
+    motion_correction(
+        converter_capsule.out.converter_results.flatten(),
+        ophys_mount_jsons.collect(),
+        ophys_mount_pophys_directory.collect(),
+        ophys_mount_sync_file.collect()
     )
 
-    if (params.data_type == "multiplane") {
+    // Run movie qc
+    movie_qc(
+        motion_correction.out.motion_results.collect()
+    )
+    if (params.data_type == "multiplane"){
         // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json(
             motion_correction.out.motion_results.collect(),
@@ -49,7 +40,7 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results.collect(),
-            converter_capsule.out.converter_results_nested.collect()
+            converter_capsule.out.converter_results_all.collect()
         )
 
         // Run extraction Suite2P
@@ -57,9 +48,12 @@ workflow {
             decrosstalk_roi_images.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
+
+        
     } else {
+        // Run extraction Suite2P
         extraction_suite2p(
-            motion_correction.out.motion_results.collect(),
+            motion_correction.out.motion_results.flatten(),
             ophys_mount_jsons.collect()
         )
     }
@@ -83,9 +77,9 @@ workflow {
         dff_capsule.out.capsule_results.flatten(),
         ophys_mount_jsons.collect()
     )
-
-    if (params.data_type == "multiplane") {
-        // Run Quality Control Aggregator
+    
+    if (params.data_type == "multiplane"){
+    // Run Quality Control Aggregator
         quality_control_aggregator(
             motion_correction.out.motion_qc_json.collect(),
             movie_qc.out.movie_qc_json.collect(),
@@ -110,9 +104,16 @@ workflow {
             classifier.out.classifier_jsons.collect()
         )
     } else {
-        println "Cannot run aggregators atm"
+        // Run Pipeline Processing Metadata Aggregator
+        pipeline_processing_metadata_aggregator(
+            motion_correction.out.motion_data_process_json.collect(),
+            extraction_suite2p.out.extraction_qc_json(),extraction_data_process_json.collect(),
+            dff_capsule.out.dff_data_process_json.collect(),
+            oasis_event_detection.out.events_json.collect(),
+            ophys_mount_jsons.collect(),
+            classifier.out.classifier_jsons.collect()
+        )
     }
-    
 }
 
 
@@ -130,9 +131,8 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*', emit: 'converter_results2'
-    path 'capsule/results/*V', emit: 'converter_results', optional: true
-    path 'capsule/results/*/*', emit: 'converter_results_nested', optional: true
+    path 'capsule/results/*_[0-9]*', emit: 'converter_results'
+    path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
 
     script:
     """
@@ -180,7 +180,7 @@ process motion_correction {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/V*', emit: 'motion_results', optional: true
+    path 'capsule/results/*_[0-9]*', emit: 'motion_results', optional: true
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
     path 'capsule/results/*/motion_correction/*', emit: 'motion_qc_json'
