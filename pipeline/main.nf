@@ -2,7 +2,7 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/multiplane-ophys_767018_2025-02-10_13-04-43'
+params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
 
 workflow {
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
@@ -11,18 +11,26 @@ workflow {
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
     // Only for mulitplane sessions
     def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
-
+    
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
     
     // Run motion correction
-    motion_correction(
-        converter_capsule.out.converter_results.flatten(),
-        ophys_mount_jsons.collect(),
-        ophys_mount_pophys_directory.collect(),
-        ophys_mount_sync_file.collect()
-    )
-
+    if (params.data_type == "multiplane"){
+        motion_correction(
+            converter_capsule.out.converter_results.flatten(),
+            ophys_mount_jsons.collect(),
+            ophys_mount_pophys_directory.collect(),
+            ophys_mount_sync_file.collect()
+        )
+    } else {
+        motion_correction(
+            converter_capsule.out.converter_results2,
+            ophys_mount_jsons.collect(),
+            ophys_mount_pophys_directory.collect(),
+            ophys_mount_sync_file.collect()
+        )
+    }
     // Run movie qc
     movie_qc(
         motion_correction.out.motion_results
@@ -95,22 +103,14 @@ workflow {
         pipeline_processing_metadata_aggregator(
             motion_correction.out.motion_data_process_json.collect(),
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
-            extraction_suite2p.out.extraction_data_process_json.collect(),
+            extraction_suite2p.out.extraction_qc_json(),extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect(),
             ophys_mount_jsons.collect(),
             classifier.out.classifier_jsons.collect()
         )
     } else {
-        // Run Pipeline Processing Metadata Aggregator
-        pipeline_processing_metadata_aggregator(
-            motion_correction.out.motion_data_process_json.collect(),
-            extraction_suite2p.out.extraction_data_process_json.collect(),
-            dff_capsule.out.dff_data_process_json.collect(),
-            oasis_event_detection.out.events_json.collect(),
-            ophys_mount_jsons.collect(),
-            classifier.out.classifier_jsons.collect()
-        )
+        println "Cannot run aggregators atm"
     }
     
 }
@@ -130,8 +130,9 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/V*', emit: 'converter_results'
-    path 'capsule/results/*/*', emit: 'converter_results_nested'
+    path 'capsule/results/*', emit: 'converter_results2'
+    path 'capsule/results/*V', emit: 'converter_results', optional: true
+    path 'capsule/results/*/*', emit: 'converter_results_nested', optional: true
 
     script:
     """
