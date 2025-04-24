@@ -123,7 +123,7 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*_[0-9]*', emit: 'converter_results'
+    path 'capsule/results/*', emit: 'converter_results', type: 'dir'
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
 
     script:
@@ -172,7 +172,7 @@ process motion_correction {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*_[0-9]*', emit: 'motion_results', optional: true
+    path 'capsule/results/*', emit: 'motion_results', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
     path 'capsule/results/*/motion_correction/*', emit: 'motion_qc_json'
