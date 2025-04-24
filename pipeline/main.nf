@@ -519,7 +519,7 @@ process classifier {
 	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
 
 	cpus 4
-	memory '200 GB'
+	memory '64 GB'
 	accelerator 1
 	label 'gpu'
 
