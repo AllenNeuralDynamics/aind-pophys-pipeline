@@ -9,27 +9,26 @@ workflow {
     def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
+    // Only for mulitplane sessions
+    def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
 
-    // Run multiplane pipeline configuration
+    // Run converter
+    converter_capsule(ophys_mount_single_to_pophys_converter)
+    
+    // Run motion correction
+    motion_correction(
+        converter_capsule.out.converter_results.flatten(),
+        ophys_mount_jsons.collect(),
+        ophys_mount_pophys_directory.collect(),
+        ophys_mount_sync_file.collect()
+    )
+
+    // Run movie qc
+    movie_qc(
+        motion_correction.out.motion_results
+    )
+
     if (params.data_type == "multiplane") {
-        def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
-
-        // Run converter
-        converter_capsule(ophys_mount_single_to_pophys_converter)
-
-        // Run motion correction
-        motion_correction(
-            converter_capsule.out.converter_results.flatten(),
-            ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
-            ophys_mount_sync_file.collect()
-        )
-
-        // Run movie qc
-        movie_qc(
-            motion_correction.out.motion_results
-        )
-
         // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json(
             motion_correction.out.motion_results.collect(),
@@ -47,29 +46,37 @@ workflow {
 
         // Run extraction Suite2P
         extraction_suite2p(
-            decrosstalk_roi_images.out.capsule_results.flatten().combine(ophys_mount_jsons.collect())
-        )
-
-        // Run classification
-        classifier(
-            ophys_mount_jsons.collect(),
-            classifier_data.collect(),
-            extraction_suite2p.out.capsule_results.flatten(),
-        )
-
-        // Run DF / F
-        dff_capsule(
-            extraction_suite2p.out.capsule_results.flatten(),
-            ophys_mount_jsons.collect(),
-            motion_correction.out.motion_results_csv.collect()
-        )
-
-        // Run Oasis Event detection
-        oasis_event_detection(
-            dff_capsule.out.capsule_results.flatten(),
+            decrosstalk_roi_images.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
+    } else {
+        extraction_suite2p(
+            motion_correction.out.motion_results.collect(),
+            ophys_mount_jsons.collect()
+        )
+    }
 
+    // Run classification
+    classifier(
+        ophys_mount_jsons.collect(),
+        classifier_data.collect(),
+        extraction_suite2p.out.capsule_results.flatten(),
+    )
+
+    // Run DF / F
+    dff_capsule(
+        extraction_suite2p.out.capsule_results.flatten(),
+        ophys_mount_jsons.collect(),
+        motion_correction.out.motion_results_csv.collect()
+    )
+
+    // Run Oasis Event detection
+    oasis_event_detection(
+        dff_capsule.out.capsule_results.flatten(),
+        ophys_mount_jsons.collect()
+    )
+
+    if (params.data_type == "multiplane") {
         // Run Quality Control Aggregator
         quality_control_aggregator(
             motion_correction.out.motion_qc_json.collect(),
@@ -94,10 +101,18 @@ workflow {
             ophys_mount_jsons.collect(),
             classifier.out.classifier_jsons.collect()
         )
-        
     } else {
-        println "Key does not contain 'multi'"
+        // Run Pipeline Processing Metadata Aggregator
+        pipeline_processing_metadata_aggregator(
+            motion_correction.out.motion_data_process_json.collect(),
+            extraction_suite2p.out.extraction_data_process_json.collect(),
+            dff_capsule.out.dff_data_process_json.collect(),
+            oasis_event_detection.out.events_json.collect(),
+            ophys_mount_jsons.collect(),
+            classifier.out.classifier_jsons.collect()
+        )
     }
+    
 }
 
 
@@ -141,7 +156,7 @@ process converter_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch" --debug=True
+    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
 
     echo "[${task.tag}] completed!"
     """
@@ -199,7 +214,7 @@ process motion_correction {
     cd capsule/code
     ls -la /data
     chmod +x run
-    ./run --debug
+    ./run
     echo "[${task.tag}] completed!"
     """
 }
@@ -296,7 +311,7 @@ process decrosstalk_split_json {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug
+    ./run
 
     echo "[${task.tag}] completed!"
     """
@@ -353,7 +368,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug
+    ./run
 
     echo "[${task.tag}] completed!"
     """
@@ -371,6 +386,7 @@ process extraction_suite2p {
 
     input:
     path extraction_input
+    path ophys_jsons
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
