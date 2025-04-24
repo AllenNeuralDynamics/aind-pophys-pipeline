@@ -77,7 +77,7 @@ workflow {
         dff_capsule.out.capsule_results.flatten(),
         ophys_mount_jsons.collect()
     )
-    
+
     if (params.data_type == "multiplane"){
     // Run Quality Control Aggregator
         quality_control_aggregator(
@@ -104,15 +104,7 @@ workflow {
             classifier.out.classifier_jsons.collect()
         )
     } else {
-        // Run Pipeline Processing Metadata Aggregator
-        pipeline_processing_metadata_aggregator(
-            motion_correction.out.motion_data_process_json.collect(),
-            extraction_suite2p.out.extraction_qc_json(),extraction_data_process_json.collect(),
-            dff_capsule.out.dff_data_process_json.collect(),
-            oasis_event_detection.out.events_json.collect(),
-            ophys_mount_jsons.collect(),
-            classifier.out.classifier_jsons.collect()
-        )
+        println "Skipping Quality Control Aggregator and Pipeline Processing Metadata Aggregator for single-plane data."
     }
 }
 
