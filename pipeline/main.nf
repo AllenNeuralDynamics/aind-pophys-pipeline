@@ -96,7 +96,8 @@ workflow {
             motion_correction.out.motion_results_csv.collect()
         )
     }
-    }
+}
+
 
     // Run Oasis Event detection
     oasis_event_detection(
@@ -140,7 +141,7 @@ workflow {
             classifier.out.classifier_jsons.collect()
         )
     }
-}
+
 
 
 // Process: aind-pophys-converter-capsule
