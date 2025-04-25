@@ -52,7 +52,7 @@ workflow {
         
     } else {
         // Run motion correction
-        motion_correction_multiplane(
+        motion_correction(
             converter_capsule.out.converter_results.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
