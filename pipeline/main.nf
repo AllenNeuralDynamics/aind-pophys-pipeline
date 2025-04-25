@@ -55,8 +55,7 @@ workflow {
         motion_correction(
             converter_capsule.out.converter_results.flatten(),
             ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
-            ophys_mount_sync_file.collect()
+            ophys_mount_pophys_directory.collect()
         )
 
         // Run movie qc
@@ -130,7 +129,7 @@ workflow {
         // Run Pipeline Processing Metadata Aggregator
         pipeline_processing_metadata_aggregator(
             motion_correction.out.motion_data_process_json.collect(),
-            extraction_suite2p.out.extraction_qc_json(),extraction_data_process_json.collect(),
+            extraction_suite2p.out.extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect(),
             ophys_mount_jsons.collect(),
@@ -142,7 +141,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-0547799'
-    container "$REGISTRY_HOST/capsule/56956b65-72a4-4248-9718-468df22b23ff:4316b90ec50f1317f9e1f800dc9c35e8"
+    container "$REGISTRY_HOST/capsule/56956b65-72a4-4248-9718-468df22b23ff:640998928072c03bffaf81b93146c9e3"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -230,7 +229,7 @@ process motion_correction_multiplane {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout f44b3cc --quiet
+    git -C capsule-repo checkout 2bfd99d --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
