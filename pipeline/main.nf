@@ -284,7 +284,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout f44b3cc --quiet
+    git -C capsule-repo checkout 2bfd99d --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
