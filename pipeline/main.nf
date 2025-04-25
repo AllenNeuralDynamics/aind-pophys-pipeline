@@ -17,22 +17,23 @@ workflow {
     println "Converter results"
     converter_capsule.out.converter_results.view()
 
-    // Run motion correction
-    motion_correction_multiplane(
-        converter_capsule.out.converter_results.flatten(),
-        ophys_mount_jsons.collect(),
-        ophys_mount_pophys_directory.collect(),
-        ophys_mount_sync_file.collect()
-    )
-
-    // Run movie qc
-    movie_qc(
-        motion_correction.out.motion_results.collect()
-    )
     if (params.data_type == "multiplane"){
+        // Run motion correction
+        motion_correction_multiplane(
+            converter_capsule.out.converter_results.flatten(),
+            ophys_mount_jsons.collect(),
+            ophys_mount_pophys_directory.collect(),
+            ophys_mount_sync_file.collect()
+        )
+
+        // Run movie qc
+        movie_qc(
+            motion_correction_multiplane.out.motion_results.collect()
+        )
+
         // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json(
-            motion_correction.out.motion_results.collect(),
+            motion_correction_multiplane.out.motion_results.collect(),
             ophys_mount_jsons.collect()
         )
 
@@ -41,7 +42,7 @@ workflow {
             decrosstalk_split_json.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
-            motion_correction.out.motion_results.collect(),
+            motion_correction_multiplane.out.motion_results.collect(),
             converter_capsule.out.converter_results_all.collect()
         )
 
@@ -53,6 +54,19 @@ workflow {
 
         
     } else {
+        // Run motion correction
+        motion_correction_multiplane(
+            converter_capsule.out.converter_results.flatten(),
+            ophys_mount_jsons.collect(),
+            ophys_mount_pophys_directory.collect(),
+            ophys_mount_sync_file.collect()
+        )
+
+        // Run movie qc
+        movie_qc(
+            motion_correction.out.motion_results.collect()
+        )
+
         // Run extraction Suite2P
         extraction_suite2p(
             motion_correction.out.motion_results.flatten(),
@@ -67,12 +81,22 @@ workflow {
         extraction_suite2p.out.capsule_results.flatten(),
     )
 
-    // Run DF / F
-    dff_capsule(
-        extraction_suite2p.out.capsule_results.flatten(),
-        ophys_mount_jsons.collect(),
-        motion_correction.out.motion_results_csv.collect()
-    )
+    if (params.data_type == "multiplane"){
+        // Run DF / F
+        dff_capsule(
+            extraction_suite2p.out.capsule_results.flatten(),
+            ophys_mount_jsons.collect(),
+            motion_correction_multiplane.out.motion_results_csv.collect()
+        )
+    } else {
+        // Run DF / F
+        dff_capsule(
+            extraction_suite2p.out.capsule_results.flatten(),
+            ophys_mount_jsons.collect(),
+            motion_correction.out.motion_results_csv.collect()
+        )
+    }
+    }
 
     // Run Oasis Event detection
     oasis_event_detection(
@@ -106,7 +130,15 @@ workflow {
             classifier.out.classifier_jsons.collect()
         )
     } else {
-        println "Skipping Quality Control Aggregator and Pipeline Processing Metadata Aggregator for single-plane data."
+        // Run Pipeline Processing Metadata Aggregator
+        pipeline_processing_metadata_aggregator(
+            motion_correction.out.motion_data_process_json.collect(),
+            extraction_suite2p.out.extraction_qc_json(),extraction_data_process_json.collect(),
+            dff_capsule.out.dff_data_process_json.collect(),
+            oasis_event_detection.out.events_json.collect(),
+            ophys_mount_jsons.collect(),
+            classifier.out.classifier_jsons.collect()
+        )
     }
 }
 
@@ -114,7 +146,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-0547799'
-    container "$REGISTRY_HOST/capsule/56956b65-72a4-4248-9718-468df22b23ff:9c59c115ceb2eb78036bf6f73b8e3b61"
+    container "$REGISTRY_HOST/capsule/56956b65-72a4-4248-9718-468df22b23ff:4316b90ec50f1317f9e1f800dc9c35e8"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -144,7 +176,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0547799.git" capsule-repo
-    git -C capsule-repo checkout 71ec1f1 --quiet
+    git -C capsule-repo checkout cccf391 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -704,7 +736,7 @@ process quality_control_aggregator {
 }
 
 // capsule - aind-pipeline-processing-metadata-aggregator
-process pipeline_processing_metadata_aggregator {
+process pipeline_processing_metadata_aggregator_multiplane {
 	tag 'capsule-8250608'
 	container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v4"
 
@@ -742,6 +774,63 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_correction_results} capsule/data
     cp -r ${decrosstalk_results} capsule/data
+    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${dff_results} capsule/data
+    cp -r ${oasis_event_detection_results} capsule/data
+    cp -r ${ophys_mount_jsons} capsule/data
+    cp -r ${classifier_jsons} capsule/data
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run --processor_full_name "Arielle Leon" --copy-ancillary-files True --derived-data-description True
+
+	echo "[${task.tag}] completed!"
+	"""
+}
+
+// capsule - aind-pipeline-processing-metadata-aggregator
+process pipeline_processing_metadata_aggregator {
+	tag 'capsule-8250608'
+	container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v4"
+
+	cpus 2
+	memory '16 GB'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+    path motion_correction_results
+    path extraction_suite2p_results
+    path dff_results
+    path oasis_event_detection_results
+    path ophys_mount_jsons
+    path classifier_jsons
+
+	output:
+	path 'capsule/results/*'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=d51df783-d892-4304-a129-238a9baea72a
+	export CO_CPUS=2
+	export CO_MEMORY=17179869184
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${motion_correction_results} capsule/data
     cp -r ${extraction_suite2p_results} capsule/data
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
