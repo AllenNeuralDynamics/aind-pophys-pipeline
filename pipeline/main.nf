@@ -14,9 +14,11 @@ workflow {
     
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
+    println "Converter results"
+    converter_capsule.out.converter_results.view()
 
     // Run motion correction
-    motion_correction(
+    motion_correction_multiplane(
         converter_capsule.out.converter_results.flatten(),
         ophys_mount_jsons.collect(),
         ophys_mount_pophys_directory.collect(),
@@ -156,8 +158,8 @@ process converter_capsule {
     """
 }
 
-// capsule - aind-ophys-motion-correction
-process motion_correction {
+// capsule - aind-ophys-motion-correction multiplane
+process motion_correction_multiplane {
     tag 'capsule-7474660'
     container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911:0da186b632b36a65afc14b406afd4686"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
@@ -197,6 +199,61 @@ process motion_correction {
     cp -r ${ophys_jsons} capsule/data
     cp -r ${pophys_dir} capsule/data
     cp -r ${sync_file} capsule/data
+
+    echo "[${task.tag}] cloning git repo..."
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
+    git -C capsule-repo checkout f44b3cc --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
+    
+    echo "[${task.tag}] running capsule..."
+    cd capsule/code
+    ls -la /data
+    chmod +x run
+    ./run
+    echo "[${task.tag}] completed!"
+    """
+}
+
+// capsule - aind-ophys-motion-correction multiplane
+process motion_correction {
+    tag 'capsule-7474660'
+    container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911:0da186b632b36a65afc14b406afd4686"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+    cpus 16
+    memory '128 GB'
+
+    input:
+    path converter_results
+    path ophys_jsons
+    path pophys_dir
+
+    output:
+    path 'capsule/results/*'
+    path 'capsule/results/*', emit: 'motion_results', type: 'dir'
+    path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
+    path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
+    path 'capsule/results/*/motion_correction/*', emit: 'motion_qc_json'
+
+    script:
+    """
+    #!/usr/bin/env bash
+    set -e
+
+    export CO_CAPSULE_ID=91a8ed4d-3b9a-49c6-9283-3f16ea5482bf
+    export CO_CPUS=16
+    export CO_MEMORY=137438953472
+    
+    mkdir -p capsule
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${converter_results} capsule/data
+    cp -r ${ophys_jsons} capsule/data
+    cp -r ${pophys_dir} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
