@@ -14,8 +14,6 @@ workflow {
     
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
-    println "Converter results"
-    converter_capsule.out.converter_results.view()
 
     if (params.data_type == "multiplane"){
         // Run motion correction
@@ -51,7 +49,6 @@ workflow {
             decrosstalk_roi_images.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
-
         
     } else {
         // Run motion correction
@@ -96,8 +93,6 @@ workflow {
             motion_correction.out.motion_results_csv.collect()
         )
     }
-}
-
 
     // Run Oasis Event detection
     oasis_event_detection(
@@ -130,6 +125,7 @@ workflow {
             ophys_mount_jsons.collect(),
             classifier.out.classifier_jsons.collect()
         )
+        
     } else {
         // Run Pipeline Processing Metadata Aggregator
         pipeline_processing_metadata_aggregator(
@@ -141,8 +137,7 @@ workflow {
             classifier.out.classifier_jsons.collect()
         )
     }
-
-
+}
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
