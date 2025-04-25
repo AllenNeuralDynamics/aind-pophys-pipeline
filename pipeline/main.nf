@@ -123,7 +123,7 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*', emit: 'converter_results', type: 'dir'
+    path 'capsule/results/*', emit: 'converter_results'
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
 
     script:
@@ -142,7 +142,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0547799.git" capsule-repo
-    git -C capsule-repo checkout 26c2b12 --quiet
+    git -C capsule-repo checkout 71ec1f1 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -152,6 +152,7 @@ process converter_capsule {
     ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
 
     echo "[${task.tag}] completed!"
+    ls -a /results
     """
 }
 
