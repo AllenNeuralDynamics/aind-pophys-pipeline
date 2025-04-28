@@ -53,7 +53,7 @@ workflow {
     } else {
         // Run motion correction
         motion_correction(
-            converter_capsule.out.converter_results.flatten(),
+            converter_capsule.out.converter_results.collect(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect()
         )
@@ -284,7 +284,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout 2bfd99d --quiet
+    git -C capsule-repo checkout 48136aa --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
