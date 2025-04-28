@@ -2,7 +2,7 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
+params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
 
 workflow {
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
@@ -109,7 +109,7 @@ workflow {
     if (params.data_type == "multiplane"){
     // Run Quality Control Aggregator
         quality_control_aggregator(
-            motion_correction.out.motion_qc_json.collect(),
+            motion_correction_multiplane.out.motion_qc_json.collect(),
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
@@ -122,10 +122,10 @@ workflow {
         )
 
         // Run Pipeline Processing Metadata Aggregator
-        pipeline_processing_metadata_aggregator(
-            motion_correction.out.motion_data_process_json.collect(),
+        pipeline_processing_metadata_aggregator_multiplane(
+            motion_correction_multiplane.out.motion_data_process_json.collect(),
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
-            extraction_suite2p.out.extraction_qc_json(),extraction_data_process_json.collect(),
+            extraction_suite2p.out.extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect(),
             ophys_mount_jsons.collect(),
@@ -185,7 +185,7 @@ process converter_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
+    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch" --debug="t
 
     echo "[${task.tag}] completed!"
     ls -a /results
@@ -244,7 +244,7 @@ process motion_correction_multiplane {
     cd capsule/code
     ls -la /data
     chmod +x run
-    ./run
+    ./run --debug
     echo "[${task.tag}] completed!"
     """
 }
@@ -453,7 +453,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --debug
 
     echo "[${task.tag}] completed!"
     """
@@ -499,7 +499,7 @@ process extraction_suite2p {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3592435.git" capsule-repo
-    git -C capsule-repo checkout 4479392 --quiet
+    git -C capsule-repo checkout 8131e2f --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
