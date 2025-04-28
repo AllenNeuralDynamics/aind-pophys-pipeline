@@ -63,9 +63,8 @@ workflow {
             motion_correction.out.motion_results.collect()
         )
 
-        // Run extraction Suite2P
         extraction_suite2p(
-            motion_correction.out.motion_results.flatten(),
+            motion_correction.out.motion_results.collect(),
             ophys_mount_jsons.collect()
         )
     }
@@ -84,20 +83,28 @@ workflow {
             ophys_mount_jsons.collect(),
             motion_correction_multiplane.out.motion_results_csv.collect()
         )
+
+        // Run Oasis Event detection
+        oasis_event_detection(
+            dff_capsule.out.capsule_results.flatten(),
+            ophys_mount_jsons.collect()
+        )
     } else {
         // Run DF / F
         dff_capsule(
-            extraction_suite2p.out.capsule_results.flatten(),
+            extraction_suite2p.out.capsule_results.collect(),
             ophys_mount_jsons.collect(),
             motion_correction.out.motion_results_csv.collect()
         )
+
+        // Run Oasis Event detection
+        oasis_event_detection(
+            dff_capsule.out.capsule_results.collect(),
+            ophys_mount_jsons.collect()
+        )
     }
 
-    // Run Oasis Event detection
-    oasis_event_detection(
-        dff_capsule.out.capsule_results.flatten(),
-        ophys_mount_jsons.collect()
-    )
+    
 
     if (params.data_type == "multiplane"){
     // Run Quality Control Aggregator
@@ -454,8 +461,8 @@ process decrosstalk_roi_images {
 
 // capsule - aind-ophys-extraction-suite2p
 process extraction_suite2p {
-    tag 'capsule-9911715'
-    container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v9"
+    tag 'capsule-3592435'
+    container "$REGISTRY_HOST/capsule/c9f136a2-67d7-4adf-b15a-e02af4237fa4"
 
     cpus 4
     memory '128 GB'
@@ -488,9 +495,11 @@ process extraction_suite2p {
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${extraction_input} capsule/data
+    cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v9.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3592435.git" capsule-repo
+    git -C capsule-repo checkout 4479392 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -558,8 +567,8 @@ process dff_capsule {
 
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
-    tag 'capsule-8957649'
-    container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v6"
+    tag 'capsule-0298748'
+	container "$REGISTRY_HOST/capsule/382062c4-fd31-4812-806b-cc81bad29bf4"
 
     cpus 4
     memory '32 GB'
@@ -594,8 +603,9 @@ process oasis_event_detection {
     cp -r ${dff_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8957649.git" capsule-repo
-    mv capsule-repo/code capsule/code
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0298748.git" capsule-repo
+	git -C capsule-repo checkout c62a395143428f5c6041e3bdfa25facf93add3c4 --quiet
+	mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
