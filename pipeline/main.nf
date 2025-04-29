@@ -10,6 +10,7 @@ workflow {
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
     // Only for mulitplane sessions
+    def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
     
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
