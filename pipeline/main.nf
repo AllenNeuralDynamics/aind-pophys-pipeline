@@ -2,7 +2,7 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
+params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_772414_2025-04-21_16-09-13'
 
 workflow {
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
@@ -18,7 +18,7 @@ workflow {
     if (params.data_type == "multiplane"){
         // Run motion correction
         motion_correction_multiplane(
-            converter_capsule.out.converter_results.flatten(),
+            converter_capsule.out.converter_results_multiplane.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             ophys_mount_sync_file.collect()
@@ -159,7 +159,8 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*', emit: 'converter_results'
+    path 'capsule/results/*', emit: 'converter_results', optional: true
+    path 'capsule/results/V*', emit: 'converter_results_multiplane', optional: true
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
 
     script:
@@ -185,7 +186,7 @@ process converter_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch" --debug="t
+    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
 
     echo "[${task.tag}] completed!"
     ls -a /results
@@ -209,7 +210,7 @@ process motion_correction_multiplane {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*', emit: 'motion_results', type: 'dir'
+    path 'capsule/results/V*', emit: 'motion_results', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
     path 'capsule/results/*/motion_correction/*', emit: 'motion_qc_json'
@@ -236,7 +237,7 @@ process motion_correction_multiplane {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout 2bfd99d --quiet
+    git -C capsule-repo checkout bbcc0ec --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -244,7 +245,7 @@ process motion_correction_multiplane {
     cd capsule/code
     ls -la /data
     chmod +x run
-    ./run --debug
+    ./run
     echo "[${task.tag}] completed!"
     """
 }
@@ -453,7 +454,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug
+    ./run
 
     echo "[${task.tag}] completed!"
     """
