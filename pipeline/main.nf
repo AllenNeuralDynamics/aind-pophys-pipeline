@@ -2,7 +2,7 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_772414_2025-04-21_16-09-13'
+params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
 
 workflow {
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
@@ -10,7 +10,6 @@ workflow {
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
     // Only for mulitplane sessions
-    def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
     
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
@@ -21,12 +20,11 @@ workflow {
             converter_capsule.out.converter_results_multiplane.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
-            ophys_mount_sync_file.collect()
         )
 
         // Run movie qc
         movie_qc(
-            motion_correction_multiplane.out.motion_results.collect()
+            motion_correction_multiplane.out.motion_results.flatten()
         )
 
         // Run decrosstalk split to prep for decrosstalk_roi_images
@@ -206,7 +204,6 @@ process motion_correction_multiplane {
     path converter_results
     path ophys_jsons
     path pophys_dir
-    path sync_file
 
     output:
     path 'capsule/results/*'
@@ -233,7 +230,6 @@ process motion_correction_multiplane {
     cp -r ${converter_results} capsule/data
     cp -r ${ophys_jsons} capsule/data
     cp -r ${pophys_dir} capsule/data
-    cp -r ${sync_file} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
