@@ -17,20 +17,20 @@ workflow {
 
     if (params.data_type == "multiplane"){
         // Run motion correction
-        motion_correction_multiplane(
-            converter_capsule.out.converter_results_multiplane.flatten(),
+        motion_correction(
+            converter_capsule.out.converter_results.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
         )
 
         // Run movie qc
         movie_qc(
-            motion_correction_multiplane.out.motion_results.flatten()
+            motion_correction.out.motion_results.flatten()
         )
 
         // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json(
-            motion_correction_multiplane.out.motion_results.collect(),
+            motion_correction.out.motion_results.collect(),
             ophys_mount_jsons.collect()
         )
 
@@ -39,7 +39,7 @@ workflow {
             decrosstalk_split_json.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
-            motion_correction_multiplane.out.motion_results.collect(),
+            motion_correction.out.motion_results.collect(),
             converter_capsule.out.converter_results_all.collect()
         )
 
@@ -80,7 +80,7 @@ workflow {
         dff_capsule(
             extraction_suite2p.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
-            motion_correction_multiplane.out.motion_results_csv.collect()
+            motion_correction.out.motion_results_csv.collect()
         )
 
         // Run Oasis Event detection
@@ -108,7 +108,7 @@ workflow {
     if (params.data_type == "multiplane"){
     // Run Quality Control Aggregator
         quality_control_aggregator(
-            motion_correction_multiplane.out.motion_qc_json.collect(),
+            motion_correction.out.motion_qc_json.collect(),
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
@@ -122,7 +122,7 @@ workflow {
 
         // Run Pipeline Processing Metadata Aggregator
         pipeline_processing_metadata_aggregator_multiplane(
-            motion_correction_multiplane.out.motion_data_process_json.collect(),
+            motion_correction.out.motion_data_process_json.collect(),
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
             extraction_suite2p.out.extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
@@ -158,8 +158,7 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*', emit: 'converter_results', optional: true
-    path 'capsule/results/V*', emit: 'converter_results_multiplane', optional: true
+    path 'capsule/results/*', emit: 'converter_results', optional: true, type: 'dir'
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
 
     script:
@@ -189,61 +188,6 @@ process converter_capsule {
 
     echo "[${task.tag}] completed!"
     ls -a /results
-    """
-}
-
-// capsule - aind-ophys-motion-correction multiplane
-process motion_correction_multiplane {
-    tag 'capsule-7474660'
-    container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911:0da186b632b36a65afc14b406afd4686"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
-
-    cpus 16
-    memory '128 GB'
-
-    input:
-    path converter_results
-    path ophys_jsons
-    path pophys_dir
-
-    output:
-    path 'capsule/results/*'
-    path 'capsule/results/V*', emit: 'motion_results', type: 'dir'
-    path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
-    path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
-    path 'capsule/results/*/motion_correction/*', emit: 'motion_qc_json'
-
-    script:
-    """
-    #!/usr/bin/env bash
-    set -e
-
-    export CO_CAPSULE_ID=91a8ed4d-3b9a-49c6-9283-3f16ea5482bf
-    export CO_CPUS=16
-    export CO_MEMORY=137438953472
-    
-    mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
-    
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${converter_results} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
-
-    echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout bbcc0ec --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-    
-    echo "[${task.tag}] running capsule..."
-    cd capsule/code
-    ls -la /data
-    chmod +x run
-    ./run
-    echo "[${task.tag}] completed!"
     """
 }
 
@@ -289,7 +233,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout 48136aa --quiet
+    git -C capsule-repo checkout bbcc0ec --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
