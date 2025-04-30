@@ -2,7 +2,7 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
+params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_772414_2025-04-21_16-09-13'
 
 workflow {
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')

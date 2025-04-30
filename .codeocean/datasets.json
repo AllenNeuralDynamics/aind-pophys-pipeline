@@ -8,10 +8,6 @@
 		{
 			"id": "35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb",
 			"mount": "2p_roi_classifier"
-		},
-		{
-			"id": "83109cdf-7f62-40f9-8ecd-a070904456be",
-			"mount": "single-plane-ophys_772414_2025-04-21_16-09-13"
 		}
 	]
 }
