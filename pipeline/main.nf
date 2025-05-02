@@ -653,7 +653,7 @@ process nwb_packaging_subject {
 	memory '8 GB'
 
 	input:
-	path 'capsule/data/ophys_session' ophys_mount_jsons
+	path ophys_mount_jsons
 
 	output:
 	path 'capsule/results/*', emit: 'subject_nwb_results'
@@ -700,13 +700,13 @@ process ophys_nwb {
 	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
-    path 'capsule/data/raw' ophys_mount_jsons
-    path 'capsule/data/nwb/' subject_nwb_results
-    path 'capsule/data/processed/' motion_correction_results
-    path 'capsule/data/processed/' extraction_results
-	path 'capsule/data/processed/' classifer_h5
-    path 'capsule/data/processed/' dff_results
-	path 'capsule/data/processed/' event_detection_results
+    path ophys_mount_jsons
+    path subject_nwb_results
+    path motion_correction_results
+    path extraction_results
+	path classifer_h5
+    path dff_results
+	path event_detection_results
 
 	output:
 	path 'capsule/results/*'
@@ -764,14 +764,14 @@ process ophys_nwb_multiplane {
 	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
-    path 'capsule/data/raw', ophys_mount_jsons
-    path 'capsule/data/nwb/', subject_nwb_results
-    path 'capsule/data/processed/multiplane-ophys_raw', motion_correction_results
-    path 'capsule/data/processed/', decrosstalk_results
-    path 'capsule/data/processed/', extraction_results
-	path 'capsule/data/processed/', classifer_h5
-	path 'capsule/data/processed/', dff_results
-	path 'capsule/data/processed/', event_detection_results
+    path ophys_mount_jsons
+    path subject_nwb_results
+    path motion_correction_results
+    path decrosstalk_results
+    path extraction_results
+	path classifer_h5
+	path dff_results
+	path event_detection_results
 
 	output:
 	path 'capsule/results/*'
