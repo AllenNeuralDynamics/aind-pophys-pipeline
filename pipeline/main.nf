@@ -8,6 +8,7 @@ workflow {
     def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
     def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+    def nwb_schemas = Channel.fromPath("$projectDir/../data/schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
     // Only for mulitplane sessions
     def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
@@ -114,6 +115,7 @@ workflow {
 
         // Run Ophys NWB Packaging for Multiplane
         ophys_nwb_multiplane(
+            nwb_schemas.collect(),
             ophys_mount_jsons.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results_all.collect(),
@@ -153,6 +155,7 @@ workflow {
 
         // Run Ophys NWB Packaging
         ophys_nwb(
+            nwb_schemas.collect(),
             ophys_mount_jsons.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results_all.collect(),
@@ -702,6 +705,7 @@ process ophys_nwb {
 	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
+    path schemas
     path ophys_mount_jsons
     path subject_nwb_results
     path motion_correction_results
@@ -726,11 +730,13 @@ process ophys_nwb {
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
     mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
     mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
     mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
     echo "[${task.tag}] copying data to capsule..."
+    cp -r ${schemas} capsule/data/schemas
     cp -r ${ophys_mount_jsons} capsule/data/raw
     cp -r ${subject_nwb_results} capsule/data/nwb
     cp -r ${motion_correction_results} capsule/data/processed
@@ -766,6 +772,7 @@ process ophys_nwb_multiplane {
 	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
+    path schemas
     path ophys_mount_jsons
     path subject_nwb_results
     path motion_correction_results
@@ -791,12 +798,14 @@ process ophys_nwb_multiplane {
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
     mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
     mkdir -p capsule/data/multiplane-ophys_raw && ln -s \$PWD/capsule/data/multiplane-ophys_raw /multiplane-ophys_raw
     mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
     mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
     echo "[${task.tag}] copying data to capsule..."
+    cp -r ${schemas} capsule/data/schemas
     cp -r ${ophys_mount_jsons} capsule/data/raw
     cp -r ${subject_nwb_results} capsule/data/nwb
     cp -r ${motion_correction_results} capsule/data/multiplane-ophys_raw
