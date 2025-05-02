@@ -140,14 +140,13 @@ workflow {
 
         // Run Pipeline Processing Metadata Aggregator
         pipeline_processing_metadata_aggregator_multiplane(
+            ophys_mount_jsons.collect(),
             motion_correction.out.motion_data_process_json.collect(),
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
             extraction_suite2p.out.extraction_data_process_json.collect(),
             classifier.out.classifier_jsons.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect(),
-            ophys_mount_jsons.collect(),
-            classifier.out.classifier_jsons.collect()
         )
         
     } else {
@@ -834,13 +833,13 @@ process pipeline_processing_metadata_aggregator_multiplane {
 	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
+    path ophys_mount_jsons
     path motion_correction_results
     path decrosstalk_results
     path extraction_suite2p_results
+    path classifier_jsons
     path dff_results
     path oasis_event_detection_results
-    path ophys_mount_jsons
-    path classifier_jsons
 
 	output:
 	path 'capsule/results/*'
