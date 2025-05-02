@@ -15,6 +15,11 @@ workflow {
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
 
+    // Run Subject NWB Packaging Process
+    nwb_packaging_subject(
+        ophys_mount_jsons.collect()
+    )
+
     if (params.data_type == "multiplane"){
         // Run motion correction
         motion_correction(
@@ -25,12 +30,12 @@ workflow {
 
         // Run movie qc
         movie_qc(
-            motion_correction.out.motion_results.flatten()
+            motion_correction.out.motion_results_all.flatten()
         )
 
         // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json(
-            motion_correction.out.motion_results.collect(),
+            motion_correction.out.motion_results_all.collect(),
             ophys_mount_jsons.collect()
         )
 
@@ -39,7 +44,7 @@ workflow {
             decrosstalk_split_json.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
-            motion_correction.out.motion_results.collect(),
+            motion_correction.out.motion_results_all.collect(),
             converter_capsule.out.converter_results_all.collect()
         )
 
@@ -59,11 +64,11 @@ workflow {
 
         // Run movie qc
         movie_qc(
-            motion_correction.out.motion_results.collect()
+            motion_correction.out.motion_results_all.collect()
         )
 
         extraction_suite2p(
-            motion_correction.out.motion_results.collect(),
+            motion_correction.out.motion_results_all.collect(),
             ophys_mount_jsons.collect()
         )
     }
@@ -106,9 +111,21 @@ workflow {
     
 
     if (params.data_type == "multiplane"){
-    // Run Quality Control Aggregator
+
+        // Run Ophys NWB Packaging for Multiplane
+        ophys_nwb_multiplane(
+            ophys_mount_jsons.collect(),
+            nwb_packaging_subject.out.subject_nwb_results.collect(),
+            motion_correction.out.motion_results_all.collect(),
+            decrosstalk_roi_images.out.capsule_results.collect(),
+            extraction_suite2p.out.capsule_results.collect(),
+            dff_capsule.out.dff_data_process_json.collect(),
+            oasis_event_detection.out.events_json.collect()
+        )
+
+        // Run Quality Control Aggregator
         quality_control_aggregator(
-            motion_correction.out.motion_qc_json.collect(),
+            motion_correction.out.motion_results.collect(),
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
@@ -132,6 +149,17 @@ workflow {
         )
         
     } else {
+
+        // Run Ophys NWB Packaging
+        ophys_nwb(
+            ophys_mount_jsons.collect(),
+            nwb_packaging_subject.out.subject_nwb_results.collect(),
+            motion_correction.out.motion_results_all.collect(),
+            extraction_suite2p.out.capsule_results.collect(),
+            dff_capsule.out.dff_data_process_json.collect(),
+            oasis_event_detection.out.events_json.collect()
+        )
+
         // Run Pipeline Processing Metadata Aggregator
         pipeline_processing_metadata_aggregator(
             motion_correction.out.motion_data_process_json.collect(),
@@ -207,10 +235,10 @@ process motion_correction {
 
     output:
     path 'capsule/results/*'
-    path 'capsule/results/*', emit: 'motion_results', type: 'dir'
+    path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
-    path 'capsule/results/*/motion_correction/*', emit: 'motion_qc_json'
+    path 'capsule/results/*/motion_correction/*', emit: 'motion_results'
 
     script:
     """
@@ -578,7 +606,7 @@ process classifier {
     
 	output:
 	path 'capsule/results/*/*/*.json', emit: 'classifier_jsons'
-	// path 'capsule/results/*/classification/*classification.h5' into capsule_aind_ophys_classifier_17_to_capsule_aind_ophys_nwb_12_27
+    path 'capsule/results/*/classification/*classification.h5', emit: 'classifer_h5'
 	path 'capsule/results/*/*/*.png', emit: 'classifier_png'
 	path 'capsule/results/*'
 
@@ -617,10 +645,54 @@ process classifier {
 	"""
 }
 
-// capsule - aind-ophys-quality-control-aggregator
-process quality_control_aggregator {
-	tag 'capsule-4691390'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v3"
+process nwb_packaging_subject {
+	tag 'capsule-8198603'
+	container "$REGISTRY_HOST/published/bdc9f09f-0005-4d09-aaf9-7e82abd93f19:v2"
+
+	cpus 1
+	memory '8 GB'
+
+	input:
+	path 'capsule/data/ophys_session' ophys_mount_jsons
+
+	output:
+	path 'capsule/results/*', emit: 'subject_nwb_results'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=bdc9f09f-0005-4d09-aaf9-7e82abd93f19
+	export CO_CPUS=1
+	export CO_MEMORY=8589934592
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8198603.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${ophys_mount_jsons} capsule/data
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run ${params.capsule_nwb_packaging_subject_capsule_13_args}
+
+	echo "[${task.tag}] completed!"
+	"""
+}
+
+// capsule - aind-ophys-nwb
+process ophys_nwb {
+	tag 'capsule-9383700'
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v12"
 
 	cpus 1
 	memory '8 GB'
@@ -628,16 +700,13 @@ process quality_control_aggregator {
 	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
-	path motion_correction_results
-    path movie_qc_json
-    path movie_qc_png
-    path decrosstalk_results
-    path extraction_suite2p_results
-    path dff_results
-    path oasis_event_detection_results
-    path oasis_event_json
-    path classifier_jsons
-    path classifier_pngs
+    path 'capsule/data/raw' ophys_mount_jsons
+    path 'capsule/data/nwb/' subject_nwb_results
+    path 'capsule/data/processed/' motion_correction_results
+    path 'capsule/data/processed/' extraction_results
+	path 'capsule/data/processed/' classifer_h5
+    path 'capsule/data/processed/' dff_results
+	path 'capsule/data/processed/' event_detection_results
 
 	output:
 	path 'capsule/results/*'
@@ -647,7 +716,7 @@ process quality_control_aggregator {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=4a698b5c-f5f6-4671-8234-dc728d049a68
+	export CO_CAPSULE_ID=8c436e95-8607-4752-8e9f-2b62024f9326
 	export CO_CPUS=1
 	export CO_MEMORY=8589934592
 
@@ -655,21 +724,90 @@ process quality_control_aggregator {
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
+    mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
+    mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_correction_results} capsule/data
-    cp -r ${movie_qc_json} capsule/data
-    cp -r ${movie_qc_png} capsule/data
-    cp -r ${decrosstalk_results} capsule/data
-    cp -r ${extraction_suite2p_results} capsule/data
-    cp -r ${dff_results} capsule/data
-    cp -r ${oasis_event_detection_results} capsule/data
-    cp -r ${oasis_event_json} capsule/data
-    cp -r ${classifier_jsons} capsule/data
-    cp -r ${classifier_pngs} capsule/data
+    cp -r ${ophys_mount_jsons} capsule/data/raw
+    cp -r ${subject_nwb_results} capsule/data/nwb
+    cp -r ${motion_correction_results} capsule/data/processed
+    cp -r ${extraction_results} capsule/data/processed
+    cp -r ${classifer_h5} capsule/data/processed
+    cp -r ${dff_results} capsule/data/processed
+    cp -r ${event_detection_results} capsule/data/processed
+
+	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v3.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+	git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run
+
+	echo "[${task.tag}] completed!"
+	"""
+}
+
+// capsule - aind-ophys-nwb
+process ophys_nwb_multiplane {
+	tag 'capsule-9383700'
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v12"
+
+	cpus 1
+	memory '8 GB'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+    path 'capsule/data/raw', ophys_mount_jsons
+    path 'capsule/data/nwb/', subject_nwb_results
+    path 'capsule/data/processed/multiplane-ophys_raw', motion_correction_results
+    path 'capsule/data/processed/', decrosstalk_results
+    path 'capsule/data/processed/', extraction_results
+	path 'capsule/data/processed/', classifer_h5
+	path 'capsule/data/processed/', dff_results
+	path 'capsule/data/processed/', event_detection_results
+
+	output:
+	path 'capsule/results/*'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=8c436e95-8607-4752-8e9f-2b62024f9326
+	export CO_CPUS=1
+	export CO_MEMORY=8589934592
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
+    mkdir -p capsule/data/multiplane-ophys_raw && ln -s \$PWD/capsule/data/multiplane-ophys_raw /multiplane-ophys_raw
+    mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
+    mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${ophys_mount_jsons} capsule/data/raw
+    cp -r ${subject_nwb_results} capsule/data/nwb
+    cp -r ${motion_correction_results} capsule/data/multiplane-ophys_raw
+    cp -r ${decrosstalk_results} capsule/data/processed
+    cp -r ${extraction_results} capsule/data/processed
+    cp -r ${classifer_h5} capsule/data/processed
+    cp -r ${dff_results} capsule/data/processed
+    cp -r ${event_detection_results} capsule/data/processed
+
+	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -793,6 +931,71 @@ process pipeline_processing_metadata_aggregator {
 	cd capsule/code
 	chmod +x run
 	./run --processor_full_name "Arielle Leon" --copy-ancillary-files True --derived-data-description True
+
+	echo "[${task.tag}] completed!"
+	"""
+}
+
+// capsule - aind-ophys-quality-control-aggregator
+process quality_control_aggregator {
+	tag 'capsule-4691390'
+	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v3"
+
+	cpus 1
+	memory '8 GB'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+	path motion_correction_results
+    path movie_qc_json
+    path movie_qc_png
+    path decrosstalk_results
+    path extraction_suite2p_results
+    path dff_results
+    path oasis_event_detection_results
+    path oasis_event_json
+    path classifier_jsons
+    path classifier_pngs
+
+	output:
+	path 'capsule/results/*'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=4a698b5c-f5f6-4671-8234-dc728d049a68
+	export CO_CPUS=1
+	export CO_MEMORY=8589934592
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${motion_correction_results} capsule/data
+    cp -r ${movie_qc_json} capsule/data
+    cp -r ${movie_qc_png} capsule/data
+    cp -r ${decrosstalk_results} capsule/data
+    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${dff_results} capsule/data
+    cp -r ${oasis_event_detection_results} capsule/data
+    cp -r ${oasis_event_json} capsule/data
+    cp -r ${classifier_jsons} capsule/data
+    cp -r ${classifier_pngs} capsule/data
+
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v3.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run
 
 	echo "[${task.tag}] completed!"
 	"""
