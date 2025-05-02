@@ -119,7 +119,7 @@ workflow {
             motion_correction.out.motion_results_all.collect(),
             decrosstalk_roi_images.out.capsule_results.collect(),
             extraction_suite2p.out.capsule_results.collect(),
-            classifer.out.classifer_h5.collect(),
+            classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect()
         )
