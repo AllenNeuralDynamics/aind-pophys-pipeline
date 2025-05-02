@@ -119,6 +119,7 @@ workflow {
             motion_correction.out.motion_results_all.collect(),
             decrosstalk_roi_images.out.capsule_results.collect(),
             extraction_suite2p.out.capsule_results.collect(),
+            cl
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect()
         )
@@ -142,6 +143,7 @@ workflow {
             motion_correction.out.motion_data_process_json.collect(),
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
             extraction_suite2p.out.extraction_data_process_json.collect(),
+            classifier.out.classifier_jsons.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect(),
             ophys_mount_jsons.collect(),
@@ -156,6 +158,7 @@ workflow {
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results_all.collect(),
             extraction_suite2p.out.capsule_results.collect(),
+            classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect()
         )
