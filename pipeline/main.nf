@@ -676,6 +676,7 @@ process nwb_packaging_subject {
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data/ophys_session && ln -s \$PWD/capsule/data/ophys_session /ophys_session
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8198603.git" capsule-repo
