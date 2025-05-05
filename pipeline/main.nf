@@ -119,11 +119,11 @@ workflow {
             ophys_mount_jsons.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results_all.collect(),
-            decrosstalk_roi_images.out.capsule_results.collect(),
-            extraction_suite2p.out.capsule_results.collect(),
+            decrosstalk_roi_images.out.decrosstalk_results_all.collect(),
+            extraction_suite2p.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
-            dff_capsule.out.dff_data_process_json.collect(),
-            oasis_event_detection.out.events_json.collect()
+            dff_capsule.out.dff_results_all.collect(),
+            oasis_event_detection.out.events_results_all.collect()
         )
 
         // Run Quality Control Aggregator
@@ -159,10 +159,10 @@ workflow {
             ophys_mount_jsons.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results_all.collect(),
-            extraction_suite2p.out.capsule_results.collect(),
+            extraction_suite2p.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
-            dff_capsule.out.dff_data_process_json.collect(),
-            oasis_event_detection.out.events_json.collect()
+            dff_capsule.out.dff_results_all.collect(),
+            oasis_event_detection.out.events_results_all.collect()
         )
 
         // Run Pipeline Processing Metadata Aggregator
@@ -398,6 +398,7 @@ process decrosstalk_roi_images {
     path 'capsule/results/*', emit: 'capsule_results'
     path 'capsule/results/*/*/*data_process.json', emit: 'decrosstalk_data_process_json', optional: true
     path 'capsule/results/*/*/*.json', emit: 'decrosstalk_qc_json', optional: true
+    path 'capsule/results/*/decrosstalk/*', emit: 'decrosstalk_results_all'
     
     script:
     """
@@ -452,6 +453,7 @@ process extraction_suite2p {
     path 'capsule/results/*', emit: 'capsule_results'
     path 'capsule/results/*/*/*data_process.json', emit: 'extraction_data_process_json', optional: true
     path 'capsule/results/*/*/*.json', emit: 'extraction_qc_json', optional: true
+    path 'capsule/results/*/extraction/*', emit: 'extraction_results_all'
 
 
     script:
@@ -506,6 +508,7 @@ process dff_capsule {
     path 'capsule/results/*', emit: 'capsule_results'
     path 'capsule/results/*/*/*data_process.json', emit: 'dff_data_process_json', optional: true
     path 'capsule/results/*/*/*.json', emit: 'dff_qc_json', optional: true
+    path 'capsule/results/*/dff/*', emit: 'dff_results_all'
 
     script:
     """
@@ -558,6 +561,7 @@ process oasis_event_detection {
     path 'capsule/results/*'
     path 'capsule/results/*/*/plots/*', emit: 'event_qc_png', optional: true
     path 'capsule/results/*/*/*json', emit: 'events_json', optional: true
+    path 'capsule/results/*/event_detection/*', emit: 'events_results_all'
 
     script:
     """
