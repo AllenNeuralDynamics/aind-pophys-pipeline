@@ -117,6 +117,7 @@ workflow {
         ophys_nwb_multiplane(
             nwb_schemas.collect(),
             ophys_mount_jsons.collect(),
+            ophys_mount_sync_file.collect(),
             ophys_mount_pophys_directory.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results_all.collect(),
@@ -770,7 +771,7 @@ process ophys_nwb {
 // capsule - aind-ophys-nwb
 process ophys_nwb_multiplane {
 	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v12"
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v13"
 
 	cpus 1
 	memory '8 GB'
@@ -780,6 +781,7 @@ process ophys_nwb_multiplane {
 	input:
     path schemas
     path ophys_mount_jsons
+    path ophys_sync_file
     path ophys_mount_pophys_directory
     path subject_nwb_results
     path motion_correction_results
@@ -808,12 +810,14 @@ process ophys_nwb_multiplane {
     mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
     mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
     mkdir -p capsule/data/multiplane-ophys_raw && ln -s \$PWD/capsule/data/multiplane-ophys_raw /multiplane-ophys_raw
+    mkdir -p capsule/data/multiplane-ophys_raw/behavior && ln -s \$PWD/capsules/data/multiplane-ophys_raw/behavior /behavior
     mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
     mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${schemas} capsule/data/schemas
     cp -r ${ophys_mount_jsons} capsule/data/multiplane-ophys_raw
+    cp -r ${ophys_sync_file} capsule/data/multiplane-ophys_raw/behavior
     cp -r ${ophys_mount_pophys_directory} capsule/data/multiplane-ophys_raw
     cp -r ${subject_nwb_results} capsule/data/nwb
     cp -r ${motion_correction_results} capsule/data
