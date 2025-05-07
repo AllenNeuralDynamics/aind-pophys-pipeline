@@ -116,14 +116,15 @@ workflow {
         // Run Ophys NWB Packaging for Multiplane
         ophys_nwb_multiplane(
             nwb_schemas.collect(),
-            ophys_mount_jsons.collect(),
+            ophys_mount_jsons.collect()
+            ophys_mount_pophys_directory.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results_all.collect(),
             decrosstalk_roi_images.out.decrosstalk_results_all.collect(),
             extraction_suite2p.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_results_all.collect(),
-            oasis_event_detection.out.events_results_all.collect()
+            oasis_event_detection.out.events_h5.collect()
         )
 
         // Run Quality Control Aggregator
@@ -162,7 +163,7 @@ workflow {
             extraction_suite2p.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_results_all.collect(),
-            oasis_event_detection.out.events_results_all.collect()
+            oasis_event_detection.out.events_h5.collect()
         )
 
         // Run Pipeline Processing Metadata Aggregator
@@ -561,7 +562,7 @@ process oasis_event_detection {
     path 'capsule/results/*'
     path 'capsule/results/*/*/plots/*', emit: 'event_qc_png', optional: true
     path 'capsule/results/*/*/*json', emit: 'events_json', optional: true
-    path 'capsule/results/*/event_detection/*', emit: 'events_results_all'
+    path 'capsule/results/*/events/*.h5', emit: 'events_h5'
 
     script:
     """
@@ -779,6 +780,7 @@ process ophys_nwb_multiplane {
 	input:
     path schemas
     path ophys_mount_jsons
+    path ophys_mount_pophys_directory
     path subject_nwb_results
     path motion_correction_results
     path decrosstalk_results
@@ -811,9 +813,10 @@ process ophys_nwb_multiplane {
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${schemas} capsule/data/schemas
-    cp -r ${ophys_mount_jsons} capsule/data/raw
+    cp -r ${ophys_mount_jsons} capsule/data/multiplane-ophys_raw
+    cp -r ${ophys_mount_pophys_directory} capsule/data/multiplane-ophys_raw
     cp -r ${subject_nwb_results} capsule/data/nwb
-    cp -r ${motion_correction_results} capsule/data/multiplane-ophys_raw
+    cp -r ${motion_correction_results} capsule/data
     cp -r ${decrosstalk_results} capsule/data/processed
     cp -r ${extraction_results} capsule/data/processed
     cp -r ${classifer_h5} capsule/data/processed
