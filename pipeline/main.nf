@@ -120,7 +120,7 @@ workflow {
             ophys_mount_sync_file.collect(),
             ophys_mount_pophys_directory.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
-            motion_correction.out.motion_results_all.collect(),
+            motion_correction.out.motion_results.collect(),
             decrosstalk_roi_images.out.decrosstalk_results_all.collect(),
             extraction_suite2p.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
