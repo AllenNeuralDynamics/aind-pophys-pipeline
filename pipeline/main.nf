@@ -219,7 +219,7 @@ process converter_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
+    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch" --debug=True
 
     echo "[${task.tag}] completed!"
     ls -a /results
@@ -276,7 +276,7 @@ process motion_correction {
     cd capsule/code
     ls -la /data
     chmod +x run
-    ./run
+    ./run --debug
     echo "[${task.tag}] completed!"
     """
 }
@@ -431,7 +431,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --debug
 
     echo "[${task.tag}] completed!"
     """
@@ -771,7 +771,7 @@ process ophys_nwb {
 // capsule - aind-ophys-nwb
 process ophys_nwb_multiplane {
 	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v13"
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v12"
 
 	cpus 1
 	memory '8 GB'
@@ -820,7 +820,7 @@ process ophys_nwb_multiplane {
     cp -r ${ophys_sync_file} capsule/data/multiplane-ophys_raw/behavior
     cp -r ${ophys_mount_pophys_directory} capsule/data/multiplane-ophys_raw
     cp -r ${subject_nwb_results} capsule/data/nwb
-    cp -r ${motion_correction_results} capsule/data
+    cp -r ${motion_correction_results} capsule/data/processed
     cp -r ${decrosstalk_results} capsule/data/processed
     cp -r ${extraction_results} capsule/data/processed
     cp -r ${classifer_h5} capsule/data/processed
@@ -830,7 +830,7 @@ process ophys_nwb_multiplane {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
+	git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
