@@ -126,59 +126,42 @@ The events.h5 contains the following keys:
 
 # Parameters
 
-Argparse is used to parse arguments from the command line. All capsules take in the input directory and output directory.
+Parameters are available to set throught the App-Panel in Code Ocean.
 
-`aind-ophys-motion-correction` and `aind-ophys-extraction-suite2p` can take in parameters to adjust all Suite2p motion-correction and segmentation settings.
+**General Parameters**
 
-`aind-ophys-motion-correction`
+Data Type - Option to run in multiplane or single plane mode (default: `single`, type: `str`)
 
-```bash
-        --input_dir                                   Input directory. (default: '/data')
-        --output_dir                                  Output directory to save the data to. (default: '/results')
-        --data_type                                   Data input type, h5 or TIFF. (default: h5)
-        --debug                                       Choose to run in debug form where it clips the incoming movie to 6 minutes. (default: False)
-        --force_refImg                                Force the use of an external reference image (default: True)
+**aind-pophys-converter-capsule**
 
-        --outlier_detrend_window                      For outlier rejection in the xoff/yoff outputs of suite2p, the offsets are first de-trended with a median filter of this duration [seconds]. This value is ~30 or 90 samples in size for 11 and 31 Hz sampling rates respectively.
+Input directory - Where to find input data (default: `/data`, type: `str`)
 
-        --outlier_maxregshift                         Units [fraction FOV dim]. After median-filter etrending, outliers more than this value are clipped to this value in x and y offset, independently.This is similar to Suite2Ps internal maxregshift, but allows for low-frequency drift. Default value of 0.05 is typically clipping outliers to 512 * 0.05 = 25 pixels above or below the median trend.
+Output directory - Where to save outputs (default: `/results`, type: `str`)
 
-        --clip_negative                               Whether or not to clip negative pixel values in output. Because the pixel values in the raw movies are set by the current coming off a photomultiplier tube, there can be pixels with negative values (current has a sign), possibly due to noise in the rig. Some segmentation algorithms cannot handle negative values in the movie, so we have this option to artificially set those pixels to zero.
+Temporary directory - Specify temporary save location (default: `/scratch`, type: `str`)
 
-        --max_reference_iterations                    Maximum number of iterations for creating a reference image (default: 8)
+Debug - Run in debug mode (default: `False`, type: `str`)
 
-        --auto_remove_empty_frames                    Automatically detect empty noise frames at the start and end of the movie. Overrides values set in trim_frames_start and trim_frames_end. Some movies arrive with otherwise quality data but contain a set of frames that are empty and contain pure noise. When processed, these frames tend to receive large random shifts that throw off motion border calculation. Turning on this setting automatically detects these frames before processing and removes them from reference image creation, automated smoothing parameter searches, and finally the motion border calculation. The frames are still written however any shift estimated is removed and their shift is set to 0 to avoid large motion borders.
+**aind-ophys-motion-correction**
 
-        --trim_frames_start                           Number of frames to remove from the start of the movie if known. Removes frames from motion border calculation and resets the frame shifts found. Frames are still written to motion correction. Raises an error if auto_remove_empty_frames is set and trim_frames_start > 0
+Input directory - Where to find input data (default: `/data`, type: `str`)
 
-        --trim_frames_end                             Number of frames to remove from the end of the movie if known. Removes frames from motion border calculation and resets the frame shifts found. Frames are still written to motion correction. Raises an error if uto_remove_empty_frames is set and trim_frames_start > 0
+Data format - Format of input data (default: `HDF5`, type: `str`)
 
-        --do_optimize_motion_params                   Do a search for best parameters of smooth_sigma and smooth_sigma_time. Adds significant runtime cost to motion correction and should only be run once per experiment with the resulting parameters being stored for later use.
+**aind-ophys-extraction**
 
-        --use_ave_image_as_reference                  Only available if `do_optimize_motion_params` is set. After the a best set of smoothing parameters is found, use the resulting average image as the reference for the full registration. This can be used as two step registration by setting by setting smooth_sigma_min=smooth_sigma_max and smooth_sigma_time_min=smooth_sigma_time_max and steps=1.
+Initialiazation - how to run segmentation (default: `mean`, type: `str`)
 
-```
+Diameter - Cellpose diameter (default: `0`, type: `int`)
 
-`aind-ophys-extraction-suite2p`
+**aind-pipeline-processing-metadata-aggregator**
 
-```bash
-        --diameter                                    Diameter that will be used for cellpose. If set to zero, diameter is estimated.
-    
-        --anatomical_only                             If greater than 0, specifies what to use Cellpose on. 1: Will find masks on max projection image divided by mean image 2: Will find masks on mean image 3: Will find masks on enhanced mean image 4: Will find masks on maximum projection image
-    
-        --denoise                                     Whether or not binned movie should be denoised before cell detection.
-    
-        --cellprob_threshold                          Threshold for cell detection that will be used by cellpose.
-    
-        --flow_threshold                              Flow threshold that will be used by cellpose.
-    
-        --spatial_hp_cp                               Window for spatial high-pass filtering of image to be used for cellpose
+Processor full name - Processor of the data
 
-        --pretrained_model                            Path to pretrained model or string for model type (can be user’s model).
+Copy ancillary files - Copy relevant metadata from the primary asset (default: `False`, type: `bool`)
 
-        --use_suite2p_neuropil                        Whether to use the fix weight provided by suite2p for neuropil correction. If not, we use a mutual information based method.
+Create derived data description - Output derived data description to results (default: `False`, type: `bool`)
 
-```
 
 # Run
 
