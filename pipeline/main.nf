@@ -451,8 +451,8 @@ process decrosstalk_roi_images {
 
 // capsule - aind-ophys-extraction-suite2p
 process extraction_suite2p {
-    tag 'capsule-3592435'
-    container "$REGISTRY_HOST/capsule/c9f136a2-67d7-4adf-b15a-e02af4237fa4"
+    tag 'capsule-9911715'
+	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v11"
 
     cpus 4
     memory '128 GB'
@@ -489,10 +489,9 @@ process extraction_suite2p {
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3592435.git" capsule-repo
-    git -C capsule-repo checkout 8131e2f --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
