@@ -1,8 +1,8 @@
 # Planar Optical Physiology Processing Pipeline
 
-The planar optical physiology pipeline is capable of processing single plane and multiplane image data. Inputs can be in the form of an HDF5 timeseries or of a group of TIFF files. Motion correction and segmentation are both done using [Suite2p](https://github.com/MouseLand/suite2p) and the final outputs of the pipeline are the cellular events detected by [OASIS](https://github.com/j-friedrich/OASIS). For multiplane data only, a step to de-multiplex ghosting in images acquired asynchronously is applied for better ROI and thus event detection.
+The planar optical physiology pipeline is capable of processing single plane and multiplane image data. Inputs can be in the form of an HDF5 timeseries or of a group of TIFF files. Motion correction is done using [Suite2p](https://github.com/MouseLand/suite2p) and segmentation can be done using Suite2p, Cellpose or CaImAn, see `--init`. Trace extraction with neuropil correction uses either Suite2p or CaImAn, see `--neuropil`.  and the final outputs of the pipeline are the cellular events detected by [OASIS](https://github.com/j-friedrich/OASIS). For multiplane data only, a step to de-multiplex ghosting in images acquired asynchronously is applied for better ROI and thus event detection.
 
-The pipeline runs on [Nextflows](https://www.nextflow.io/) DLS2 and contains the following steps:
+The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the following steps:
 
 * [aind-pophys-converter-capsule](https://github.com/AllenNeuralDynamics/aind-pophys-converter-capsule): Used to determine input type and pre-process data to run in the pipeline. For multiplane data that is stored in an interleaved TIFF, data are de-interleaved into planes and stored as separate HDF5 timeseries. Data collected on our Bergamo rig requires special handling of portions (or epochs) of the data. Epochs need to be annotated for special handling in the motion correction and segmentation repositories. 
 
@@ -12,7 +12,7 @@ The pipeline runs on [Nextflows](https://www.nextflow.io/) DLS2 and contains the
 
 * [aind-ophys-decrosstalk-roi-images](https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images): Removes the ghosting of cells from plane pairs scanned consecutively.
 
-* [aind-ophys-extraction](https://github.com/AllenNeuralDynamics/aind-ophys-extraction): Combination of Cellpose and Suite2p cell detection and extraction.
+* [aind-ophys-extraction](https://github.com/AllenNeuralDynamics/aind-ophys-extraction): Uses a mix-and-match approach to combine Cellpose, Suite2p, and CaImAn for cell detection and signal extraction.
 
 * [aind-ophys-dff](https://github.com/AllenNeuralDynamics/aind-ophys-dff/blob/main/code/run_capsule.py#L116): Uses [aind-ophys-utils](https://github.com/AllenNeuralDynamics/aind-ophys-utils/tree/main) to compute the delta F over F from the fluorescence traces.
 
@@ -56,7 +56,7 @@ The following folders will be under the field of view directory within the `resu
 
 `ophys_converter`
 
-The converter can determine if a session is multiplane or related to AIND's Bergamo rig. If the data are neither of thess, the converter will drop a text file. The multiplane and Bergamo outputs do not get saved since they are transitional artifacts of processing. 
+The converter can determine if a session is multiplane or related to AIND's Bergamo rig. If the data are neither of these, the converter will drop a text file. The multiplane and Bergamo outputs do not get saved since they are transitional artifacts of processing. 
 
 `motion_correction`
 
@@ -121,12 +121,12 @@ dF/F signals for each ROI are packed into the 'data' key within the dataset.
 ```
 The events.h5 contains the following keys:
 
-* 'cell_roi_ids', list of ROI ID values
-* 'events', event traces for each ROI
+* `denoised`, the deconvolved neural activity ("events" / "spike rates")
+* `events`, event traces for each ROI
 
 # Parameters
 
-Parameters are available to set throught the App-Panel in Code Ocean.
+Parameters are available to set through the App-Panel in Code Ocean.
 
 **General Parameters**
 
@@ -150,9 +150,9 @@ Data format - Format of input data (default: `HDF5`, type: `str`)
 
 **aind-ophys-extraction**
 
-Initialiazation - how to run segmentation (default: `mean`, type: `str`)
+Initialization - how to run segmentation (default: `mean`, type: `str`)
 
-Diameter - Cellpose diameter (default: `0`, type: `int`)
+Diameter - Diameter for cell segmentation of all 4 intialization methods (default: `0`, type: `int`)
 
 **aind-pipeline-processing-metadata-aggregator**
 
@@ -188,7 +188,7 @@ from codeocean.data_asset import (
 
 client = CodeOcean(domain=os.environ["CODEOCEAN_URL"], token=os.environ["API_TOKEN"])
 
-# Run a pipeline with ordered parameters.
+# Run a pipeline with named parameters.
 
 run_params = RunParams(
     pipeline_id=os.environ["PIPELINE_ID"],
