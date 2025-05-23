@@ -129,7 +129,7 @@ workflow {
         )
 
         // Run Quality Control Aggregator
-        quality_control_aggregator(
+        quality_control_aggregator_multiplane(
             motion_correction.out.motion_results.collect(),
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
@@ -165,6 +165,18 @@ workflow {
             classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_results_all.collect(),
             oasis_event_detection.out.events_h5.collect()
+        )
+        // Run Quality Control Aggregator
+        quality_control_aggregator(
+            motion_correction.out.motion_results.collect(),
+            movie_qc.out.movie_qc_json.collect(),
+            movie_qc.out.movie_qc_png.collect(),
+            extraction_suite2p.out.extraction_qc_json.collect(),
+            dff_capsule.out.dff_qc_json.collect(),
+            oasis_event_detection.out.event_qc_png.collect(),
+            oasis_event_detection.out.events_json.collect(),
+            classifier.out.classifier_jsons.collect(),
+            classifier.out.classifier_png.collect()
         )
 
         // Run Pipeline Processing Metadata Aggregator
@@ -703,8 +715,8 @@ process nwb_packaging_subject {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v12"
+	tag 'capsule-7197641'
+	container "$REGISTRY_HOST/capsule/0be2aae9-3cda-45de-b5f6-870c0b569819:41ff6fd9d464d0ed7f4b68d9f6acba7e"
 
 	cpus 1
 	memory '8 GB'
@@ -755,9 +767,10 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
+    git -C capsule-repo checkout f9984e8 --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
@@ -770,8 +783,8 @@ process ophys_nwb {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb_multiplane {
-	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v12"
+	tag 'capsule-7197641'
+	container "$REGISTRY_HOST/capsule/0be2aae9-3cda-45de-b5f6-870c0b569819:41ff6fd9d464d0ed7f4b68d9f6acba7e"
 
 	cpus 1
 	memory '8 GB'
@@ -830,9 +843,10 @@ process ophys_nwb_multiplane {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
+    git -C capsule-repo checkout f9984e8 --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
@@ -960,9 +974,9 @@ process pipeline_processing_metadata_aggregator {
 }
 
 // capsule - aind-ophys-quality-control-aggregator
-process quality_control_aggregator {
+process quality_control_aggregator_multiplane {
 	tag 'capsule-4691390'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v3"
+	container "$REGISTRY_HOST/capsule/05b8a796-f8c7-4177-b486-82abfc146e49:b902af65b696824e8ca753bf50afa9f3"
 
 	cpus 1
 	memory '8 GB'
@@ -1011,9 +1025,74 @@ process quality_control_aggregator {
     cp -r ${classifier_pngs} capsule/data
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v3.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4691390.git" capsule-repo
+    git -C capsule-repo checkout 7c32641 --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
+
+	echo "[${task.tag}] running capsule..."
+	cd capsule/code
+	chmod +x run
+	./run
+
+	echo "[${task.tag}] completed!"
+	"""
+}
+
+// capsule - aind-ophys-quality-control-aggregator
+process quality_control_aggregator{
+	tag 'capsule-4691390'
+	container "$REGISTRY_HOST/capsule/05b8a796-f8c7-4177-b486-82abfc146e49:b902af65b696824e8ca753bf50afa9f3"
+
+	cpus 1
+	memory '8 GB'
+
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+
+	input:
+	path motion_correction_results
+    path movie_qc_json
+    path movie_qc_png
+    path extraction_suite2p_results
+    path dff_results
+    path oasis_event_detection_results
+    path oasis_event_json
+    path classifier_jsons
+    path classifier_pngs
+
+	output:
+	path 'capsule/results/*'
+
+	script:
+	"""
+	#!/usr/bin/env bash
+	set -e
+
+	export CO_CAPSULE_ID=4a698b5c-f5f6-4671-8234-dc728d049a68
+	export CO_CPUS=1
+	export CO_MEMORY=8589934592
+
+	mkdir -p capsule
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${motion_correction_results} capsule/data
+    cp -r ${movie_qc_json} capsule/data
+    cp -r ${movie_qc_png} capsule/data
+    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${dff_results} capsule/data
+    cp -r ${oasis_event_detection_results} capsule/data
+    cp -r ${oasis_event_json} capsule/data
+    cp -r ${classifier_jsons} capsule/data
+    cp -r ${classifier_pngs} capsule/data
+
+	echo "[${task.tag}] cloning git repo..."
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4691390.git" capsule-repo
+    git -C capsule-repo checkout 7c32641 --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
