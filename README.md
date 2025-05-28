@@ -173,11 +173,12 @@ Derived from the example on the [Code Ocean API Github](https://github.com/codeo
 import os
 
 from codeocean import CodeOcean
-from codeocean.computation import RunParams
-from codeocean.data_asset import (
-    DataAssetParams,
+from codeocean.computation import (
     DataAssetsRunParam,
-    PipelineProcessParams,
+    NamedRunParam,
+    RunParams,
+)
+from codeocean.data_asset import (
     Source,
     ComputationSource,
     Target,
@@ -190,39 +191,57 @@ client = CodeOcean(domain=os.environ["CODEOCEAN_URL"], token=os.environ["API_TOK
 
 # Run a pipeline with named parameters.
 
-run_params = RunParams(
-    pipeline_id=os.environ["PIPELINE_ID"],
+snr_thr = 1.8 # default = 1.5
+nb = 3 # default = 2
+
+run_params=RunParams(
+    capsule_id=job_settings.pipeline_id,
     data_assets=[
         DataAssetsRunParam(
-            id="eeefcc52-b445-4e3c-80c5-0e65526cd712",
-            mount="Reference",
-        ),
+            id=job_settings.asset_id,
+            mount="ophys",
+        )
+    ],
+    named_parameters=[
+        NamedRunParam(
+            param_name="init", value="greedy_roi"
+            ),
+        NamedRunParam(
+            param_name="neuropil", value="cnmf"
+            ),
+        NamedRunParam(
+            param_name="nb", value=str(nb)
+            ),
+        NamedRunParam(
+            param_name="snr_thr", value=str(snr_thr)
+        )
+        ],
 )
 
 computation = client.computations.run_capsule(run_params)
 
 # Wait for pipeline to finish.
 
-computation = client.computations.wait_until_completed(computation)
+client.computations.wait_until_completed(computation)
 
 # Create an external (S3) data asset from computation results.
 
 data_asset_params = DataAssetParams(
     name="My External Result",
-    description="Computation result",
-    mount="my-result",
-    tags=["my", "external", "result"],
-    source=Source(
+    description="<description of data>",
+    mount="<mount>",
+    tags=["<version>", "<platform>", "<data_type>"],
+    source=Source[
         computation=ComputationSource(
             id=computation.id,
         ),
-    ),
-    target=Target(
+    ],
+    target=Target[
         aws=AWSS3Target(
             bucket=os.environ["EXTERNAL_S3_BUCKET"],
-            prefix=os.environ.get("EXTERNAL_S3_BUCKET_PREFIX"),
+            prefix="<some_prefex>",
         ),
-    ),
+    ],
 )
 
 data_asset = client.data_assets.create_data_asset(data_asset_params)
