@@ -121,8 +121,8 @@ dF/F signals for each ROI are packed into the 'data' key within the dataset.
 ```
 The events.h5 contains the following keys:
 
-* `denoised`, the deconvolved neural activity ("events" / "spike rates")
-* `events`, event traces for each ROI
+* `events`: The deconvolved neural activity ("events" / "spike rates").
+* `denoised`: The inferred denoised fluorescence signal.
 
 # Parameters
 
@@ -152,7 +152,7 @@ Data format - Format of input data (default: `HDF5`, type: `str`)
 
 Initialization - how to run segmentation (default: `mean`, type: `str`)
 
-Diameter - Diameter for cell segmentation of all 4 intialization methods (default: `0`, type: `int`)
+Diameter - Diameter for cell segmentation of all 4 initialization methods (default: `0`, type: `int`)
 
 **aind-pipeline-processing-metadata-aggregator**
 
@@ -239,7 +239,7 @@ data_asset_params = DataAssetParams(
     target=Target[
         aws=AWSS3Target(
             bucket=os.environ["EXTERNAL_S3_BUCKET"],
-            prefix="<some_prefex>",
+            prefix="<some_prefix>",
         ),
     ],
 )
