@@ -767,7 +767,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
-    git -C capsule-repo checkout f9984e8 --quiet
+    git -C capsule-repo checkout 49-latest-version-is-broken-for-multiplane --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -843,7 +843,7 @@ process ophys_nwb_multiplane {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
-    git -C capsule-repo checkout f9984e8 --quiet
+    git -C capsule-repo checkout 49-latest-version-is-broken-for-multiplane --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
