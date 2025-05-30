@@ -56,7 +56,7 @@ workflow {
         decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
         decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
         decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
-        
+
         // Run extraction Suite2P
         extraction(
             decrosstalk_roi_images.out.capsule_results.flatten(),
@@ -833,7 +833,7 @@ process quality_control_aggregator {
     path motion_correction_results
     path movie_qc_json
     path movie_qc_png
-    path decrosstalk_results optional: true
+    path decrosstalk_results
     path extraction_results
     path dff_results
     path oasis_event_detection_results
