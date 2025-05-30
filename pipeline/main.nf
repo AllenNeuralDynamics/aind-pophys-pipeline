@@ -14,12 +14,9 @@ workflow {
     def ophys_mount_sync_file = params.data_type == "multiplane" ?
         Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any') : Channel.empty()
     // Set decrosstalk channel to empty if not multiplane
-    def decrosstalk_qc_json = params.data_type == "multiplane" ?
-        decrosstalk_roi_images.out.decrosstalk_qc_json : Channel.empty()
-    def decrosstalk_data_process_json = params.data_type == "multiplane" ?
-        decrosstalk_roi_images.out.decrosstalk_data_process_json : Channel.empty()
-    def decrosstalk_results_all = params.data_type == "multiplane" ?
-        decrosstalk_roi_images.out.decrosstalk_results_all : Channel.empty()
+    def decrosstalk_qc_json =  Channel.empty()
+    def decrosstalk_data_process_json = Channel.empty()
+    def decrosstalk_results_all = Channel.empty()
     
     // Run converter
     converter_capsule(ophys_mount_single_to_pophys_converter)
@@ -56,7 +53,10 @@ workflow {
             motion_correction.out.motion_results_all.collect(),
             converter_capsule.out.converter_results_all.collect()
         )
-
+        decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
+        decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
+        decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
+        
         // Run extraction Suite2P
         extraction(
             decrosstalk_roi_images.out.capsule_results.flatten(),
