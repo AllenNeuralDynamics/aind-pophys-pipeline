@@ -10,17 +10,14 @@ workflow {
     def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     def nwb_schemas = Channel.fromPath("$projectDir/../data/schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
-    // Only for mulitplane sessions
+    // Set ophys_mount_sync_file to empty if not multiplane
     def ophys_mount_sync_file = params.data_type == "multiplane" ?
         Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any') : Channel.empty()
     // Set decrosstalk channel to empty if not multiplane
-
     def decrosstalk_qc_json = params.data_type == "multiplane" ?
         decrosstalk_roi_images.out.decrosstalk_qc_json : Channel.empty()
-
     def decrosstalk_data_process_json = params.data_type == "multiplane" ?
         decrosstalk_roi_images.out.decrosstalk_data_process_json : Channel.empty()
-
     def decrosstalk_results_all = params.data_type == "multiplane" ?
         decrosstalk_roi_images.out.decrosstalk_results_all : Channel.empty()
     
