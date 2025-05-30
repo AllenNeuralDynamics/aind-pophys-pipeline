@@ -771,7 +771,7 @@ process pipeline_processing_metadata_aggregator {
     input:
     path ophys_mount_jsons
     path motion_correction_results
-    path decrosstalk_results optional: true
+    path decrosstalk_results
     path extraction_results
     path classifier_jsons
     path dff_results
