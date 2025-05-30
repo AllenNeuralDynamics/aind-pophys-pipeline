@@ -286,7 +286,6 @@ process motion_correction {
     
     echo "[${task.tag}] running capsule..."
     cd capsule/code
-    ls -la /data
     chmod +x run
     ./run
     echo "[${task.tag}] completed!"
