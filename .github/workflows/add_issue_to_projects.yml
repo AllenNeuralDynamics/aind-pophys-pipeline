@@ -1,4 +1,4 @@
-name: Add issue to Sci Comp and aind-physio-arch boards
+name: Add issue to Sci Comp triage board
 
 on:
   issues:
