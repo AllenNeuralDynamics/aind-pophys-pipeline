@@ -11,7 +11,8 @@ workflow {
     def nwb_schemas = Channel.fromPath("$projectDir/../data/schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
     // Only for mulitplane sessions
-    def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
+    def ophys_mount_sync_file = params.data_type == "multiplane" ?
+        Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any') : Channel.empty()
     // Set decrosstalk channel to empty if not multiplane
 
     def decrosstalk_qc_json = params.data_type == "multiplane" ?
