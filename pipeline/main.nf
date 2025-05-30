@@ -691,11 +691,11 @@ process ophys_nwb {
 	input:
     path schemas
     path ophys_mount_jsons
-    path ophys_sync_file optional: true
+    path ophys_sync_file
     path ophys_mount_pophys_directory
     path subject_nwb_results
     path motion_correction_results
-    path decrosstalk_results optional: true
+    path decrosstalk_results
     path extraction_results
 	path classifer_h5
 	path dff_results
