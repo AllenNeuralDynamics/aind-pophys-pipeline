@@ -50,7 +50,7 @@ workflow {
         )
 
         // Run extraction Suite2P
-        extraction_suite2p(
+        extraction(
             decrosstalk_roi_images.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
@@ -68,7 +68,7 @@ workflow {
             motion_correction.out.motion_results_all.collect()
         )
 
-        extraction_suite2p(
+        extraction(
             motion_correction.out.motion_results_all.collect(),
             ophys_mount_jsons.collect()
         )
@@ -78,13 +78,13 @@ workflow {
     classifier(
         ophys_mount_jsons.collect(),
         classifier_data.collect(),
-        extraction_suite2p.out.capsule_results.flatten(),
+        extraction.out.capsule_results.flatten(),
     )
 
     if (params.data_type == "multiplane"){
         // Run DF / F
         dff_capsule(
-            extraction_suite2p.out.capsule_results.flatten(),
+            extraction.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
             motion_correction.out.motion_results_csv.collect()
         )
@@ -97,7 +97,7 @@ workflow {
     } else {
         // Run DF / F
         dff_capsule(
-            extraction_suite2p.out.capsule_results.collect(),
+            extraction.out.capsule_results.collect(),
             ophys_mount_jsons.collect(),
             motion_correction.out.motion_results_csv.collect()
         )
@@ -122,7 +122,7 @@ workflow {
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results.collect(),
             decrosstalk_roi_images.out.decrosstalk_results_all.collect(),
-            extraction_suite2p.out.extraction_results_all.collect(),
+            extraction.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_results_all.collect(),
             oasis_event_detection.out.events_h5.collect()
@@ -134,7 +134,7 @@ workflow {
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
             decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
-            extraction_suite2p.out.extraction_qc_json.collect(),
+            extraction.out.extraction_qc_json.collect(),
             dff_capsule.out.dff_qc_json.collect(),
             oasis_event_detection.out.event_qc_png.collect(),
             oasis_event_detection.out.events_json.collect(),
@@ -147,7 +147,7 @@ workflow {
             ophys_mount_jsons.collect(),
             motion_correction.out.motion_data_process_json.collect(),
             decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
-            extraction_suite2p.out.extraction_data_process_json.collect(),
+            extraction.out.extraction_data_process_json.collect(),
             classifier.out.classifier_jsons.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect(),
@@ -161,7 +161,7 @@ workflow {
             ophys_mount_jsons.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
             motion_correction.out.motion_results.collect(),
-            extraction_suite2p.out.extraction_results_all.collect(),
+            extraction.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_results_all.collect(),
             oasis_event_detection.out.events_h5.collect()
@@ -171,7 +171,7 @@ workflow {
             motion_correction.out.motion_results.collect(),
             movie_qc.out.movie_qc_json.collect(),
             movie_qc.out.movie_qc_png.collect(),
-            extraction_suite2p.out.extraction_qc_json.collect(),
+            extraction.out.extraction_qc_json.collect(),
             dff_capsule.out.dff_qc_json.collect(),
             oasis_event_detection.out.event_qc_png.collect(),
             oasis_event_detection.out.events_json.collect(),
@@ -182,7 +182,7 @@ workflow {
         // Run Pipeline Processing Metadata Aggregator
         pipeline_processing_metadata_aggregator(
             motion_correction.out.motion_data_process_json.collect(),
-            extraction_suite2p.out.extraction_data_process_json.collect(),
+            extraction.out.extraction_data_process_json.collect(),
             dff_capsule.out.dff_data_process_json.collect(),
             oasis_event_detection.out.events_json.collect(),
             ophys_mount_jsons.collect(),
@@ -450,7 +450,7 @@ process decrosstalk_roi_images {
 }
 
 // capsule - aind-ophys-extraction-suite2p
-process extraction_suite2p {
+process extraction {
     tag 'capsule-9911715'
 	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v11"
 
@@ -513,7 +513,7 @@ process dff_capsule {
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
-    path extraction_suite2p_results
+    path extraction_results
     path ophys_mount_json
     path motion_correction_results
 
@@ -539,7 +539,7 @@ process dff_capsule {
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount_json} capsule/data
-    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${extraction_results} capsule/data
     cp -r ${motion_correction_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
@@ -871,7 +871,7 @@ process pipeline_processing_metadata_aggregator_multiplane {
     path ophys_mount_jsons
     path motion_correction_results
     path decrosstalk_results
-    path extraction_suite2p_results
+    path extraction_results
     path classifier_jsons
     path dff_results
     path oasis_event_detection_results
@@ -896,7 +896,7 @@ process pipeline_processing_metadata_aggregator_multiplane {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_correction_results} capsule/data
     cp -r ${decrosstalk_results} capsule/data
-    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${extraction_results} capsule/data
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${ophys_mount_jsons} capsule/data
@@ -928,7 +928,7 @@ process pipeline_processing_metadata_aggregator {
 
 	input:
     path motion_correction_results
-    path extraction_suite2p_results
+    path extraction_results
     path dff_results
     path oasis_event_detection_results
     path ophys_mount_jsons
@@ -953,7 +953,7 @@ process pipeline_processing_metadata_aggregator {
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_correction_results} capsule/data
-    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${extraction_results} capsule/data
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${ophys_mount_jsons} capsule/data
@@ -988,7 +988,7 @@ process quality_control_aggregator_multiplane {
     path movie_qc_json
     path movie_qc_png
     path decrosstalk_results
-    path extraction_suite2p_results
+    path extraction_results
     path dff_results
     path oasis_event_detection_results
     path oasis_event_json
@@ -1017,7 +1017,7 @@ process quality_control_aggregator_multiplane {
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
     cp -r ${decrosstalk_results} capsule/data
-    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${extraction_results} capsule/data
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${oasis_event_json} capsule/data
@@ -1053,7 +1053,7 @@ process quality_control_aggregator{
 	path motion_correction_results
     path movie_qc_json
     path movie_qc_png
-    path extraction_suite2p_results
+    path extraction_results
     path dff_results
     path oasis_event_detection_results
     path oasis_event_json
@@ -1081,7 +1081,7 @@ process quality_control_aggregator{
     cp -r ${motion_correction_results} capsule/data
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
-    cp -r ${extraction_suite2p_results} capsule/data
+    cp -r ${extraction_results} capsule/data
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${oasis_event_json} capsule/data
