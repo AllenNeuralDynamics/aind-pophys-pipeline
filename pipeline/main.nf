@@ -13,6 +13,7 @@ workflow {
     // Only for mulitplane sessions
     def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any')
     // Set decrosstalk channel to empty if not multiplane
+
     def decrosstalk_qc_json = params.data_type == "multiplane" ?
         decrosstalk_roi_images.out.decrosstalk_qc_json : Channel.empty()
 
@@ -126,7 +127,7 @@ workflow {
         ophys_mount_pophys_directory.collect(),
         nwb_packaging_subject.out.subject_nwb_results.collect(),
         motion_correction.out.motion_results.collect(),
-        decrosstalk_roi_images.out.decrosstalk_results_all.collect(),
+        decrosstalk_results_all.collect(),
         extraction.out.extraction_results_all.collect(),
         classifier.out.classifer_h5.collect(),
         dff_capsule.out.dff_results_all.collect(),
@@ -138,7 +139,7 @@ workflow {
         motion_correction.out.motion_results.collect(),
         movie_qc.out.movie_qc_json.collect(),
         movie_qc.out.movie_qc_png.collect(),
-        decrosstalk_roi_images.out.decrosstalk_qc_json.collect(),
+        decrosstalk_qc_json.collect(),
         extraction.out.extraction_qc_json.collect(),
         dff_capsule.out.dff_qc_json.collect(),
         oasis_event_detection.out.event_qc_png.collect(),
@@ -151,7 +152,7 @@ workflow {
     pipeline_processing_metadata_aggregator(
         ophys_mount_jsons.collect(),
         motion_correction.out.motion_data_process_json.collect(),
-        decrosstalk_roi_images.out.decrosstalk_data_process_json.collect(),
+        decrosstalk_data_process_json.collect(),
         extraction.out.extraction_data_process_json.collect(),
         classifier.out.classifier_jsons.collect(),
         dff_capsule.out.dff_data_process_json.collect(),
