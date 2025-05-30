@@ -160,7 +160,7 @@ workflow {
             nwb_schemas.collect(),
             ophys_mount_jsons.collect(),
             nwb_packaging_subject.out.subject_nwb_results.collect(),
-            motion_correction.out.motion_results_all.collect(),
+            motion_correction.out.motion_results.collect(),
             extraction_suite2p.out.extraction_results_all.collect(),
             classifier.out.classifer_h5.collect(),
             dff_capsule.out.dff_results_all.collect(),
@@ -773,6 +773,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
+    ls -la /data/processed
 	chmod +x run
 	./run
 
