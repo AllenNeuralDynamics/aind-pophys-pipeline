@@ -121,7 +121,7 @@ workflow {
     ophys_nwb(
         nwb_schemas.collect(),
         ophys_mount_jsons.collect(),
-        ophys_mount_sync_file.collect(),
+        ophys_mount_sync_file.collect().ifEmpty([]),
         ophys_mount_pophys_directory.collect(),
         nwb_packaging_subject.out.subject_nwb_results.collect(),
         motion_correction.out.motion_results.collect(),
