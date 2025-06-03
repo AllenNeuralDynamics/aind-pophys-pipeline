@@ -116,7 +116,7 @@ workflow {
             ophys_mount_jsons.collect()
         )
     }
-
+    
     // Run Ophys NWB Packaging for Multiplane
     ophys_nwb(
         nwb_schemas.collect(),
@@ -125,19 +125,19 @@ workflow {
         ophys_mount_pophys_directory.collect(),
         nwb_packaging_subject.out.subject_nwb_results.collect(),
         motion_correction.out.motion_results.collect(),
-        decrosstalk_results_all.collect(),
+        decrosstalk_results_all.collect().ifEmpty([]), // Handle empty channel
         extraction.out.extraction_results_all.collect(),
         classifier.out.classifer_h5.collect(),
         dff_capsule.out.dff_results_all.collect(),
         oasis_event_detection.out.events_h5.collect()
-    )
+    )   
 
     // Run Quality Control Aggregator
     quality_control_aggregator(
         motion_correction.out.motion_results.collect(),
         movie_qc.out.movie_qc_json.collect(),
         movie_qc.out.movie_qc_png.collect(),
-        decrosstalk_qc_json.collect(),
+        decrosstalk_qc_json.collect().ifEmpty([]),
         extraction.out.extraction_qc_json.collect(),
         dff_capsule.out.dff_qc_json.collect(),
         oasis_event_detection.out.event_qc_png.collect(),
@@ -145,18 +145,19 @@ workflow {
         classifier.out.classifier_jsons.collect(),
         classifier.out.classifier_png.collect()
     )
-
+    
     // Run Pipeline Processing Metadata Aggregator
     pipeline_processing_metadata_aggregator(
         ophys_mount_jsons.collect(),
         motion_correction.out.motion_data_process_json.collect(),
-        decrosstalk_data_process_json.collect(),
+        decrosstalk_data_process_json.collect().ifEmpty([]),
         extraction.out.extraction_data_process_json.collect(),
         classifier.out.classifier_jsons.collect(),
         dff_capsule.out.dff_data_process_json.collect(),
         oasis_event_detection.out.events_json.collect(),
     )  
 }
+
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
@@ -712,7 +713,7 @@ process ophys_nwb {
 	export CO_CAPSULE_ID=8c436e95-8607-4752-8e9f-2b62024f9326
 	export CO_CPUS=1
 	export CO_MEMORY=8589934592
-
+    echo "I AM MAKING AN NWB"
 	mkdir -p capsule
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
