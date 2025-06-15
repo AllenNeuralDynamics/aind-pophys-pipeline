@@ -2,17 +2,24 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
+// params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
 
 workflow {
-    def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
-    def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-    def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+    // def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
+    def ophys_mount_single_to_pophys_converter = Channel.fromPath("$projectDir/../data/harvard-single", type: 'dir')
+    ophys_mount_single_to_pophys_converter.view()
+    // def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
+    def ophys_mount_jsons = Channel.fromPath("${ophys_mount_single_to_pophys_converter}/*.json", type: 'any')
+    //  def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+    def ophys_mount_pophys_directory = Channel.fromPath("${ophys_mount_single_to_pophys_converter}/pophys", type: 'dir')
     def nwb_schemas = Channel.fromPath("$projectDir/../data/schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
     // Set ophys_mount_sync_file to empty if not multiplane
+    // def ophys_mount_sync_file = params.data_type == "multiplane" ?
+    //     Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any') : Channel.empty()
     def ophys_mount_sync_file = params.data_type == "multiplane" ?
-        Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any') : Channel.empty()
+        Channel.fromPath("${ophys_mount_single_to_pophys_converter}/behavior/*.h5", type: 'any') : Channel.empty()
+
     // Set decrosstalk channel to empty if not multiplane
     def decrosstalk_qc_json =  Channel.empty()
     def decrosstalk_data_process_json = Channel.empty()
@@ -161,6 +168,7 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
+    stageInMode 'copy'
     tag 'capsule-0547799'
     container "$REGISTRY_HOST/capsule/56956b65-72a4-4248-9718-468df22b23ff:640998928072c03bffaf81b93146c9e3"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
@@ -197,6 +205,7 @@ process converter_capsule {
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
+    echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
     chmod +x run
     ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
