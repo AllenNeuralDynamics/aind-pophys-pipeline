@@ -5,29 +5,42 @@ nextflow.enable.dsl = 2
 // params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
 
 workflow {
-    // def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
-    def ophys_mount_single_to_pophys_converter = Channel.fromPath("$projectDir/../data/harvard-single", type: 'dir')
+    // Parameterized data source selection
+    def use_s3_source = params.containsKey('ophys_mount_url')
+    
+    // Data source setup
+    if (use_s3_source) {
+        def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
+        def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
+        def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+    } else {
+        def ophys_mount_single_to_pophys_converter = Channel.fromPath("$projectDir/../data/harvard-single", type: 'dir')
+        def ophys_mount_jsons = Channel.fromPath("$projectDir/../data/harvard-single/*.json", type: 'any')
+        def ophys_mount_pophys_directory = Channel.fromPath("$projectDir/../data/harvard-single/pophys", type: 'dir')
+    }
+    
     ophys_mount_single_to_pophys_converter.view()
-    // def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-    def ophys_mount_jsons = Channel.fromPath("${ophys_mount_single_to_pophys_converter}/*.json", type: 'any')
-    //  def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
-    def ophys_mount_pophys_directory = Channel.fromPath("${ophys_mount_single_to_pophys_converter}/pophys", type: 'dir')
+    
     def nwb_schemas = Channel.fromPath("$projectDir/../data/schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
+    
     // Set ophys_mount_sync_file to empty if not multiplane
-    // def ophys_mount_sync_file = params.data_type == "multiplane" ?
-    //     Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any') : Channel.empty()
     def ophys_mount_sync_file = params.data_type == "multiplane" ?
         Channel.fromPath("${ophys_mount_single_to_pophys_converter}/behavior/*.h5", type: 'any') : Channel.empty()
 
-    // Set decrosstalk channel to empty if not multiplane
-    def converter_results = Channel.empty()
-    def decrosstalk_qc_json =  Channel.empty()
+    // Initialize channels for multiplane-specific processes
+    def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_data_process_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
     
-    // Run converter
-    converter_capsule(ophys_mount_single_to_pophys_converter)
+    // Conditional converter execution - only run for S3 sources
+    def motion_correction_input
+    if (use_s3_source) {
+        converter_capsule(ophys_mount_single_to_pophys_converter)
+        motion_correction_input = converter_capsule.out.converter_results
+    } else {
+        motion_correction_input = ophys_mount_single_to_pophys_converter
+    }
 
     // Run Subject NWB Packaging Process
     nwb_packaging_subject(
@@ -35,9 +48,9 @@ workflow {
     )
 
     if (params.data_type == "multiplane"){
-        // Run motion correction
+        // Run motion correction for multiplane
         motion_correction(
-            converter_capsule.out.converter_results.flatten(),
+            motion_correction_input.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
         )
@@ -59,8 +72,9 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            converter_capsule.out.converter_results_all.collect()
+            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
         )
+        
         decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
         decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
         decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
@@ -72,10 +86,10 @@ workflow {
         )
         
     } else {
-        // Run motion correction
+        // Run motion correction for single plane (adjusted input order)
         motion_correction(
             ophys_mount_single_to_pophys_converter.collect(),
-            converter_capsule.out.converter_results.collect(),
+            motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect()
         )
@@ -227,8 +241,7 @@ process motion_correction {
     memory '128 GB'
 
     input:
-    path ophys_mount.ifEmpty([]), name: capsule/data
-    path converter_results.ifEmpty([]), name: capsule/data
+    path ophys_mount, name: capsule/data
     path ophys_jsons, name: capsule/data
     path pophys_dir, name: capsule/data
 
