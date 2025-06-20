@@ -21,6 +21,7 @@ workflow {
         Channel.fromPath("${ophys_mount_single_to_pophys_converter}/behavior/*.h5", type: 'any') : Channel.empty()
 
     // Set decrosstalk channel to empty if not multiplane
+    def converter_results = Channel.empty()
     def decrosstalk_qc_json =  Channel.empty()
     def decrosstalk_data_process_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
@@ -73,6 +74,7 @@ workflow {
     } else {
         // Run motion correction
         motion_correction(
+            ophys_mount_single_to_pophys_converter.collect(),
             converter_capsule.out.converter_results.collect(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect()
@@ -180,7 +182,7 @@ process converter_capsule {
     path ophys_mount, name: 'capsule/data'
 
     output:
-    path 'capsule/results/*'
+    path 'capsule/results/*', optional: true
     path 'capsule/results/*', emit: 'converter_results', optional: true, type: 'dir'
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
 
@@ -225,7 +227,8 @@ process motion_correction {
     memory '128 GB'
 
     input:
-    path converter_results
+    path ophys_mount_single_to_pophys_converter.ifEmpty([])
+    path converter_results.ifEmpty([])
     path ophys_jsons
     path pophys_dir
 
