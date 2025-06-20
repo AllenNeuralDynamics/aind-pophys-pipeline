@@ -227,10 +227,10 @@ process motion_correction {
     memory '128 GB'
 
     input:
-    path ophys_mount.ifEmpty([])
-    path converter_results.ifEmpty([])
-    path ophys_jsons
-    path pophys_dir
+    path ophys_mount.ifEmpty([]), name: capsule/data
+    path converter_results.ifEmpty([]), name: capsule/data
+    path ophys_jsons, name: capsule/data
+    path pophys_dir, name: capsule/data
 
     output:
     path 'capsule/results/*'
@@ -252,11 +252,6 @@ process motion_correction {
     mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
-    
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${converter_results} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
