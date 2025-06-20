@@ -7,16 +7,21 @@ nextflow.enable.dsl = 2
 workflow {
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
+    
+    // Declare all variables outside conditional blocks
     def ophys_mount_single_to_pophys_converter
-    def ophys_mount_jsons
+    def ophys_mount_jsons  
     def ophys_mount_pophys_directory
+    def base_path
     
     // Data source setup
     if (use_s3_source) {
+        base_path = params.ophys_mount_url
         ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
         ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     } else {
+        base_path = "$projectDir/../data/harvard-single"
         ophys_mount_single_to_pophys_converter = Channel.fromPath("$projectDir/../data/harvard-single", type: 'dir')
         ophys_mount_jsons = Channel.fromPath("$projectDir/../data/harvard-single/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("$projectDir/../data/harvard-single/pophys", type: 'dir')
@@ -27,7 +32,7 @@ workflow {
     
     // Set ophys_mount_sync_file to empty if not multiplane
     def ophys_mount_sync_file = params.data_type == "multiplane" ?
-        Channel.fromPath("${ophys_mount_single_to_pophys_converter}/behavior/*.h5", type: 'any') : Channel.empty()
+        Channel.fromPath("${base_path}/behavior/*.h5", type: 'any') : Channel.empty()
 
     // Initialize channels for multiplane-specific processes
     def decrosstalk_qc_json = Channel.empty()
