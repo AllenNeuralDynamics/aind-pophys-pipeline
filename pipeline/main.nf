@@ -227,7 +227,7 @@ process motion_correction {
     memory '128 GB'
 
     input:
-    path ophys_mount_single_to_pophys_converter.ifEmpty([])
+    path ophys_mount.ifEmpty([])
     path converter_results.ifEmpty([])
     path ophys_jsons
     path pophys_dir
