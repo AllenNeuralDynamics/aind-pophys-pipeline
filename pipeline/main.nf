@@ -9,10 +9,10 @@ workflow {
     def use_s3_source = params.containsKey('ophys_mount_url')
     
     // Declare all variables outside conditional blocks
-    def ophys_mount_single_to_pophys_converter
-    def ophys_mount_jsons  
-    def ophys_mount_pophys_directory
-    def base_path
+    def ophys_mount_single_to_pophys_converter = Channel.empty()
+    def ophys_mount_jsons = Channel.empty()
+    def ophys_mount_pophys_directory = Channel.empty()
+    def base_path = Channel.empty()
     
     // Data source setup
     if (use_s3_source) {
@@ -21,18 +21,18 @@ workflow {
         ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     } else {
-        base_path = "$projectDir/../data/harvard-single"
-        ophys_mount_single_to_pophys_converter = Channel.fromPath("$projectDir/../data/harvard-single", type: 'dir')
-        ophys_mount_jsons = Channel.fromPath("$projectDir/../data/harvard-single/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("$projectDir/../data/harvard-single/pophys", type: 'dir')
+        base_path = "$projectDir/../data/"
+        ophys_mount_single_to_pophys_converter = Channel.fromPath("${base_path}harvard-single", type: 'dir')
+        ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
+        ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
     }
 
-    def nwb_schemas = Channel.fromPath("$projectDir/../data/schemas/*", type: 'any', checkIfExists: true)
-    def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
+    def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
+    def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
     
     // Set ophys_mount_sync_file to empty if not multiplane
     def ophys_mount_sync_file = params.data_type == "multiplane" ?
-        Channel.fromPath("${base_path}/behavior/*.h5", type: 'any') : Channel.empty()
+        Channel.fromPath("${base_path}behavior/*.h5", type: 'any') : Channel.empty()
 
     // Initialize channels for multiplane-specific processes
     def decrosstalk_qc_json = Channel.empty()
@@ -94,7 +94,6 @@ workflow {
     } else {
         // Run motion correction for single plane (adjusted input order)
         motion_correction(
-            ophys_mount_single_to_pophys_converter.collect(),
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect()
@@ -123,7 +122,7 @@ workflow {
         dff_capsule(
             extraction.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
-            motion_correction.out.motion_results_csv.collect()
+            // motion_correction.out.motion_results_csv.collect()
         )
 
         // Run Oasis Event detection
@@ -136,7 +135,7 @@ workflow {
         dff_capsule(
             extraction.out.capsule_results.collect(),
             ophys_mount_jsons.collect(),
-            motion_correction.out.motion_results_csv.collect()
+            // motion_correction.out.motion_results_csv.collect()
         )
 
         // Run Oasis Event detection
@@ -240,22 +239,22 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-7474660'
-    container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911:0da186b632b36a65afc14b406afd4686"
+    container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911:d5ac3e8d6dc84767538bab9015c01d2d"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
 
     input:
-    path ophys_mount, name: capsule/data
-    path ophys_jsons, name: capsule/data
-    path pophys_dir, name: capsule/data
+    path ophys_mount
+    path ophys_jsons
+    path pophys_dir
 
     output:
     path 'capsule/results/*'
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
-    path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json', optional: true
+    path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json'
     path 'capsule/results/*/motion_correction/*', emit: 'motion_results'
 
     script:
@@ -272,16 +271,21 @@ process motion_correction {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
+    echo "[${task.tag}] copying data to capsule..."
+    cp -r ${ophys_mount} capsule/data
+    cp -r ${ophys_jsons} capsule/data
+    cp -r ${pophys_dir} capsule/data
+
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout bbcc0ec --quiet
+    git -C capsule-repo checkout abb7d02 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --data_type TIFF
     echo "[${task.tag}] completed!"
     """
 }
@@ -508,7 +512,7 @@ process dff_capsule {
     input:
     path extraction_results
     path ophys_mount_json
-    path motion_correction_results
+    // path motion_correction_results
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -533,7 +537,6 @@ process dff_capsule {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount_json} capsule/data
     cp -r ${extraction_results} capsule/data
-    cp -r ${motion_correction_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
     git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
