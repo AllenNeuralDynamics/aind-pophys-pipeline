@@ -7,20 +7,21 @@ nextflow.enable.dsl = 2
 workflow {
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
+    def ophys_mount_single_to_pophys_converter
+    def ophys_mount_jsons
+    def ophys_mount_pophys_directory
     
     // Data source setup
     if (use_s3_source) {
-        def ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
-        def ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-        def ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+        ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
+        ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
+        ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     } else {
-        def ophys_mount_single_to_pophys_converter = Channel.fromPath("$projectDir/../data/harvard-single", type: 'dir')
-        def ophys_mount_jsons = Channel.fromPath("$projectDir/../data/harvard-single/*.json", type: 'any')
-        def ophys_mount_pophys_directory = Channel.fromPath("$projectDir/../data/harvard-single/pophys", type: 'dir')
+        ophys_mount_single_to_pophys_converter = Channel.fromPath("$projectDir/../data/harvard-single", type: 'dir')
+        ophys_mount_jsons = Channel.fromPath("$projectDir/../data/harvard-single/*.json", type: 'any')
+        ophys_mount_pophys_directory = Channel.fromPath("$projectDir/../data/harvard-single/pophys", type: 'dir')
     }
-    
-    ophys_mount_single_to_pophys_converter.view()
-    
+
     def nwb_schemas = Channel.fromPath("$projectDir/../data/schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("$projectDir/../data/2p_roi_classifier/*", type: 'any', checkIfExists: true)
     
