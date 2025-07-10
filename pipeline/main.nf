@@ -190,8 +190,8 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     stageInMode 'copy'
-    tag 'capsule-7474660'
-	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v19"
+    tag 'capsule-0547799'
+    container "$REGISTRY_HOST/capsule/56956b65-72a4-4248-9718-468df22b23ff:640998928072c03bffaf81b93146c9e3"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -220,13 +220,10 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-	if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
-		git clone --filter=tree:0 --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
-	else
-		git clone --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
-	fi
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0547799.git" capsule-repo
+    git -C capsule-repo checkout 77b8b31 --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     echo "Processing: \$(basename $ophys_mount)"
@@ -242,7 +239,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-7474660'
-    container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911:d5ac3e8d6dc84767538bab9015c01d2d"
+	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v19"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -280,10 +277,13 @@ process motion_correction {
     cp -r ${pophys_dir} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    git -C capsule-repo checkout abb7d02 --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+	if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
+		git clone --filter=tree:0 --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
+	else
+		git clone --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
+	fi
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
     
     echo "[${task.tag}] running capsule..."
     cd capsule/code
