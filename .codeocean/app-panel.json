@@ -11,6 +11,96 @@
 	],
 	"parameters": [
 		{
+			"id": "2B5inaUfx2l72jSn",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Do registration",
+			"param_name": "do_registration",
+			"description": "whether to register data (2 forces re-registration)",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "True"
+		},
+		{
+			"id": "jeeR0JkdhOMIETtu",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Batch size",
+			"param_name": "batch_size",
+			"description": "Number of frames per batch",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "500"
+		},
+		{
+			"id": "qs9wYWVcRFx0lxdT",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Max registration shift",
+			"param_name": "maxregshift",
+			"description": "Max registration shift",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "0.1"
+		},
+		{
+			"id": "sdUelMJcBBsTetWt",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Multi channel alignment",
+			"param_name": "align_by_chan",
+			"description": "when multi-channel, you can align by non-functional channel (1-based)",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "1"
+		},
+		{
+			"id": "fN2pHsTkHJ6OSb4y",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Smooth sigma time",
+			"param_name": "smooth_sigma_time",
+			"description": "gaussian smoothing in time. If do_optimize_motion_params is set, this will be overridden",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		},
+		{
+			"id": "UXknNMDgsG5rLeAQ",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Smooth sigma",
+			"param_name": "smooth_sigma",
+			"description": "~1 good for 2P recordings, recommend 3-5 for 1P recordings. If do_optimize_motion_params is set, this will be overridden",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "1.15"
+		},
+		{
+			"id": "63i7pOE4Vs0R0t6e",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Registration type",
+			"param_name": "nonrigid",
+			"description": "Whether to use non-rigid registration",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "True"
+		},
+		{
+			"id": "ZzocO56aGovOojPQ",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "Max registration shift non-rigid",
+			"param_name": "maxregshiftNR",
+			"description": "maximum pixel shift allowed for nonrigid, relative to rigid",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "5"
+		},
+		{
+			"id": "VL7lhDcGwAjjcNI3",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "SNR threshold",
+			"param_name": "snr_thresh",
+			"description": "if any nonrigid block is below this threshold, it gets smoothed until above this threshold. 1.0 results in no smoothing",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "1.2"
+		},
+		{
 			"id": "ctwzhZAAH2W1iPIw",
 			"name": "Data Type",
 			"param_name": "data_type",
