@@ -281,7 +281,7 @@ process motion_correction {
         git clone --filter=tree:0 --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
     else
         git clone --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
-    3i
+    fi
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
     
