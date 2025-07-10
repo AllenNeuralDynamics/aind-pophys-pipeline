@@ -6,12 +6,12 @@
 			"mount": "ophys_mount_url"
 		},
 		{
-			"id": "27518f8e-7613-4a34-b117-edc90a64233e",
-			"mount": "harvard-single"
-		},
-		{
 			"id": "35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb",
 			"mount": "2p_roi_classifier"
+		},
+		{
+			"id": "fb1e1a28-dd10-4868-ba5a-1a3e732a8ef8",
+			"mount": "harvard-single"
 		},
 		{
 			"id": "fb4b5cef-4505-4145-b8bd-e41d6863d7a9",

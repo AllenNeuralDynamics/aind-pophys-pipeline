@@ -2,7 +2,7 @@
 
 nextflow.enable.dsl = 2
 
-// params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
+params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
 
 workflow {
     // Parameterized data source selection
@@ -13,15 +13,15 @@ workflow {
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
-    
+    println params
+    base_path = "$projectDir/../data/"
     // Data source setup
     if (use_s3_source) {
-        base_path = params.ophys_mount_url
         ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
         ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     } else {
-        base_path = "$projectDir/../data/"
+        
         ophys_mount_single_to_pophys_converter = Channel.fromPath("${base_path}harvard-single", type: 'dir')
         ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
@@ -190,8 +190,8 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     stageInMode 'copy'
-    tag 'capsule-0547799'
-    container "$REGISTRY_HOST/capsule/56956b65-72a4-4248-9718-468df22b23ff:640998928072c03bffaf81b93146c9e3"
+    tag 'capsule-7474660'
+	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v19"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -220,10 +220,13 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0547799.git" capsule-repo
-    git -C capsule-repo checkout 77b8b31 --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+	if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
+		git clone --filter=tree:0 --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
+	else
+		git clone --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
+	fi
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     echo "Processing: \$(basename $ophys_mount)"
@@ -293,7 +296,7 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v6"
+	container "$REGISTRY_HOST/capsule/4f0eb1d2-88ce-4dfb-82b2-00bb6e2b6546:83f17117e1eda0acfaa390ffff4bf8f6"
 
 	cpus 16
 	memory '128 GB'
@@ -326,9 +329,10 @@ process movie_qc {
     cp -r ${motion_results} capsule/data
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2921644.git" capsule-repo
+    git -C capsule-repo checkout 21-name-sub-directory-for-single-plane-data --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
@@ -775,7 +779,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
-    git -C capsule-repo checkout 49-latest-version-is-broken-for-multiplane --quiet
+    git -C capsule-repo checkout 55-package-external-assets --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 

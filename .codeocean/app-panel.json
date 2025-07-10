@@ -1,6 +1,14 @@
 {
 	"version": 1,
 	"named_parameters": true,
+	"categories": [
+		{
+			"id": "nZKp6yPHuR1wvOse",
+			"name": "Motion correction",
+			"description": "Motion correction parameters",
+			"icon": "📂"
+		}
+	],
 	"parameters": [
 		{
 			"id": "ctwzhZAAH2W1iPIw",
