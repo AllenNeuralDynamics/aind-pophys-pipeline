@@ -289,7 +289,7 @@ process motion_correction {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --do_registration [${params.do_registration}] --data_type [${params.data_type}]
+    ./run --do_registration ${params.do_registration} --data_type ${params.data_type}
     echo "[${task.tag}] completed!"
     """
 }
