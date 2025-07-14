@@ -101,9 +101,19 @@
 			"default_value": "1.2"
 		},
 		{
-			"id": "ctwzhZAAH2W1iPIw",
+			"id": "iiWqirdN0o8rkoOA",
+			"category": "nZKp6yPHuR1wvOse",
 			"name": "Data Type",
 			"param_name": "data_type",
+			"description": "Whether input data is TIFF of HDF5 format",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "h5"
+		},
+		{
+			"id": "ctwzhZAAH2W1iPIw",
+			"name": "Acquisition Data Type",
+			"param_name": "acquisition_data_type",
 			"description": "Indicate if this is a single or multiplane data asset",
 			"type": "list",
 			"value_type": "string",

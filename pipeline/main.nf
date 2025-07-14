@@ -7,6 +7,7 @@ params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_
 workflow {
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
+    println params
     
     // Declare all variables outside conditional blocks
     def ophys_mount_single_to_pophys_converter = Channel.empty()
@@ -31,7 +32,7 @@ workflow {
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
     
     // Set ophys_mount_sync_file to empty if not multiplane
-    def ophys_mount_sync_file = params.data_type == "multiplane" ?
+    def ophys_mount_sync_file = params.acquisition_data_type == "multiplane" ?
         Channel.fromPath("${base_path}behavior/*.h5", type: 'any') : Channel.empty()
 
     // Initialize channels for multiplane-specific processes
@@ -53,7 +54,7 @@ workflow {
         ophys_mount_jsons.collect()
     )
 
-    if (params.data_type == "multiplane"){
+    if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
         motion_correction(
             motion_correction_input.flatten(),
@@ -117,7 +118,7 @@ workflow {
         extraction.out.capsule_results.flatten(),
     )
 
-    if (params.data_type == "multiplane"){
+    if (params.acquisition_data_type == "multiplane"){
         // Run DF / F
         dff_capsule(
             extraction.out.capsule_results.flatten(),
@@ -288,7 +289,7 @@ process motion_correction {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --data_type TIFF
+    ./run --do_registration [${params.do_registration}] --data_type [${params.data_type}]
     echo "[${task.tag}] completed!"
     """
 }
@@ -879,7 +880,7 @@ process quality_control_aggregator {
     path 'capsule/results/*'
 
     script:
-    def image_type_arg = params.data_type == "multiplane" ? "--image_type=multiplane" : ""
+    def image_type_arg = params.acquisition_data_type == "multiplane" ? "--image_type=multiplane" : ""
     """
     #!/usr/bin/env bash
     set -e
