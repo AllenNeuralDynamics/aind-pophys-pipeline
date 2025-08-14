@@ -15,7 +15,7 @@ workflow {
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
-
+    
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
 
@@ -40,7 +40,7 @@ workflow {
         ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
     }
-
+    
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
     
@@ -74,7 +74,8 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
         )
-
+        println motion_correction.out.motion_results_all.view()
+        println ophys_mount_jsons.view()
         // Run movie qc
         movie_qc(
             motion_correction.out.motion_results_all.flatten()
