@@ -9,14 +9,12 @@ params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26
 workflow {
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
-    println params
     
     // Declare all variables outside conditional blocks
     def ophys_mount_single_to_pophys_converter = Channel.empty()
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
-    println params
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
 
