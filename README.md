@@ -20,6 +20,10 @@ The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the 
 
 * [aind-ophys-processing-json-collection](https://github.com/AllenNeuralDynamics/aind-ophys-processing-json-collection): The processing JSON generated for each plane are appended together and saved into the top-level session directory.
 
+# Parameters
+
+If using in Code Ocean, use the `App Builder` panel to tune parameters. You have the option of using the `pipeline_parameters.json` in the root directory to tune parameters as well. To use this file, copy it into the `/data` directory and do not rename the file.
+
 # Input
 
 Currently, the pipeline supports the following input data types:
