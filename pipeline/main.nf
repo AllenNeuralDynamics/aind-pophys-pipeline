@@ -74,12 +74,11 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
         )
-        println motion_correction.out.motion_results_all.view()
-        println ophys_mount_jsons.view()
+        
         // Run movie qc
         movie_qc(
-            motion_correction.out.motion_results_all.flatten()
-            ophys_mount_jsons.collect()
+            motion_correction.out.motion_results_all.flatten(),
+            ophys_mount_jsons.collect(),
             motion_correction_input.collect()
         )
 
@@ -118,8 +117,8 @@ workflow {
 
         // Run movie qc
         movie_qc(
-            motion_correction.out.motion_results_all.flatten()
-            ophys_mount_jsons.collect()
+            motion_correction.out.motion_results_all.flatten(),
+            ophys_mount_jsons.collect(),
             motion_correction_input.collect()
         )
 
