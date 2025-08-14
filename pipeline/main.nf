@@ -244,7 +244,7 @@ process converter_capsule {
     echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
     chmod +x run
-    ./run --debug ${params.debug} --input_dir ${params.input_idr} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}
+    ./run --debug ${params.debug} --input_dir ${params.input_dir} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}
 
     echo "[${task.tag}] completed!"
     ls -a /results
