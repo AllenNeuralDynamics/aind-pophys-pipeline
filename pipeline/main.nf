@@ -25,7 +25,8 @@ workflow {
         configData.each { key, value ->
             params[key] = value
             println "Added params.${key} = ${value}"
-    }    
+        }
+    }
     // Data source setup
     if (use_s3_source) {
         ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
