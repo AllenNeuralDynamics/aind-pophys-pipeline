@@ -15,6 +15,7 @@ workflow {
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
+    def z_stacks = Channel.empty()
     
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
@@ -74,12 +75,13 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
         )
+        z_stacks = converter_capsule.out.local_stacks
         
         // Run movie qc
         movie_qc(
             motion_correction.out.motion_results_all.flatten(),
             ophys_mount_jsons.collect(),
-            motion_correction_input.collect()
+            z_stacks.collect().ifEmpty([])
         )
 
         // Run decrosstalk split to prep for decrosstalk_roi_images
@@ -119,7 +121,7 @@ workflow {
         movie_qc(
             motion_correction.out.motion_results_all.flatten(),
             ophys_mount_jsons.collect(),
-            motion_correction_input.collect()
+            z_stacks.collect().ifEmpty([])
         )
 
         extraction(
@@ -221,6 +223,7 @@ process converter_capsule {
     path 'capsule/results/*', optional: true
     path 'capsule/results/*', emit: 'converter_results', optional: true, type: 'dir'
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
+    path 'capsule/results/*/*local*', emit: 'local_stacks', optional: true
 
     script:
     """
