@@ -339,8 +339,9 @@ process movie_qc {
 	export CO_MEMORY=137438953472
 
 	mkdir -p capsule
-	mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data /data/raw
-    mkdir -p capsule/data/zstacks && ln -s \$PWD/capsule/data /data/zstacks
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
+    mkdir -p capsule/data/zstacks && ln -s \$PWD/capsule/data/zstacks /zstacks
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
