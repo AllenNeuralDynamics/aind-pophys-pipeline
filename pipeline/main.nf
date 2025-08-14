@@ -6,6 +6,7 @@ params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_
 
 workflow {
     // Parameterized data source selection
+    base_path = "$projectDir/../data/"
     def use_s3_source = params.containsKey('ophys_mount_url')
     println params
     
@@ -14,8 +15,17 @@ workflow {
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
-    println params
-    base_path = "$projectDir/../data/"
+    def parameter_json = file("${base_path}pipeline_parameters.json")
+
+    if (parameter_json.exists()) {
+        def jsonSlurper = new JsonSlurper()
+        def configData = jsonSlurper.parse(parameter_json)
+        
+        // Add each key-value pair from JSON to params
+        configData.each { key, value ->
+            params[key] = value
+            println "Added params.${key} = ${value}"
+    }    
     // Data source setup
     if (use_s3_source) {
         ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
@@ -230,7 +240,7 @@ process converter_capsule {
     echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
     chmod +x run
-    ./run --output_dir="/results" --input_dir="/data" --temp_dir="/scratch"
+    ./run --debug ${params.debug}
 
     echo "[${task.tag}] completed!"
     ls -a /results
@@ -289,7 +299,7 @@ process motion_correction {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --do_registration ${params.do_registration} --data_type ${params.data_type}
+    ./run --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug} \
     echo "[${task.tag}] completed!"
     """
 }
@@ -445,7 +455,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --debug ${params.debug}
 
     echo "[${task.tag}] completed!"
     """
@@ -498,7 +508,7 @@ process extraction {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run 
+    ./run run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}
 
     echo "[${task.tag}] completed!"
     """
@@ -551,7 +561,7 @@ process dff_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method}
 
     echo "[${task.tag}] completed!"
     """
@@ -848,8 +858,7 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --processor_full_name "Arielle Leon" --copy-ancillary-files True --derived-data-description True
-
+    ./run --processor_full_name ${params.processor_full_name} --skip_ancillary_files ${params.skip_ancillary_files} --modality ${params.modality} --pipeline_version ${params.pipeline_version} --aggregate_quality_control ${params.aggregate_quality_control} --data_summary ${params.data_summary} --verbose ${params.verbose}}
     echo "[${task.tag}] completed!"
     """
 }
