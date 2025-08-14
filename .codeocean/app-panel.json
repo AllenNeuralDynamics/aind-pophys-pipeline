@@ -7,13 +7,28 @@
 			"name": "Motion correction",
 			"description": "Motion correction parameters",
 			"icon": "📂"
+		},
+		{
+			"id": "0MIbi200f8w3BECK",
+			"name": "Extraction",
+			"icon": "📂"
+		},
+		{
+			"id": "G6KbQxbdyPWxTFRp",
+			"name": "DF / F",
+			"icon": "📂"
+		},
+		{
+			"id": "PeTDLWkOAq4846Yc",
+			"name": "Metadata Manager",
+			"icon": "📂"
 		}
 	],
 	"parameters": [
 		{
 			"id": "2B5inaUfx2l72jSn",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Do registration",
+			"name": "do_registration",
 			"param_name": "do_registration",
 			"description": "whether to register data (2 forces re-registration)",
 			"type": "text",
@@ -23,7 +38,7 @@
 		{
 			"id": "jeeR0JkdhOMIETtu",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Batch size",
+			"name": "batch_size",
 			"param_name": "batch_size",
 			"description": "Number of frames per batch",
 			"type": "text",
@@ -33,7 +48,7 @@
 		{
 			"id": "qs9wYWVcRFx0lxdT",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Max registration shift",
+			"name": "maxregshift",
 			"param_name": "maxregshift",
 			"description": "Max registration shift",
 			"type": "text",
@@ -43,7 +58,7 @@
 		{
 			"id": "sdUelMJcBBsTetWt",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Multi channel alignment",
+			"name": "align_by_chan",
 			"param_name": "align_by_chan",
 			"description": "when multi-channel, you can align by non-functional channel (1-based)",
 			"type": "text",
@@ -53,7 +68,7 @@
 		{
 			"id": "fN2pHsTkHJ6OSb4y",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Smooth sigma time",
+			"name": "smooth_sigma_time",
 			"param_name": "smooth_sigma_time",
 			"description": "gaussian smoothing in time. If do_optimize_motion_params is set, this will be overridden",
 			"type": "text",
@@ -63,7 +78,7 @@
 		{
 			"id": "UXknNMDgsG5rLeAQ",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Smooth sigma",
+			"name": "smooth_sigma",
 			"param_name": "smooth_sigma",
 			"description": "~1 good for 2P recordings, recommend 3-5 for 1P recordings. If do_optimize_motion_params is set, this will be overridden",
 			"type": "text",
@@ -73,7 +88,7 @@
 		{
 			"id": "63i7pOE4Vs0R0t6e",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Registration type",
+			"name": "nonrigid",
 			"param_name": "nonrigid",
 			"description": "Whether to use non-rigid registration",
 			"type": "text",
@@ -83,7 +98,7 @@
 		{
 			"id": "ZzocO56aGovOojPQ",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Max registration shift non-rigid",
+			"name": "maxregshiftNR",
 			"param_name": "maxregshiftNR",
 			"description": "maximum pixel shift allowed for nonrigid, relative to rigid",
 			"type": "text",
@@ -93,7 +108,7 @@
 		{
 			"id": "VL7lhDcGwAjjcNI3",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "SNR threshold",
+			"name": "snr_thresh",
 			"param_name": "snr_thresh",
 			"description": "if any nonrigid block is below this threshold, it gets smoothed until above this threshold. 1.0 results in no smoothing",
 			"type": "text",
@@ -103,7 +118,7 @@
 		{
 			"id": "iiWqirdN0o8rkoOA",
 			"category": "nZKp6yPHuR1wvOse",
-			"name": "Data Type",
+			"name": "data_type",
 			"param_name": "data_type",
 			"description": "Whether input data is TIFF of HDF5 format",
 			"type": "text",
@@ -111,8 +126,176 @@
 			"default_value": "h5"
 		},
 		{
+			"id": "7uKTIg57gfQVuWo6",
+			"category": "0MIbi200f8w3BECK",
+			"name": "diameter",
+			"param_name": "diameter",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		},
+		{
+			"id": "WKbLoZofRfduM86m",
+			"category": "0MIbi200f8w3BECK",
+			"name": "cellprob_threshold",
+			"param_name": "cellprob_threshold",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "0.0"
+		},
+		{
+			"id": "2WhyZligNJR6if3V",
+			"category": "0MIbi200f8w3BECK",
+			"name": "init",
+			"param_name": "init",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "sparsery"
+		},
+		{
+			"id": "qiYjidTGsOyXShbn",
+			"category": "0MIbi200f8w3BECK",
+			"name": "functional_chan",
+			"param_name": "functional_chan",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "1"
+		},
+		{
+			"id": "sULL70TXGdwLYhgq",
+			"category": "0MIbi200f8w3BECK",
+			"name": "threshold_scaling",
+			"param_name": "threshold_scaling",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "1"
+		},
+		{
+			"id": "eQtfKinOZ6qB9aFA",
+			"category": "0MIbi200f8w3BECK",
+			"name": "max_overlap",
+			"param_name": "max_overlap",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "0.75"
+		},
+		{
+			"id": "lvs03UdQlYYdEMXz",
+			"category": "0MIbi200f8w3BECK",
+			"name": "soma_crop",
+			"param_name": "soma_crop",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		},
+		{
+			"id": "zofhKuodY3VhS3hD",
+			"category": "0MIbi200f8w3BECK",
+			"name": "allow_overlap",
+			"param_name": "allow_overlap",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		},
+		{
+			"id": "gjQV3xZvyxpDAAdI",
+			"category": "G6KbQxbdyPWxTFRp",
+			"name": "long_window",
+			"param_name": "long_window",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "60"
+		},
+		{
+			"id": "xan4tyT7xWOCElQI",
+			"category": "G6KbQxbdyPWxTFRp",
+			"name": "short_window",
+			"param_name": "short_window",
+			"type": "text",
+			"value_type": "number",
+			"default_value": "3.333"
+		},
+		{
+			"id": "BycX2OTa8IpRiJsr",
+			"category": "G6KbQxbdyPWxTFRp",
+			"name": "inactive_percentile",
+			"param_name": "inactive_percentile",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "10"
+		},
+		{
+			"id": "VDHYCAvVk4DIxpmr",
+			"category": "G6KbQxbdyPWxTFRp",
+			"name": "noise_method",
+			"param_name": "noise_method",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "mad"
+		},
+		{
+			"id": "jPYqk1O32mabRR3y",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "processor_full_name",
+			"param_name": "processor_full_name",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "pipeline user"
+		},
+		{
+			"id": "VA68lyeeBjk6krjO",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "modality",
+			"param_name": "modality",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "hZCHHf0pxvm3vh07",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "pipeline_version",
+			"param_name": "pipeline_version",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "MWbuO7hhGGgG7sZD",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "aggregate_quality_control",
+			"param_name": "aggregate_quality_control",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		},
+		{
+			"id": "ujGOMIjMK2aap0u1",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "verbose",
+			"param_name": "verbose",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "1"
+		},
+		{
+			"id": "B14bDnJoumB7wWpx",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "skip_ancillary_files",
+			"param_name": "skip_ancillary_files",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
+		},
+		{
+			"id": "nUUF3L7CJ2uoKzTz",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "data_summary",
+			"param_name": "data_summary",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
 			"id": "ctwzhZAAH2W1iPIw",
-			"name": "Acquisition Data Type",
+			"name": "acquisition_data_type",
 			"param_name": "acquisition_data_type",
 			"description": "Indicate if this is a single or multiplane data asset",
 			"type": "list",
@@ -123,6 +306,14 @@
 				"single",
 				"multiplane"
 			]
+		},
+		{
+			"id": "Mk3Iqjh6NZ0FIU3H",
+			"name": "debug",
+			"param_name": "debug",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "0"
 		}
 	]
 }
