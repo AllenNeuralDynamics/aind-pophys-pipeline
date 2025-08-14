@@ -15,6 +15,7 @@ workflow {
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
+
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
 
@@ -77,6 +78,8 @@ workflow {
         // Run movie qc
         movie_qc(
             motion_correction.out.motion_results_all.flatten()
+            ophys_mount_jsons.collect()
+            motion_correction_input.collect()
         )
 
         // Run decrosstalk split to prep for decrosstalk_roi_images
@@ -114,7 +117,9 @@ workflow {
 
         // Run movie qc
         movie_qc(
-            motion_correction.out.motion_results_all.collect()
+            motion_correction.out.motion_results_all.flatten()
+            ophys_mount_jsons.collect()
+            motion_correction_input.collect()
         )
 
         extraction(
@@ -313,6 +318,8 @@ process movie_qc {
 
 	input:
 	path motion_results
+    path ophys_jsons
+    path zstacks
 
 	output:
 	path 'capsule/results/*'
@@ -329,12 +336,15 @@ process movie_qc {
 	export CO_MEMORY=137438953472
 
 	mkdir -p capsule
-	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data /data/raw
+    mkdir -p capsule/data/zstacks && ln -s \$PWD/capsule/data /data/zstacks
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_results} capsule/data
+    cp -r ${ophys_jsons} capsule/data/raw
+    cp -r ${zstacks} capsule/data/zstacks
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone --branch v7.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
