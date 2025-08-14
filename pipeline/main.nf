@@ -11,7 +11,7 @@ workflow {
     def use_s3_source = params.containsKey('ophys_mount_url')
     
     // Declare all variables outside conditional blocks
-    def ophys_mount_single_to_pophys_converter = Channel.empty()
+    def ophys_data = Channel.empty()
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
@@ -31,12 +31,12 @@ workflow {
     }
     // Data source setup
     if (use_s3_source) {
-        ophys_mount_single_to_pophys_converter = Channel.fromPath(params.ophys_mount_url, type: 'any')
+        ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
         ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     } else {
         
-        ophys_mount_single_to_pophys_converter = Channel.fromPath("${base_path}harvard-single", type: 'dir')
+        ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
         ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
         ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
     }
@@ -56,10 +56,10 @@ workflow {
     // Conditional converter execution - only run for S3 sources
     def motion_correction_input
     if (use_s3_source) {
-        converter_capsule(ophys_mount_single_to_pophys_converter)
+        converter_capsule(ophys_data)
         motion_correction_input = converter_capsule.out.converter_results
     } else {
-        motion_correction_input = ophys_mount_single_to_pophys_converter
+        motion_correction_input = ophys_data
     }
 
     // Run Subject NWB Packaging Process
