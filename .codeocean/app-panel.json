@@ -314,6 +314,30 @@
 			"type": "text",
 			"value_type": "integer",
 			"default_value": "0"
+		},
+		{
+			"id": "qJPrXDS0DDvEvzoC",
+			"name": "input_dir",
+			"param_name": "input_dir",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "/data"
+		},
+		{
+			"id": "TUhWYN8lJEDdZML2",
+			"name": "output_dir",
+			"param_name": "output_dir",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "/results"
+		},
+		{
+			"id": "oizgHp1rgKNaprHn",
+			"name": "temp_dir",
+			"param_name": "temp_dir",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "/scratch"
 		}
 	]
 }
