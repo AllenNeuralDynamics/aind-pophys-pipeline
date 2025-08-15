@@ -526,8 +526,8 @@ process extraction {
 
 // capsule - aind-ophys-dff
 process dff_capsule {
-    tag 'capsule-5252030'
-	container "$REGISTRY_HOST/published/8511f8d7-ac43-4c63-ae00-dad820185c47:v9"
+    tag 'capsule-6574773'
+	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v5"
 
     cpus 4
     memory '32 GB'
@@ -564,7 +564,7 @@ process dff_capsule {
     cp -r ${extraction_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v9.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8957649.git" capsule-repo
+    git clone --branch v5.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
