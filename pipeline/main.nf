@@ -192,7 +192,7 @@ workflow {
         oasis_event_detection.out.events_json.collect(),
         classifier.out.classifier_jsons.collect(),
         classifier.out.classifier_png.collect(),
-        ophys_mount_json.collect()
+        ophys_mount_jsons.collect()
     )
     
     // Run Pipeline Processing Metadata Aggregator
@@ -895,7 +895,7 @@ process quality_control_aggregator {
     path oasis_event_json
     path classifier_jsons
     path classifier_pngs
-    path ophys_mount_json
+    path ophys_mount_jsons
 
     output:
     path 'capsule/results/*'
@@ -916,7 +916,7 @@ process quality_control_aggregator {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_json} cpasule/data
+    cp -r ${ophys_mount_jsons} cpasule/data
     cp -r ${motion_correction_results} capsule/data
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
