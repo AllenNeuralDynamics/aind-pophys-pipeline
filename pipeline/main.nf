@@ -866,7 +866,7 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --processor_full_name ${params.processor_full_name} --skip_ancillary_files ${params.skip_ancillary_files} --modality ${params.modality} --pipeline_version ${params.pipeline_version} --aggregate_quality_control ${params.aggregate_quality_control} --data_summary ${params.data_summary} --verbose ${params.verbose}}
+    ./run --processor_full_name ${params.processor_full_name} --skip_ancillary_files ${params.skip_ancillary_files} --modality ${params.modality} --pipeline_version ${params.pipeline_version} --aggregate_quality_control ${params.aggregate_quality_control} --data_summary ${params.data_summary} --verbose ${params.verbose}
     echo "[${task.tag}] completed!"
     """
 }
