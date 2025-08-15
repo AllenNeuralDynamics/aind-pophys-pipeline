@@ -916,7 +916,7 @@ process quality_control_aggregator {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_jsons} cpasule/data
+    cp -r ${ophys_mount_jsons} capsule/data
     cp -r ${motion_correction_results} capsule/data
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
