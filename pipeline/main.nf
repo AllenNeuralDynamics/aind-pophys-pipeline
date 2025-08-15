@@ -518,7 +518,7 @@ process extraction {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}
+    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}
 
     echo "[${task.tag}] completed!"
     """
@@ -526,8 +526,8 @@ process extraction {
 
 // capsule - aind-ophys-dff
 process dff_capsule {
-    tag 'capsule-8957649'
-	container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v9"
+    tag 'capsule-5252030'
+	container "$REGISTRY_HOST/published/8511f8d7-ac43-4c63-ae00-dad820185c47:v9"
 
     cpus 4
     memory '32 GB'
