@@ -348,7 +348,9 @@ process movie_qc {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_results} capsule/data
     cp -r ${ophys_jsons} capsule/data/raw
-    cp -r ${zstacks} capsule/data/zstacks
+    if [ -n "${zstacks}" ] && [ "${zstacks}" != "[]" ]; then
+        cp -r ${zstacks} capsule/data/zstacks
+    fi
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone --branch v7.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
