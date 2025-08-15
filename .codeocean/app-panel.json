@@ -312,8 +312,8 @@
 			"name": "debug",
 			"param_name": "debug",
 			"type": "text",
-			"value_type": "integer",
-			"default_value": "0"
+			"value_type": "string",
+			"default_value": "False"
 		},
 		{
 			"id": "qJPrXDS0DDvEvzoC",
