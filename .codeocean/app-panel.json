@@ -256,7 +256,8 @@
 			"name": "pipeline_version",
 			"param_name": "pipeline_version",
 			"type": "text",
-			"value_type": "string"
+			"value_type": "string",
+			"default_value": "\"\""
 		},
 		{
 			"id": "MWbuO7hhGGgG7sZD",
