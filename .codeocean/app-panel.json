@@ -56,6 +56,20 @@
 			"default_value": "0.1"
 		},
 		{
+			"id": "IJsHGzkycjaliQSb",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "data_type",
+			"param_name": "data_type",
+			"description": "Input data type",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "h5",
+			"extra_data": [
+				"h5",
+				"tiff"
+			]
+		},
+		{
 			"id": "sdUelMJcBBsTetWt",
 			"category": "nZKp6yPHuR1wvOse",
 			"name": "align_by_chan",
@@ -114,16 +128,6 @@
 			"type": "text",
 			"value_type": "number",
 			"default_value": "1.2"
-		},
-		{
-			"id": "iiWqirdN0o8rkoOA",
-			"category": "nZKp6yPHuR1wvOse",
-			"name": "data_type",
-			"param_name": "data_type",
-			"description": "Whether input data is TIFF of HDF5 format",
-			"type": "text",
-			"value_type": "string",
-			"default_value": "h5"
 		},
 		{
 			"id": "7uKTIg57gfQVuWo6",
