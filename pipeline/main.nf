@@ -920,7 +920,7 @@ process quality_control_aggregator {
     cp -r ${motion_correction_results} capsule/data
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
-    if [ -e "${decrosstalk_results}" ]; then
+    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
         cp -r ${decrosstalk_results} capsule/data
     fi
     cp -r ${extraction_results} capsule/data
