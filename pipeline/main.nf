@@ -784,7 +784,7 @@ process ophys_nwb {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${schemas} capsule/data/schemas
     cp -r ${ophys_mount_jsons} capsule/data/raw
-    if [ -e "${ophys_sync_file}" ]; then
+    if [ -n "${ophys_sync_file}" ] && [ "${ophys_sync_file}" != "[]" ]; then
         cp -r ${ophys_sync_file} capsule/data/raw/behavior
     fi
     cp -r ${ophys_mount_pophys_directory} capsule/data/raw
