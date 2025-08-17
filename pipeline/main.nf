@@ -783,7 +783,6 @@ process ophys_nwb {
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
     mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
     mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
     mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsule/data/raw/behavior /behavior
     mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
     mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
@@ -816,6 +815,7 @@ process ophys_nwb {
 	cd capsule/code
 	chmod +x run
 	ls -R /data
+    ./run
 
 	echo "[${task.tag}] completed!"
 	"""
