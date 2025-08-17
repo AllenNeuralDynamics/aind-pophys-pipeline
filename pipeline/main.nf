@@ -45,9 +45,11 @@ workflow {
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
     
-    // Set ophys_mount_sync_file to empty if not multiplane
-    def ophys_mount_sync_file = params.acquisition_data_type == "multiplane" ?
-        Channel.fromPath("${base_path}behavior/*.h5", type: 'any') : Channel.empty()
+    // Set ophys_mount_sync_file - look for .h5 files regardless of acquisition type
+    def ophys_mount_sync_file = Channel.fromPath("${base_path}behavior/*.h5", type: 'any', checkIfExists: false)
+    
+    // Debug: Check for all behavior files
+    def all_behavior_files = Channel.fromPath("${base_path}behavior/*", type: 'any', checkIfExists: false)
 
     // Initialize channels for multiplane-specific processes
     def decrosstalk_qc_json = Channel.empty()
@@ -163,6 +165,11 @@ workflow {
             dff_capsule.out.capsule_results.collect(),
             ophys_mount_jsons.collect()
         )
+    }
+    
+    // Debug: Check for all behavior files
+    all_behavior_files.subscribe { file ->
+        println "DEBUG: Found behavior file: ${file}"
     }
     
     // Run Ophys NWB Packaging for Multiplane
@@ -808,7 +815,7 @@ process ophys_nwb {
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run
+	ls -R /data
 
 	echo "[${task.tag}] completed!"
 	"""
