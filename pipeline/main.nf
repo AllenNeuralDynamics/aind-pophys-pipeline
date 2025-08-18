@@ -45,14 +45,14 @@ workflow {
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
     
-    // Set ophys_mount_sync_file - only look for .h5 files when using ophys_mount_url
+    // Set ophys_mount_sync_file - look for .h5 files in behavior subdirectory when using ophys_mount_url
     def ophys_mount_sync_file = params.ophys_mount_url ? 
-        Channel.fromPath("${params.ophys_mount_url}/*.h5", type: 'any', checkIfExists: false) :
+        Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any', checkIfExists: false) :
         Channel.empty()
     
-    // Debug: Check for all files in the data directory (only when using ophys_mount_url)
-    def all_data_files = params.ophys_mount_url ? 
-        Channel.fromPath("${params.ophys_mount_url}/*", type: 'any', checkIfExists: false) :
+    // Debug: Check for all files in the behavior directory (only when using ophys_mount_url)
+    def all_behavior_files = params.ophys_mount_url ? 
+        Channel.fromPath("${params.ophys_mount_url}/behavior/*", type: 'any', checkIfExists: false) :
         Channel.empty()
 
     // Initialize channels for multiplane-specific processes
@@ -171,9 +171,9 @@ workflow {
         )
     }
     
-    // Debug: Check for all data files
-    all_data_files.subscribe { file ->
-        println "DEBUG: Found data file: ${file}"
+    // Debug: Check for all behavior files
+    all_behavior_files.subscribe { file ->
+        println "DEBUG: Found behavior file: ${file}"
     }
     
     // Run Ophys NWB Packaging for Multiplane
@@ -740,7 +740,7 @@ process nwb_packaging_subject {
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run ${params.capsule_nwb_packaging_subject_capsule_13_args}
+	./run 
 
 	echo "[${task.tag}] completed!"
 	"""
