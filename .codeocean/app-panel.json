@@ -144,15 +144,6 @@
 			"default_value": "0.0"
 		},
 		{
-			"id": "2WhyZligNJR6if3V",
-			"category": "0MIbi200f8w3BECK",
-			"name": "init",
-			"param_name": "init",
-			"type": "text",
-			"value_type": "string",
-			"default_value": "sparsery"
-		},
-		{
 			"id": "qiYjidTGsOyXShbn",
 			"category": "0MIbi200f8w3BECK",
 			"name": "functional_chan",
@@ -178,6 +169,25 @@
 			"type": "text",
 			"value_type": "number",
 			"default_value": "0.75"
+		},
+		{
+			"id": "mvyXPPB5cuB9R8h2",
+			"category": "0MIbi200f8w3BECK",
+			"name": "init",
+			"param_name": "init",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "mean",
+			"extra_data": [
+				"max/mean",
+				"mean",
+				"enhanced_mean",
+				"max",
+				"sourcery",
+				"sparsery",
+				"greedy_roi",
+				"corr_pnr"
+			]
 		},
 		{
 			"id": "lvs03UdQlYYdEMXz",
