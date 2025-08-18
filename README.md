@@ -177,10 +177,10 @@ noise_method: mad
 **Metadata Manager**
 ```
 processor_full_name: pipeline user
-modality: calcium_imaging
+modality: pophys
 pipeline_version: 
 aggregate_quality_control: 0
 verbose: 1
 skip_ancillary_files: 0
-data_summary: 
+data_summary: "data notes"
 ```
