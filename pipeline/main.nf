@@ -4,7 +4,7 @@ nextflow.enable.dsl = 2
 
 import groovy.json.JsonSlurper
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
+params.ophys_mount_url = 's3://aind-private-data-prod-o5171v/single-plane-ophys_767715_2025-02-17_17-41-50'
 
 workflow {
     // Parameterized data source selection
@@ -324,7 +324,7 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v7"
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v8"
 
 	cpus 16
 	memory '128 GB'
@@ -365,7 +365,7 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v7.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	git clone --branch v8.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
