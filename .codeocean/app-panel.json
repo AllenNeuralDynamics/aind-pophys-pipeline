@@ -116,14 +116,18 @@
 			"default_value": "1.2"
 		},
 		{
-			"id": "iiWqirdN0o8rkoOA",
+			"id": "IJsHGzkycjaliQSb",
 			"category": "nZKp6yPHuR1wvOse",
 			"name": "data_type",
 			"param_name": "data_type",
-			"description": "Whether input data is TIFF of HDF5 format",
-			"type": "text",
+			"description": "Input data type",
+			"type": "list",
 			"value_type": "string",
-			"default_value": "h5"
+			"default_value": "h5",
+			"extra_data": [
+				"h5",
+				"tiff"
+			]
 		},
 		{
 			"id": "7uKTIg57gfQVuWo6",
@@ -266,8 +270,12 @@
 			"name": "pipeline_version",
 			"param_name": "pipeline_version",
 			"type": "text",
+<<<<<<< HEAD
 			"value_type": "string",
 			"default_value": "\"\""
+=======
+			"value_type": "string"
+>>>>>>> 43f37732bf7bd5eb8c9319d8f68cd43f7564012c
 		},
 		{
 			"id": "MWbuO7hhGGgG7sZD",
@@ -323,8 +331,13 @@
 			"name": "debug",
 			"param_name": "debug",
 			"type": "text",
+<<<<<<< HEAD
 			"value_type": "string",
 			"default_value": "False"
+=======
+			"value_type": "integer",
+			"default_value": "0"
+>>>>>>> 43f37732bf7bd5eb8c9319d8f68cd43f7564012c
 		},
 		{
 			"id": "qJPrXDS0DDvEvzoC",
