@@ -16,6 +16,12 @@ workflow {
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
     def z_stacks = Channel.empty()
+        // Print all parameters at startup
+        println "\n--- Pipeline Parameters ---"
+        params.keySet().sort().each { key ->
+            println "PARAM: ${key} = ${params[key]}"
+        }
+        println "--- End Parameters ---\n"
     
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
@@ -255,8 +261,8 @@ process converter_capsule {
     echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
     chmod +x run
+    echo "converter_capsule parameters: --debug ${params.debug} --input_dir ${params.input_dir} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}"
     ./run --debug ${params.debug} --input_dir ${params.input_dir} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}
-
     echo "[${task.tag}] completed!"
     ls -a /results
     """
@@ -310,6 +316,7 @@ process motion_correction {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
+    echo "motion_correction parameters: --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}"
     ./run --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
     
     echo "[${task.tag}] completed!"
@@ -527,7 +534,8 @@ process extraction {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}
+    echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
+    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}n --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}
 
     echo "[${task.tag}] completed!"
     """
@@ -580,8 +588,9 @@ process dff_capsule {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
+    echo "dff_capsule parameters: --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method}"
     ./run --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method}
-
+    
     echo "[${task.tag}] completed!"
     """
 }
