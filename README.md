@@ -130,127 +130,57 @@ The events.h5 contains the following keys:
 
 # Parameters
 
-Parameters are available to set through the App-Panel in Code Ocean.
+If using in Code Ocean, use the `App Builder` panel to tune parameters. You have the option of using the `pipeline_parameters.json` in the root directory to tune parameters as well. To use this file, copy it into the `/data` directory and do not rename the file.
 
-**General Parameters**
+Below are the parameters and their default values. Navigate to the processing repositories to view descriptions
 
-Data Type - Option to run in multiplane or single plane mode (default: `single`, type: `str`)
-
-**aind-pophys-converter-capsule**
-
-Input directory - Where to find input data (default: `/data`, type: `str`)
-
-Output directory - Where to save outputs (default: `/results`, type: `str`)
-
-Temporary directory - Specify temporary save location (default: `/scratch`, type: `str`)
-
-Debug - Run in debug mode (default: `False`, type: `str`)
-
-**aind-ophys-motion-correction**
-
-Input directory - Where to find input data (default: `/data`, type: `str`)
-
-Data format - Format of input data (default: `HDF5`, type: `str`)
-
-**aind-ophys-extraction**
-
-Initialization - how to run segmentation (default: `mean`, type: `str`)
-
-Diameter - Diameter for cell segmentation of all 4 initialization methods (default: `0`, type: `int`)
-
-**aind-pipeline-processing-metadata-aggregator**
-
-Processor full name - Processor of the data
-
-Copy ancillary files - Copy relevant metadata from the primary asset (default: `False`, type: `bool`)
-
-Create derived data description - Output derived data description to results (default: `False`, type: `bool`)
-
-
-# Run
-
-`aind` Runs in the Code Ocean pipeline [here](https://codeocean.allenneuraldynamics.org/capsule/7026342/tree). If a user has credentials for `aind` Code Ocean, the pipeline can be run using the [Code Ocean API](https://github.com/codeocean/codeocean-sdk-python). 
-
-Derived from the example on the [Code Ocean API Github](https://github.com/codeocean/codeocean-sdk-python/blob/main/examples/run_pipeline.py)
-
-```python
-import os
-
-from codeocean import CodeOcean
-from codeocean.computation import (
-    DataAssetsRunParam,
-    NamedRunParam,
-    RunParams,
-)
-from codeocean.data_asset import (
-    Source,
-    ComputationSource,
-    Target,
-    AWSS3Target,
-)
-
-# Create the client using your domain and API token.
-
-client = CodeOcean(domain=os.environ["CODEOCEAN_URL"], token=os.environ["API_TOKEN"])
-
-# Run a pipeline with named parameters.
-
-snr_thr = 1.8 # default = 1.5
-nb = 3 # default = 2
-
-run_params=RunParams(
-    capsule_id=job_settings.pipeline_id,
-    data_assets=[
-        DataAssetsRunParam(
-            id=job_settings.asset_id,
-            mount="ophys",
-        )
-    ],
-    named_parameters=[
-        NamedRunParam(
-            param_name="init", value="greedy_roi"
-            ),
-        NamedRunParam(
-            param_name="neuropil", value="cnmf"
-            ),
-        NamedRunParam(
-            param_name="nb", value=str(nb)
-            ),
-        NamedRunParam(
-            param_name="snr_thr", value=str(snr_thr)
-        )
-        ],
-)
-
-computation = client.computations.run_capsule(run_params)
-
-# Wait for pipeline to finish.
-
-client.computations.wait_until_completed(computation)
-
-# Create an external (S3) data asset from computation results.
-
-data_asset_params = DataAssetParams(
-    name="My External Result",
-    description="<description of data>",
-    mount="<mount>",
-    tags=["<version>", "<platform>", "<data_type>"],
-    source=Source[
-        computation=ComputationSource(
-            id=computation.id,
-        ),
-    ],
-    target=Target[
-        aws=AWSS3Target(
-            bucket=os.environ["EXTERNAL_S3_BUCKET"],
-            prefix="<some_prefix>",
-        ),
-    ],
-)
-
-data_asset = client.data_assets.create_data_asset(data_asset_params)
-
-data_asset = client.data_assets.wait_until_ready(data_asset)
+**Top Level Paramters**
+```
+acquisition_data_type: single  # Single plane or multiplane configuration
+debug: 0  # Run pipeline in debug mode
+input_dir: /data  # Input data directory
+output_dir: /results  # Where to store results
+temp_dir: /scratch  #  Temporary directory
 ```
 
-
+**Motion Correction**
+```
+do_registration: True
+batch_size: 500
+maxregshift: 0.1
+align_by_chan: 1
+smooth_sigma_time: 0
+smooth_sigma: 1.15
+nonrigid: True
+maxregshiftNR: 5
+snr_thresh: 1.2
+data_type: h5
+```
+**Extraction**
+```
+diameter: 0
+cellprob_threshold: 0.0
+init: sparsery
+functional_chan: 1
+threshold_scaling: 1
+max_overlap : 0.75
+soma_crop: 0
+allow_overlap: 0
+```
+**dF / F**
+```
+long_window: 60
+short_window: 3.333
+inactive_percentile: 10
+noise_method: mad
+```
+**Metadata Manager**
+```
+processor_full_name: pipeline user
+modality: pophys
+pipeline_version: 
+aggregate_quality_control: 0
+verbose: 1
+skip_ancillary_files: 0
+data_summary: "data notes"
+```

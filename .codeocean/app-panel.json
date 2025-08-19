@@ -56,20 +56,6 @@
 			"default_value": "0.1"
 		},
 		{
-			"id": "IJsHGzkycjaliQSb",
-			"category": "nZKp6yPHuR1wvOse",
-			"name": "data_type",
-			"param_name": "data_type",
-			"description": "Input data type",
-			"type": "list",
-			"value_type": "string",
-			"default_value": "h5",
-			"extra_data": [
-				"h5",
-				"tiff"
-			]
-		},
-		{
 			"id": "sdUelMJcBBsTetWt",
 			"category": "nZKp6yPHuR1wvOse",
 			"name": "align_by_chan",
@@ -130,6 +116,19 @@
 			"default_value": "1.2"
 		},
 		{
+			"id": "H71g2p5t5XrrU42F",
+			"category": "nZKp6yPHuR1wvOse",
+			"name": "data_type",
+			"param_name": "data_type",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "h5",
+			"extra_data": [
+				"h5",
+				"tiff"
+			]
+		},
+		{
 			"id": "7uKTIg57gfQVuWo6",
 			"category": "0MIbi200f8w3BECK",
 			"name": "diameter",
@@ -146,15 +145,6 @@
 			"type": "text",
 			"value_type": "number",
 			"default_value": "0.0"
-		},
-		{
-			"id": "2WhyZligNJR6if3V",
-			"category": "0MIbi200f8w3BECK",
-			"name": "init",
-			"param_name": "init",
-			"type": "text",
-			"value_type": "string",
-			"default_value": "sparsery"
 		},
 		{
 			"id": "qiYjidTGsOyXShbn",
@@ -182,6 +172,25 @@
 			"type": "text",
 			"value_type": "number",
 			"default_value": "0.75"
+		},
+		{
+			"id": "mvyXPPB5cuB9R8h2",
+			"category": "0MIbi200f8w3BECK",
+			"name": "init",
+			"param_name": "init",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "mean",
+			"extra_data": [
+				"max/mean",
+				"mean",
+				"enhanced_mean",
+				"max",
+				"sourcery",
+				"sparsery",
+				"greedy_roi",
+				"corr_pnr"
+			]
 		},
 		{
 			"id": "lvs03UdQlYYdEMXz",
@@ -260,7 +269,8 @@
 			"name": "pipeline_version",
 			"param_name": "pipeline_version",
 			"type": "text",
-			"value_type": "string"
+			"value_type": "string",
+			"default_value": "\"\""
 		},
 		{
 			"id": "MWbuO7hhGGgG7sZD",
@@ -316,8 +326,8 @@
 			"name": "debug",
 			"param_name": "debug",
 			"type": "text",
-			"value_type": "integer",
-			"default_value": "0"
+			"value_type": "string",
+			"default_value": "False"
 		},
 		{
 			"id": "qJPrXDS0DDvEvzoC",
