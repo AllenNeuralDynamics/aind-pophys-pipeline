@@ -3,7 +3,7 @@
 	"attached_datasets": [
 		{
 			"id": "0780001e-c9d6-4cf5-a56b-c363f8957fe9",
-			"mount": "ophys_mount_url"
+			"mount": "ophys_mount"
 		},
 		{
 			"id": "35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb",
