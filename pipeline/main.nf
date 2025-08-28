@@ -283,7 +283,6 @@ process motion_correction {
     path pophys_dir
 
     output:
-    path 'capsule/results/*'
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json'
