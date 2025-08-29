@@ -235,12 +235,7 @@ workflow {
 process converter_capsule {
     tag 'capsule-2840051'
 	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v3"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("converter_capsule", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
@@ -288,12 +283,7 @@ process converter_capsule {
 process motion_correction {
     tag 'capsule-7474660'
 	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v19"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("motion_correction", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
@@ -347,12 +337,7 @@ process motion_correction {
 process movie_qc {
 	tag 'capsule-0300037'
 	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v8"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("movie_qc", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 
 	cpus 16
@@ -417,12 +402,7 @@ process decrosstalk_split_json {
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("decrosstalk_split_json", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path motion_results
@@ -471,12 +451,7 @@ process decrosstalk_roi_images {
     cpus 16
     memory '128 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("decrosstalk_roi_images", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path decrosstalk_split
@@ -534,12 +509,7 @@ process extraction {
     cpus 4
     memory '128 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("extraction", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path extraction_input
@@ -593,12 +563,7 @@ process dff_capsule {
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("dff_capsule", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path extraction_results
@@ -652,12 +617,7 @@ process oasis_event_detection {
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("oasis_event_detection", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path dff_results
@@ -711,12 +671,7 @@ process classifier {
 	accelerator 1
 	label 'gpu'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("classifier", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
     path ophys_mount_jsons
@@ -767,8 +722,9 @@ process classifier {
 process nwb_packaging_subject {
 	tag 'capsule-8198603'
 	container "$REGISTRY_HOST/published/bdc9f09f-0005-4d09-aaf9-7e82abd93f19:v2"
-
-	cpus 1
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	
+    cpus 1
 	memory '8 GB'
 
 	input:
@@ -813,6 +769,7 @@ process nwb_packaging_subject {
 process ophys_nwb {
 	tag 'capsule-9383700'
 	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v14"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 1
 	memory '8 GB'
@@ -897,6 +854,7 @@ process ophys_nwb {
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-8324994'
 	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 2
     memory '16 GB'
@@ -962,7 +920,8 @@ process pipeline_processing_metadata_aggregator {
 process quality_control_aggregator {
     tag 'capsule-4044810'
 	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v4"
-
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    
     cpus 1
     memory '8 GB'
 
