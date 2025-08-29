@@ -466,7 +466,7 @@ process decrosstalk_split_json {
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
-	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v11"
+	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v12"
 
     cpus 16
     memory '128 GB'
@@ -513,7 +513,7 @@ process decrosstalk_roi_images {
     cp -r ${converter_files} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+    git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
