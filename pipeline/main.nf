@@ -403,9 +403,9 @@ process movie_qc {
 	./run
 
 	echo "[${task.tag}] completed!"
-	echo "[$(date)] PUBLISH READY: movie_qc task completed, outputs ready for publishing"
-	echo "[$(date)] TASK_HASH: ${task.hash}"
-	echo "[$(date)] WORK_DIR: \$PWD"
+	echo "[\$(date)] PUBLISH READY: movie_qc task completed, outputs ready for publishing"
+	echo "[\$(date)] TASK_HASH: ${task.hash}"
+	echo "[\$(date)] WORK_DIR: \$PWD"
 	"""
 }
 
