@@ -330,7 +330,7 @@ process movie_qc {
 	cpus 16
 	memory '128 GB'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	publishDir "$RESULTS_PATH", mode: 'copy'
 
 	input:
 	path motion_results
