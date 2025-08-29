@@ -6,6 +6,17 @@ import groovy.json.JsonSlurper
 
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
 
+// Function to log publishing events with detailed timing
+def logPublishEvent(processName, fileName, taskHash, workDir, event) {
+    def timestamp = new Date().format("yyyy-MM-dd HH:mm:ss.SSS")
+    def logMessage = "[${timestamp}] PUBLISH_${event}: ${processName} | ${fileName} | Task: ${taskHash.take(8)} | WorkDir: ${workDir}"
+    println logMessage
+    
+    // Also write to a dedicated publishing log file
+    def logFile = new File("publishing_events.log")
+    logFile.append("${logMessage}\n")
+}
+
 workflow {
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
@@ -224,7 +235,12 @@ workflow {
 process converter_capsule {
     tag 'capsule-2840051'
 	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v3"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("converter_capsule", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     cpus 16
     memory '128 GB'
@@ -272,7 +288,12 @@ process converter_capsule {
 process motion_correction {
     tag 'capsule-7474660'
 	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v19"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("motion_correction", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     cpus 16
     memory '128 GB'
@@ -326,11 +347,17 @@ process motion_correction {
 process movie_qc {
 	tag 'capsule-0300037'
 	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v8"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("movie_qc", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
+
 
 	cpus 16
 	memory '128 GB'
 
-	publishDir "$RESULTS_PATH", mode: 'copy'
 
 	input:
 	path motion_results
@@ -376,6 +403,9 @@ process movie_qc {
 	./run
 
 	echo "[${task.tag}] completed!"
+	echo "[$(date)] PUBLISH READY: movie_qc task completed, outputs ready for publishing"
+	echo "[$(date)] TASK_HASH: ${task.hash}"
+	echo "[$(date)] WORK_DIR: \$PWD"
 	"""
 }
 
@@ -387,7 +417,12 @@ process decrosstalk_split_json {
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("decrosstalk_split_json", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     input:
     path motion_results
@@ -436,7 +471,12 @@ process decrosstalk_roi_images {
     cpus 16
     memory '128 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("decrosstalk_roi_images", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     input:
     path decrosstalk_split
@@ -494,7 +534,12 @@ process extraction {
     cpus 4
     memory '128 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("extraction", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     input:
     path extraction_input
@@ -548,7 +593,12 @@ process dff_capsule {
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("dff_capsule", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     input:
     path extraction_results
@@ -602,7 +652,12 @@ process oasis_event_detection {
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("oasis_event_detection", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     input:
     path dff_results
@@ -656,7 +711,12 @@ process classifier {
 	accelerator 1
 	label 'gpu'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("classifier", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
 	input:
     path ophys_mount_jsons
@@ -757,7 +817,12 @@ process ophys_nwb {
 	cpus 1
 	memory '8 GB'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("ophys_nwb", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
 	input:
     path schemas
@@ -836,7 +901,12 @@ process pipeline_processing_metadata_aggregator {
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("pipeline_processing_metadata_aggregator", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     input:
     path ophys_mount_jsons
@@ -896,7 +966,12 @@ process quality_control_aggregator {
     cpus 1
     memory '8 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> 
+        def baseName = new File(filename).getName()
+        def uniqueName = "${baseName}_${task.hash.take(8)}"
+        logPublishEvent("quality_control_aggregator", baseName, task.hash, task.workDir, "START")
+        return uniqueName
+    }, mode: 'copy', overwrite: true, failOnError: false
 
     input:
     path motion_correction_results
