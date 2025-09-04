@@ -27,12 +27,13 @@ workflow {
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
     def z_stacks = Channel.empty()
-        // Print all parameters at startup
-        println "\n--- Pipeline Parameters ---"
-        params.keySet().sort().each { key ->
-            println "PARAM: ${key} = ${params[key]}"
-        }
-        println "--- End Parameters ---\n"
+    // Print all parameters at startup
+    println "\n--- Pipeline Parameters ---"
+    params.keySet().sort().each { key ->
+        println "PARAM: ${key} = ${params[key]}"
+    }
+    println "--- End Parameters ---\n"
+    println "Results Path: $RESULTS_PATH"
     
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
