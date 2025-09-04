@@ -337,8 +337,11 @@ process motion_correction {
 process movie_qc {
 	tag 'capsule-0300037'
 	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v8"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
-
+    publishDir "$RESULTS_PATH", 
+        mode: 'copy',
+        overwrite: true,
+        failOnError: false,
+        saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
 	memory '128 GB'
