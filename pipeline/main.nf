@@ -337,7 +337,13 @@ process motion_correction {
 process movie_qc {
 	tag 'capsule-0300037'
 	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v8"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", 
+        mode: 'copy',
+        failOnError: false,
+        saveAs: { filename -> 
+            def fname = new File(filename).getName()
+            return fname
+        }
 
 	cpus 16
 	memory '128 GB'
@@ -349,9 +355,9 @@ process movie_qc {
     path zstacks
 
 	output:
-	path 'capsule/results/*'
-	path 'capsule/results/*/*/*.json', emit:'movie_qc_json'
-	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png'
+	path 'capsule/results/*', emit: 'all_results'
+	path 'capsule/results/*/*/*.json', emit:'movie_qc_json', optional: true
+	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png', optional: true
 
 	script:
 	"""
@@ -387,9 +393,18 @@ process movie_qc {
 	./run
 
 	echo "[${task.tag}] completed!"
+	
+	# Make sure output directory structure is correct
+	echo "Output directory structure:"
+	find capsule/results -type d | sort
+	
+	# Ensure permissions are correct for S3 copying
+	chmod -R 755 capsule/results
+	
 	echo "[\$(date)] PUBLISH READY: movie_qc task completed, outputs ready for publishing"
 	echo "[\$(date)] TASK_HASH: ${task.hash}"
 	echo "[\$(date)] WORK_DIR: \$PWD"
+	echo "[\$(date)] RESULTS_PATH: $RESULTS_PATH"
 	"""
 }
 
