@@ -486,6 +486,7 @@ process decrosstalk_roi_images {
     """
 }
 
+
 // capsule - aind-ophys-extraction-suite2p
 process extraction {
     tag 'capsule-9911715'
@@ -707,8 +708,8 @@ process classifier {
 process nwb_packaging_subject {
 	tag 'capsule-8198603'
 	container "$REGISTRY_HOST/published/bdc9f09f-0005-4d09-aaf9-7e82abd93f19:v2"
-	
-    cpus 1
+
+	cpus 1
 	memory '8 GB'
 
 	input:
@@ -751,8 +752,8 @@ process nwb_packaging_subject {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-7197641'
-	container "$REGISTRY_HOST/capsule/0be2aae9-3cda-45de-b5f6-870c0b569819:41ff6fd9d464d0ed7f4b68d9f6acba7e"
+	tag 'capsule-9383700'
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v14"
 
 	cpus 1
 	memory '8 GB'
@@ -790,21 +791,20 @@ process ophys_nwb {
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
     mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
     mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsules/data/raw/behavior /behavior
+    mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsule/data/raw/behavior /behavior
     mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
     mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${schemas} capsule/data/schemas
     cp -r ${ophys_mount_jsons} capsule/data/raw
-    if [ -e "${ophys_sync_file}" ]; then
+    if [ -n "${ophys_sync_file}" ] && [ "${ophys_sync_file}" != "[]" ]; then
         cp -r ${ophys_sync_file} capsule/data/raw/behavior
     fi
     cp -r ${ophys_mount_pophys_directory} capsule/data/raw
     cp -r ${subject_nwb_results} capsule/data/nwb
     cp -r ${motion_correction_results} capsule/data/processed
-    if [ -e "${decrosstalk_results}" ]; then
+    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
         cp -r ${decrosstalk_results} capsule/data/processed
     fi
     cp -r ${extraction_results} capsule/data/processed
@@ -815,15 +815,15 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
-    git -C capsule-repo checkout 55-package-external-assets --quiet
+	git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run
+	ls -R /data
+    ./run
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -831,8 +831,8 @@ process ophys_nwb {
 
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-8250608'
-    container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v4"
+    tag 'capsule-8324994'
+	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
 
     cpus 2
     memory '16 GB'
@@ -877,22 +877,22 @@ process pipeline_processing_metadata_aggregator {
     cp -r ${classifier_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
+    git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --processor_full_name ${params.processor_full_name} --skip_ancillary_files ${params.skip_ancillary_files} --modality ${params.modality} --pipeline_version ${params.pipeline_version} --aggregate_quality_control ${params.aggregate_quality_control} --data_summary ${params.data_summary} --verbose ${params.verbose}}
+    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + params.processor_full_name : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('pipeline_version') ? '--pipeline_version ' + params.pipeline_version : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') ? '--data_summary ' + params.data_summary : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''}
     echo "[${task.tag}] completed!"
     """
 }
 
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
-    tag 'capsule-4691390'
-    container "$REGISTRY_HOST/capsule/05b8a796-f8c7-4177-b486-82abfc146e49:b902af65b696824e8ca753bf50afa9f3"
+    tag 'capsule-4044810'
+	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v4"
 
     cpus 1
     memory '8 GB'
@@ -935,7 +935,7 @@ process quality_control_aggregator {
     cp -r ${motion_correction_results} capsule/data
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
-    if [ -e "${decrosstalk_results}" ]; then
+    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
         cp -r ${decrosstalk_results} capsule/data
     fi
     cp -r ${extraction_results} capsule/data
@@ -946,8 +946,7 @@ process quality_control_aggregator {
     cp -r ${classifier_pngs} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4691390.git" capsule-repo
-    git -C capsule-repo checkout 5d050cd --quiet
+    git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
