@@ -22,7 +22,6 @@ workflow {
         println "PARAM: ${key} = ${params[key]}"
     }
     println "--- End Parameters ---\n"
-    println "Results Path: $RESULTS_PATH"
     
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
