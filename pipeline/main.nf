@@ -16,12 +16,12 @@ workflow {
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
     def z_stacks = Channel.empty()
-        // Print all parameters at startup
-        println "\n--- Pipeline Parameters ---"
-        params.keySet().sort().each { key ->
-            println "PARAM: ${key} = ${params[key]}"
-        }
-        println "--- End Parameters ---\n"
+    // Print all parameters at startup
+    println "\n--- Pipeline Parameters ---"
+    params.keySet().sort().each { key ->
+        println "PARAM: ${key} = ${params[key]}"
+    }
+    println "--- End Parameters ---\n"
     
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
@@ -283,7 +283,6 @@ process motion_correction {
     path pophys_dir
 
     output:
-    path 'capsule/results/*'
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json'
@@ -326,12 +325,12 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v8"
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v9"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
 	memory '128 GB'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
 	path motion_results
@@ -348,7 +347,6 @@ process movie_qc {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=f52d9390-8569-49bb-9562-2d624b18ee56
 	export CO_CPUS=16
 	export CO_MEMORY=137438953472
 
@@ -367,17 +365,17 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v8.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	git clone --branch v9.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
-	echo "[${task.tag}] running capsule..."
-	cd capsule/code
-	chmod +x run
-	./run
+    echo "[${task.tag}] running capsule..."
+    cd capsule/code
+    chmod +x run
+    ./run
 
-	echo "[${task.tag}] completed!"
-	"""
+    echo "[${task.tag}] completed!"
+    """
 }
 
 // capsule - aind-ophys-decrosstalk-split-session-json
@@ -432,7 +430,7 @@ process decrosstalk_split_json {
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
-	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v11"
+	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v12"
 
     cpus 16
     memory '128 GB'
@@ -474,7 +472,7 @@ process decrosstalk_roi_images {
     cp -r ${converter_files} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+    git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -486,6 +484,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] completed!"
     """
 }
+
 
 // capsule - aind-ophys-extraction-suite2p
 process extraction {
