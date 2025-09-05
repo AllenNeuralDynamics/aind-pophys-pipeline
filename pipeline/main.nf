@@ -6,17 +6,6 @@ import groovy.json.JsonSlurper
 
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
 
-// Function to log publishing events with detailed timing
-def logPublishEvent(processName, fileName, taskHash, workDir, event) {
-    def timestamp = new Date().format("yyyy-MM-dd HH:mm:ss.SSS")
-    def logMessage = "[${timestamp}] PUBLISH_${event}: ${processName} | ${fileName} | Task: ${taskHash.take(8)} | WorkDir: ${workDir}"
-    println logMessage
-    
-    // Also write to a dedicated publishing log file
-    def logFile = new File("publishing_events.log")
-    logFile.append("${logMessage}\n")
-}
-
 workflow {
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
@@ -338,13 +327,7 @@ process motion_correction {
 process movie_qc {
 	tag 'capsule-0300037'
 	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v8"
-    publishDir "$RESULTS_PATH", 
-        mode: 'copy',
-        failOnError: false,
-        saveAs: { filename -> 
-            def fname = new File(filename).getName()
-            return fname
-        }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
 	memory '128 GB'
@@ -356,16 +339,15 @@ process movie_qc {
     path zstacks
 
 	output:
-	path 'capsule/results/*', emit: 'all_results'
-	path 'capsule/results/*/*/*.json', emit:'movie_qc_json', optional: true
-	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png', optional: true
+	path 'capsule/results/*'
+	path 'capsule/results/*/*/*.json', emit:'movie_qc_json'
+	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png'
 
 	script:
 	"""
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=f52d9390-8569-49bb-9562-2d624b18ee56
 	export CO_CPUS=16
 	export CO_MEMORY=137438953472
 
@@ -388,25 +370,13 @@ process movie_qc {
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
-	echo "[${task.tag}] running capsule..."
-	cd capsule/code
-	chmod +x run
-	./run
+    echo "[${task.tag}] running capsule..."
+    cd capsule/code
+    chmod +x run
+    ./run 
 
-	echo "[${task.tag}] completed!"
-	
-	# Make sure output directory structure is correct
-	echo "Output directory structure:"
-	find capsule/results -type d | sort
-	
-	# Ensure permissions are correct for S3 copying
-	chmod -R 755 capsule/results
-	
-	echo "[\$(date)] PUBLISH READY: movie_qc task completed, outputs ready for publishing"
-	echo "[\$(date)] TASK_HASH: ${task.hash}"
-	echo "[\$(date)] WORK_DIR: \$PWD"
-	echo "[\$(date)] RESULTS_PATH: $RESULTS_PATH"
-	"""
+    echo "[${task.tag}] completed!"
+    """
 }
 
 // capsule - aind-ophys-decrosstalk-split-session-json
@@ -782,19 +752,13 @@ process nwb_packaging_subject {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v14"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	tag 'capsule-7197641'
+	container "$REGISTRY_HOST/capsule/0be2aae9-3cda-45de-b5f6-870c0b569819:41ff6fd9d464d0ed7f4b68d9f6acba7e"
 
 	cpus 1
 	memory '8 GB'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("ophys_nwb", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
     path schemas
@@ -827,20 +791,21 @@ process ophys_nwb {
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
     mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
     mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsule/data/raw/behavior /behavior
+    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
+    mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsules/data/raw/behavior /behavior
     mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
     mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${schemas} capsule/data/schemas
     cp -r ${ophys_mount_jsons} capsule/data/raw
-    if [ -n "${ophys_sync_file}" ] && [ "${ophys_sync_file}" != "[]" ]; then
+    if [ -e "${ophys_sync_file}" ]; then
         cp -r ${ophys_sync_file} capsule/data/raw/behavior
     fi
     cp -r ${ophys_mount_pophys_directory} capsule/data/raw
     cp -r ${subject_nwb_results} capsule/data/nwb
     cp -r ${motion_correction_results} capsule/data/processed
-    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
+    if [ -e "${decrosstalk_results}" ]; then
         cp -r ${decrosstalk_results} capsule/data/processed
     fi
     cp -r ${extraction_results} capsule/data/processed
@@ -851,15 +816,15 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
+    git -C capsule-repo checkout 55-package-external-assets --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	ls -R /data
-    ./run
+	./run
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -867,19 +832,13 @@ process ophys_nwb {
 
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-8324994'
-	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    tag 'capsule-8250608'
+    container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v4"
 
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("pipeline_processing_metadata_aggregator", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path ophys_mount_jsons
@@ -919,33 +878,27 @@ process pipeline_processing_metadata_aggregator {
     cp -r ${classifier_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
+    git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + params.processor_full_name : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('pipeline_version') ? '--pipeline_version ' + params.pipeline_version : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') ? '--data_summary ' + params.data_summary : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''}
+    ./run --processor_full_name ${params.processor_full_name} --skip_ancillary_files ${params.skip_ancillary_files} --modality ${params.modality} --pipeline_version ${params.pipeline_version} --aggregate_quality_control ${params.aggregate_quality_control} --data_summary ${params.data_summary} --verbose ${params.verbose}}
     echo "[${task.tag}] completed!"
     """
 }
 
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
-    tag 'capsule-4044810'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v4"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
-    
+    tag 'capsule-4691390'
+    container "$REGISTRY_HOST/capsule/05b8a796-f8c7-4177-b486-82abfc146e49:b902af65b696824e8ca753bf50afa9f3"
+
     cpus 1
     memory '8 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> 
-        def baseName = new File(filename).getName()
-        def uniqueName = "${baseName}_${task.hash.take(8)}"
-        logPublishEvent("quality_control_aggregator", baseName, task.hash, task.workDir, "START")
-        return uniqueName
-    }, mode: 'copy', overwrite: true, failOnError: false
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path motion_correction_results
@@ -983,7 +936,7 @@ process quality_control_aggregator {
     cp -r ${motion_correction_results} capsule/data
     cp -r ${movie_qc_json} capsule/data
     cp -r ${movie_qc_png} capsule/data
-    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
+    if [ -e "${decrosstalk_results}" ]; then
         cp -r ${decrosstalk_results} capsule/data
     fi
     cp -r ${extraction_results} capsule/data
@@ -994,7 +947,8 @@ process quality_control_aggregator {
     cp -r ${classifier_pngs} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4691390.git" capsule-repo
+    git -C capsule-repo checkout 5d050cd --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
