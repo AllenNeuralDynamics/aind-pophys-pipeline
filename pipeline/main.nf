@@ -707,7 +707,6 @@ process classifier {
 process nwb_packaging_subject {
 	tag 'capsule-8198603'
 	container "$REGISTRY_HOST/published/bdc9f09f-0005-4d09-aaf9-7e82abd93f19:v2"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 	
     cpus 1
 	memory '8 GB'
