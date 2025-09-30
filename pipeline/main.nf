@@ -69,8 +69,13 @@ workflow {
     // Conditional converter execution - only run for S3 sources
     def motion_correction_input
     if (use_s3_source) {
-        converter_capsule(ophys_data)
-        motion_correction_input = converter_capsule.out.converter_results.flatten().filter { it.isDirectory() }.filter { !it.name.matches('vasculature|matched_tiff_vals') }
+    converter_capsule(ophys_data)
+    
+    // Just use assignment with view operators inline
+    motion_correction_input = converter_capsule.out.converter_results
+        .flatten()
+        .filter { it.isDirectory() }
+        .filter { !it.name.matches('vasculature|matched_tiff_vals') }
     } else {
         motion_correction_input = ophys_data
     }
@@ -223,7 +228,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v6"
+	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v7"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -234,7 +239,7 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*', optional: true
-    path 'capsule/results/*', emit: 'converter_results', optional: true, type: 'dir'
+    path 'capsule/results/*', emit: 'converter_results', optional: true
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
     path 'capsule/results/*/*local*', emit: 'local_stacks', optional: true
 
@@ -253,7 +258,7 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
+    git clone --branch v7.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
