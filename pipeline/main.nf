@@ -234,7 +234,7 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*', optional: true
-    path 'capsule/results/*', emit: 'converter_results', optional: true, type: 'dir'
+    path 'capsule/results/!(vasculature|matched_tiff_vals)', emit: 'converter_results', optional: true, type: 'dir'
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
     path 'capsule/results/*/*local*', emit: 'local_stacks', optional: true
 
