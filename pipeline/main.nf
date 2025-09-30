@@ -71,6 +71,10 @@ workflow {
     if (use_s3_source) {
         converter_capsule(ophys_data)
         motion_correction_input = converter_capsule.out.converter_results
+        motion_correction_input = converter_capsule.out.converter_results
+        .flatten()
+        .filter { it.isDirectory() }
+        .filter { !it.name.matches('vasculature|matched_tiff_vals') }
     } else {
         motion_correction_input = ophys_data
     }
@@ -234,7 +238,7 @@ process converter_capsule {
 
     output:
     path 'capsule/results/*', optional: true
-    path 'capsule/results/!(vasculature|matched_tiff_vals)', emit: 'converter_results', optional: true, type: 'dir'
+    path 'capsule/results/*', emit: 'converter_results', optional: true, type: 'dir'
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
     path 'capsule/results/*/*local*', emit: 'local_stacks', optional: true
 
