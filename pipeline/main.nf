@@ -71,7 +71,6 @@ workflow {
     if (use_s3_source) {
         converter_capsule(ophys_data)
         motion_correction_input = converter_capsule.out.converter_results
-        motion_correction_input = converter_capsule.out.converter_results
         .flatten()
         .filter { it.isDirectory() }
         .filter { !it.name.matches('vasculature|matched_tiff_vals') }
