@@ -70,10 +70,7 @@ workflow {
     def motion_correction_input
     if (use_s3_source) {
         converter_capsule(ophys_data)
-        motion_correction_input = converter_capsule.out.converter_results
-        .flatten()
-        .filter { it.isDirectory() }
-        .filter { !it.name.matches('vasculature|matched_tiff_vals') }
+        motion_correction_input = converter_capsule.out.converter_results.flatten().filter { it.isDirectory() }.filter { !it.name.matches('vasculature|matched_tiff_vals') }
     } else {
         motion_correction_input = ophys_data
     }
