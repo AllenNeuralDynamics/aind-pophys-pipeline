@@ -16,6 +16,9 @@ workflow {
     def ophys_mount_pophys_directory = Channel.empty()
     def base_path = Channel.empty()
     def z_stacks = Channel.empty()
+    def vasculature_dir = Channel.empty()
+    def matched_tiff_vals_dir = Channel.empty()
+    
     // Print all parameters at startup
     println "\n--- Pipeline Parameters ---"
     params.keySet().sort().each { key ->
@@ -69,13 +72,23 @@ workflow {
     // Conditional converter execution - only run for S3 sources
     def motion_correction_input
     if (use_s3_source) {
-    converter_capsule(ophys_data)
-    
-    // Just use assignment with view operators inline
-    motion_correction_input = converter_capsule.out.converter_results
-        .flatten()
-        .filter { it.isDirectory() }
-        .filter { !it.name.matches('vasculature|matched_tiff_vals') }
+        converter_capsule(ophys_data)
+        
+        // Separate the directories we want to filter out
+        converter_capsule.out.converter_results
+            .flatten()
+            .filter { it.isDirectory() }
+            .branch {
+                vasculature: it.name == 'vasculature'
+                matched_tiff_vals: it.name == 'matched_tiff_vals'
+                other: true
+            }
+            .set { converter_split }
+        
+        // Set the channels
+        motion_correction_input = converter_split.other
+        vasculature_dir = converter_split.vasculature
+        matched_tiff_vals_dir = converter_split.matched_tiff_vals
     } else {
         motion_correction_input = ophys_data
     }
@@ -209,7 +222,9 @@ workflow {
         oasis_event_detection.out.events_json.collect(),
         classifier.out.classifier_jsons.collect(),
         classifier.out.classifier_png.collect(),
-        ophys_mount_jsons.collect()
+        ophys_mount_jsons.collect(),
+        vasculature_dir.collect().ifEmpty([]),
+        matched_tiff_vals_dir.collect().ifEmpty([])
     )
     
     // Run Pipeline Processing Metadata Aggregator
@@ -915,6 +930,8 @@ process quality_control_aggregator {
     path classifier_jsons
     path classifier_pngs
     path ophys_mount_jsons
+    path vasculature_dir
+    path matched_tiff_vals_dir
 
     output:
     path 'capsule/results/*'
@@ -948,6 +965,12 @@ process quality_control_aggregator {
     cp -r ${oasis_event_json} capsule/data
     cp -r ${classifier_jsons} capsule/data
     cp -r ${classifier_pngs} capsule/data
+    if [ -n "${vasculature_dir}" ] && [ "${vasculature_dir}" != "[]" ]; then
+        cp -r ${vasculature_dir} capsule/data
+    fi
+    if [ -n "${matched_tiff_vals_dir}" ] && [ "${matched_tiff_vals_dir}" != "[]" ]; then
+        cp -r ${matched_tiff_vals_dir} capsule/data
+    fi
 
     echo "[${task.tag}] cloning git repo..."
     git clone --branch v8.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
