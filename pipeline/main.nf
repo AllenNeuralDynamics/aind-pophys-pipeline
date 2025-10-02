@@ -85,10 +85,10 @@ workflow {
             }
             .set { converter_split }
         
-        // Set the channels
+        // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
         motion_correction_input = converter_split.other
         vasculature_dir = converter_split.vasculature
-        matched_tiff_vals_dir = converter_split.matched_tiff_vals
+        matched_tiff_vals_dir = converter_split.matched_tiff_vals   
     } else {
         motion_correction_input = ophys_data
     }
