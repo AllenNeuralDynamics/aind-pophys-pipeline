@@ -4,7 +4,7 @@ nextflow.enable.dsl = 2
 
 import groovy.json.JsonSlurper
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
+params.ophys_mount_url = 's3://aind-open-data/single-plane-ophys_784743_2025-09-25_16-37-27'
 
 workflow {
     // Parameterized data source selection
@@ -194,6 +194,11 @@ workflow {
             ophys_mount_jsons.collect()
         )
     }
+
+    println "~~~~~~~~~~~~~~NWB OUPTUS"
+    nwb_schemas.view()
+    println "~~~~~~~~~~~~~~~Motion outputs"
+    motion_correction.out.motion_results.view()
     
     // Run Ophys NWB Packaging for Multiplane
     ophys_nwb(
