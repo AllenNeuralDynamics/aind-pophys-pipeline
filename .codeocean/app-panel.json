@@ -253,7 +253,7 @@
 			"param_name": "processor_full_name",
 			"type": "text",
 			"value_type": "string",
-			"default_value": "pipeline user"
+			"default_value": "\"pipeline user\""
 		},
 		{
 			"id": "VA68lyeeBjk6krjO",
