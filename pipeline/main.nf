@@ -4,7 +4,7 @@ nextflow.enable.dsl = 2
 
 import groovy.json.JsonSlurper
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
+params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_809092_2025-10-08_13-17-11'
 
 workflow {
     // Parameterized data source selection

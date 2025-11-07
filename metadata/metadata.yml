@@ -1,5 +1,5 @@
 metadata_version: 1
-name: aind-pophys-pipeline
+name: nov25-qc_aind-pophys-pipeline
 description: Population calcium imaging pipeline for running motion correction to
   cell event detection on multiplane and single plane 2-photon movies.
 authors:
