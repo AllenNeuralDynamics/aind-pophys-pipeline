@@ -28,10 +28,10 @@ workflow {
     
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
-    def model = file("$projectDir/../model")
+    def cytotorch_model = file("$projectDir/../cytotorch_0")
 
-    if (!model.exists()) {
-        log.error "ERROR: Model directory not found at: ${model}"
+    if (!cytotorch_model.exists()) {
+        log.error "ERROR: Cytotorch model file not found at: ${cytotorch_model}"
         exit 1
     }
 
@@ -133,7 +133,7 @@ workflow {
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
             use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
-            cytotorch.collect()
+            Channel.fromPath(cytotorch_model)
         )
         
         decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
@@ -505,7 +505,7 @@ process decrosstalk_roi_images {
 		git clone --filter=tree:0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4612268.git" capsule-repo
 	else
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4612268.git" capsule-repo
-	ficapsule-repo
+	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
