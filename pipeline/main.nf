@@ -14,7 +14,6 @@ workflow {
     def ophys_data = Channel.empty()
     def ophys_mount_jsons = Channel.empty()
     def ophys_mount_pophys_directory = Channel.empty()
-    def base_path = Channel.empty()
     def z_stacks = Channel.empty()
     def vasculature_dir = Channel.empty()
     def matched_tiff_vals_dir = Channel.empty()
@@ -26,7 +25,7 @@ workflow {
     }
     println "--- End Parameters ---\n"
     
-    base_path = "$projectDir/../data/"
+    def base_path = "${projectDir}/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
 
     if (parameter_json.exists()) {
@@ -450,10 +449,10 @@ process decrosstalk_split_json {
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
-	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v12"
+	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v13"
 
-    cpus 16
-    memory '128 GB'
+    cpus 32
+    memory '250 GB'
 
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
@@ -492,7 +491,11 @@ process decrosstalk_roi_images {
     cp -r ${converter_files} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+    if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
+		git clone --filter=tree:0 --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+	else
+		git clone --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
