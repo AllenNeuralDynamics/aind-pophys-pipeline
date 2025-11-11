@@ -27,7 +27,7 @@ workflow {
     
     def base_path = "${projectDir}/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
-    def cytotorch_model = file("${projectDir}/../cytotorch_0")
+    def cytotorch_model = file("${base_path}cytotorch_0")
 
     if (!cytotorch_model.exists()) {
         log.error "ERROR: Cytotorch model file not found at: ${cytotorch_model}"
