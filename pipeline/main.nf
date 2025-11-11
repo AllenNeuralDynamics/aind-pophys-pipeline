@@ -27,12 +27,6 @@ workflow {
     
     def base_path = "${projectDir}/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
-    def cytotorch_model = file("${base_path}cytotorch_0")
-
-    if (!cytotorch_model.exists()) {
-        log.error "ERROR: Cytotorch model file not found at: ${cytotorch_model}"
-        exit 1
-    }
 
     if (parameter_json.exists()) {
         def jsonSlurper = new JsonSlurper()
@@ -131,8 +125,7 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
-            file(cytotorch_model)
+            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
         )
         
         decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
@@ -469,7 +462,6 @@ process decrosstalk_roi_images {
     path pophys_dir
     path motion_results
     path converter_files
-    path cytotorch
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -497,7 +489,6 @@ process decrosstalk_roi_images {
     cp -r ${pophys_dir} capsule/data
     cp -r ${motion_results} capsule/data
     cp -r ${converter_files} capsule/data
-    cp ${cytotorch} capsule
 
     echo "[${task.tag}] cloning git repo..."
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
