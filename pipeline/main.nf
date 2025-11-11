@@ -28,6 +28,12 @@ workflow {
     
     base_path = "$projectDir/../data/"
     def parameter_json = file("${base_path}pipeline_parameters.json")
+    def model = file("$projectDir/../model")
+
+    if (!model.exists()) {
+        log.error "ERROR: Model directory not found at: ${model}"
+        exit 1
+    }
 
     if (parameter_json.exists()) {
         def jsonSlurper = new JsonSlurper()
@@ -126,7 +132,8 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
+            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
+            cytotorch.collect()
         )
         
         decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
@@ -449,8 +456,8 @@ process decrosstalk_split_json {
 
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
-    tag 'capsule-1533578'
-	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v12"
+    tag 'capsule-4612268'
+	container "$REGISTRY_HOST/capsule/e31d29f8-7eee-446b-8f0a-2f027fe6f39b:2f7d9335976d870a9f941cf3b34b861e"
 
     cpus 16
     memory '128 GB'
@@ -463,6 +470,7 @@ process decrosstalk_roi_images {
     path pophys_dir
     path motion_results
     path converter_files
+    path cytotorch
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -490,9 +498,14 @@ process decrosstalk_roi_images {
     cp -r ${pophys_dir} capsule/data
     cp -r ${motion_results} capsule/data
     cp -r ${converter_files} capsule/data
+    cp ${cytotorch} capsule
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+    if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
+		git clone --filter=tree:0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4612268.git" capsule-repo
+	else
+		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4612268.git" capsule-repo
+	ficapsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
