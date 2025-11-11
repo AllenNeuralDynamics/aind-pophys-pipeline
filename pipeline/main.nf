@@ -458,8 +458,8 @@ process decrosstalk_roi_images {
     tag 'capsule-1533578'
 	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v13"
 
-    cpus 16
-    memory '128 GB'
+    cpus 32
+    memory '250 GB'
 
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
