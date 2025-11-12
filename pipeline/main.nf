@@ -913,8 +913,8 @@ process pipeline_processing_metadata_aggregator {
 
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
-    tag 'capsule-4044810'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v9"
+    tag 'capsule-8973995'
+	container "$REGISTRY_HOST/published/081b9d36-c2c6-4fa0-a82f-66f2a97a6d2d"
 
     cpus 1
     memory '8 GB'
@@ -976,7 +976,7 @@ process quality_control_aggregator {
     fi
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v9.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+    git clone --branch fix-multiplane-aggregation "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8973995.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
