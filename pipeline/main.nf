@@ -914,7 +914,7 @@ process pipeline_processing_metadata_aggregator {
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
     tag 'capsule-8973995'
-	container "$REGISTRY_HOST/published/081b9d36-c2c6-4fa0-a82f-66f2a97a6d2d"
+	container "$REGISTRY_HOST/capsule/081b9d36-c2c6-4fa0-a82f-66f2a97a6d2d:0878b3d22a0cae9476546ddf4801069b"
 
     cpus 1
     memory '8 GB'
@@ -945,7 +945,7 @@ process quality_control_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=4a698b5c-f5f6-4671-8234-dc728d049a68
+    export CO_CAPSULE_ID=081b9d36-c2c6-4fa0-a82f-66f2a97a6d2d
     export CO_CPUS=1
     export CO_MEMORY=8589934592
 
@@ -976,7 +976,8 @@ process quality_control_aggregator {
     fi
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch fix-multiplane-aggregation "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8973995.git" capsule-repo
+    git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-8973995.git" capsule-repo
+    git -C capsule-repo checkout e7bbdf9 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
