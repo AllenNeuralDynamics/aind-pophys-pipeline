@@ -386,7 +386,8 @@ process movie_qc {
 
 	echo "[${task.tag}] cloning git repo..."
     git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-9195883.git" capsule-repo
-    git -C capsule-repo checkout a6a1e1c --quiet	mv capsule-repo/code capsule/code
+    git -C capsule-repo checkout a6a1e1c --quiet
+    mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
