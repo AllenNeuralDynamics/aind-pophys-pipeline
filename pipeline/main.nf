@@ -979,7 +979,7 @@ process quality_control_aggregator {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-8973995.git" capsule-repo
-    git -C capsule-repo checkout 1f3c4d6 --quiet
+    git -C capsule-repo checkout 210edf3 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
