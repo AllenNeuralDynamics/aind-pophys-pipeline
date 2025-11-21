@@ -1,5 +1,12 @@
 # CHANGELOG
 
+
+## [9.0] - 2025-11-21
+
+### Fixed
+
+* Decrosstalk optimization implemented [#40](https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/pull/40)
+
 ## [8.0] - 2025-11-11
 
 ### Fixed
