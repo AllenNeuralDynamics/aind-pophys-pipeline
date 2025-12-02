@@ -97,7 +97,10 @@ workflow {
         ophys_mount_jsons.collect()
     )
 
+    println("Checking single/multiplane")
+
     if (params.acquisition_data_type == "multiplane"){
+        println("found multiplane")
         // Run motion correction for multiplane
         motion_correction(
             motion_correction_input.flatten(),
@@ -105,6 +108,9 @@ workflow {
             ophys_mount_pophys_directory.collect(),
         )
         z_stacks = converter_capsule.out.local_stacks
+        println("After motion correction")
+        println("z_stacks")
+        println(z_stacks)
         
         // Run movie qc
         movie_qc(
@@ -273,7 +279,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8369960.git" capsule-repo
-    git -C capsule-repo checkout 0160e1b --quiet
+    git -C capsule-repo checkout b217354 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
