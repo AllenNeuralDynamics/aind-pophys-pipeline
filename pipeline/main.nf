@@ -386,7 +386,7 @@ process movie_qc {
 
 	echo "[${task.tag}] cloning git repo..."
     git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-9195883.git" capsule-repo
-    git -C capsule-repo checkout a6a1e1c --quiet
+    git -C capsule-repo checkout 15bbef9 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -979,7 +979,7 @@ process quality_control_aggregator {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-8973995.git" capsule-repo
-    git -C capsule-repo checkout 210edf3 --quiet
+    git -C capsule-repo checkout e5d2cff --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
