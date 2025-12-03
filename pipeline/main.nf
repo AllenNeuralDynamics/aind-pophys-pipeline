@@ -253,7 +253,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-8369960'
-	container "$REGISTRY_HOST/capsule/a2fa4e08-0ca7-4a29-a560-883899ddfa3c:b60c18c58596b839c98770d9043880ed"
+	container "$REGISTRY_HOST/capsule/a2fa4e08-0ca7-4a29-a560-883899ddfa3c:bf6318c4d48e83688d6e8dfb503998ce"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -284,7 +284,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8369960.git" capsule-repo
-    git -C capsule-repo checkout 1f47685 --quiet
+    git -C capsule-repo checkout a8fa596 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
