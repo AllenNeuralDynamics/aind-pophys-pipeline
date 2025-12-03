@@ -75,16 +75,19 @@ workflow {
         
         // Separate the directories we want to filter out
         converter_capsule.out.converter_results
-            .view { "converter_results: $it class=${it.getClass().name} isDir=${it.isDirectory()}" }
+            .view { "converter_results raw: $it" }
             .flatten()
+            .view { "converter_results flattened: $it" }
             .filter { it.isDirectory() }
-            .view { "after filter: $it" }
+            .view { "converter_results after isDirectory: $it" }
             .branch {
                 vasculature: it.name == 'vasculature'
                 matched_tiff_vals: it.name == 'matched_tiff_vals'
                 other: true
             }
             .set { converter_split }
+
+        converter_split.other.view { "converter_split.other: $it" }
         
         // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
         motion_correction_input = converter_split.other
