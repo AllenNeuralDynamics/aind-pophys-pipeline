@@ -75,8 +75,10 @@ workflow {
         
         // Separate the directories we want to filter out
         converter_capsule.out.converter_results
+            .view { "converter_results: $it class=${it.getClass().name} isDir=${it.isDirectory()}" }
             .flatten()
             .filter { it.isDirectory() }
+            .view { "after filter: $it" }
             .branch {
                 vasculature: it.name == 'vasculature'
                 matched_tiff_vals: it.name == 'matched_tiff_vals'
