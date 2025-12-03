@@ -226,6 +226,7 @@ workflow {
         movie_qc.out.movie_qc_json.collect(),
         movie_qc.out.movie_qc_png.collect(),
         decrosstalk_qc_json.collect().ifEmpty([]),
+        decrosstalk_results_all.collect(),
         extraction.out.extraction_qc_json.collect(),
         dff_capsule.out.dff_qc_json.collect(),
         oasis_event_detection.out.event_qc_png.collect(),
