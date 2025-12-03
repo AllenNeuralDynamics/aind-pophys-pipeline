@@ -356,7 +356,7 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-9195883'
-	container "$REGISTRY_HOST/capsule/68b49112-063d-44b0-ac21-d6b27b6b54d6:5d9cd8bf7135e57df12d4e323ee49523"
+	container "$REGISTRY_HOST/capsule/68b49112-063d-44b0-ac21-d6b27b6b54d6:ec6a47142bddef76b0ad7241feddaa53"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
@@ -398,7 +398,7 @@ process movie_qc {
 
 	echo "[${task.tag}] cloning git repo..."
     git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-9195883.git" capsule-repo
-    git -C capsule-repo checkout 15bbef9 --quiet
+    git -C capsule-repo checkout 0b54943 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
