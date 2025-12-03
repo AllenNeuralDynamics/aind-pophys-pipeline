@@ -284,7 +284,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8369960.git" capsule-repo
-    git -C capsule-repo checkout b217354 --quiet
+    git -C capsule-repo checkout 39c364f --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
