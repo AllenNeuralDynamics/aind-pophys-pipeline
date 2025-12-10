@@ -64,7 +64,6 @@ workflow {
         Channel.empty()
 
     // Initialize channels for multiplane-specific processes
-    def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_data_process_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
     
@@ -75,19 +74,14 @@ workflow {
         
         // Separate the directories we want to filter out
         converter_capsule.out.converter_results
-            .view { "converter_results raw: $it" }
             .flatten()
-            .view { "converter_results flattened: $it" }
             .filter { it.isDirectory() }
-            .view { "converter_results after isDirectory: $it" }
             .branch {
                 vasculature: it.name == 'vasculature'
                 matched_tiff_vals: it.name == 'matched_tiff_vals'
                 other: true
             }
             .set { converter_split }
-
-        converter_split.other.view { "converter_split.other: $it" }
         
         // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
         motion_correction_input = converter_split.other
@@ -102,10 +96,7 @@ workflow {
         ophys_mount_jsons.collect()
     )
 
-    println("Checking single/multiplane")
-
     if (params.acquisition_data_type == "multiplane"){
-        println("found multiplane")
         // Run motion correction for multiplane
         motion_correction(
             motion_correction_input.flatten(),
@@ -113,9 +104,6 @@ workflow {
             ophys_mount_pophys_directory.collect(),
         )
         z_stacks = converter_capsule.out.local_stacks
-        println("After motion correction")
-        println("z_stacks")
-        println(z_stacks)
         
         // Run movie qc
         movie_qc(
@@ -139,7 +127,6 @@ workflow {
             use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
         )
         
-        decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
         decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
         decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
 
@@ -252,8 +239,8 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
-    tag 'capsule-8369960'
-	container "$REGISTRY_HOST/capsule/a2fa4e08-0ca7-4a29-a560-883899ddfa3c:bf6318c4d48e83688d6e8dfb503998ce"
+    tag 'capsule-2840051'
+	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v8"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -273,7 +260,7 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=a2fa4e08-0ca7-4a29-a560-883899ddfa3c
+    export CO_CAPSULE_ID=56956b65-72a4-4248-9718-468df22b23ff
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -283,8 +270,7 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8369960.git" capsule-repo
-    git -C capsule-repo checkout c1f97a1 --quiet
+    git clone --branch v8.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -355,8 +341,8 @@ process motion_correction {
 
 // capsule - aind-ophys-movie-qc
 process movie_qc {
-	tag 'capsule-9195883'
-	container "$REGISTRY_HOST/capsule/68b49112-063d-44b0-ac21-d6b27b6b54d6:ec6a47142bddef76b0ad7241feddaa53"
+	tag 'capsule-0300037'
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
@@ -378,7 +364,6 @@ process movie_qc {
 	#!/usr/bin/env bash
 	set -e
 
-    export CO_CAPSULE_ID=68b49112-063d-44b0-ac21-d6b27b6b54d6
 	export CO_CPUS=16
 	export CO_MEMORY=137438953472
 
@@ -397,9 +382,8 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-    git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-9195883.git" capsule-repo
-    git -C capsule-repo checkout 1883adf --quiet
-    mv capsule-repo/code capsule/code
+	git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
@@ -480,7 +464,6 @@ process decrosstalk_roi_images {
     output:
     path 'capsule/results/*', emit: 'capsule_results'
     path 'capsule/results/*/*/*data_process.json', emit: 'decrosstalk_data_process_json', optional: true
-    path 'capsule/results/*/*/*.json', emit: 'decrosstalk_qc_json', optional: true
     path 'capsule/results/*/decrosstalk/*', emit: 'decrosstalk_results_all'
     
     script:
@@ -927,8 +910,8 @@ process pipeline_processing_metadata_aggregator {
 
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
-    tag 'capsule-8973995'
-	container "$REGISTRY_HOST/capsule/081b9d36-c2c6-4fa0-a82f-66f2a97a6d2d:0878b3d22a0cae9476546ddf4801069b"
+    tag 'capsule-4044810'
+	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v10"
 
     cpus 1
     memory '8 GB'
@@ -959,7 +942,7 @@ process quality_control_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=081b9d36-c2c6-4fa0-a82f-66f2a97a6d2d
+    export CO_CAPSULE_ID=4a698b5c-f5f6-4671-8234-dc728d049a68
     export CO_CPUS=1
     export CO_MEMORY=8589934592
 
@@ -990,8 +973,7 @@ process quality_control_aggregator {
     fi
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://$GIT_ACCESS_TOKEN@$GIT_HOST/capsule-8973995.git" capsule-repo
-    git -C capsule-repo checkout e15343e --quiet
+    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
