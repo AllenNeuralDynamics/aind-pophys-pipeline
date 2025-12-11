@@ -4,7 +4,7 @@ nextflow.enable.dsl = 2
 
 import groovy.json.JsonSlurper
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_784498_2025-04-26_11-23-47'
+params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_809092_2025-10-08_13-17-11'
 
 workflow {
     // Parameterized data source selection
@@ -64,7 +64,6 @@ workflow {
         Channel.empty()
 
     // Initialize channels for multiplane-specific processes
-    def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_data_process_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
     
@@ -128,7 +127,6 @@ workflow {
             use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
         )
         
-        decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
         decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
         decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
 
@@ -214,7 +212,7 @@ workflow {
         motion_correction.out.motion_results.collect(),
         movie_qc.out.movie_qc_json.collect(),
         movie_qc.out.movie_qc_png.collect(),
-        decrosstalk_qc_json.collect().ifEmpty([]),
+        decrosstalk_results_all.collect().ifEmpty([]),
         extraction.out.extraction_qc_json.collect(),
         dff_capsule.out.dff_qc_json.collect(),
         oasis_event_detection.out.event_qc_png.collect(),
@@ -242,7 +240,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v7"
+	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v8"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -272,7 +270,7 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v7.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
+    git clone --branch v8.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -344,7 +342,7 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v9"
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
@@ -384,7 +382,7 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v9.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -466,7 +464,6 @@ process decrosstalk_roi_images {
     output:
     path 'capsule/results/*', emit: 'capsule_results'
     path 'capsule/results/*/*/*data_process.json', emit: 'decrosstalk_data_process_json', optional: true
-    path 'capsule/results/*/*/*.json', emit: 'decrosstalk_qc_json', optional: true
     path 'capsule/results/*/decrosstalk/*', emit: 'decrosstalk_results_all'
     
     script:
@@ -914,7 +911,7 @@ process pipeline_processing_metadata_aggregator {
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
     tag 'capsule-4044810'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v9"
+	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v10"
 
     cpus 1
     memory '8 GB'
@@ -976,7 +973,7 @@ process quality_control_aggregator {
     fi
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v9.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
