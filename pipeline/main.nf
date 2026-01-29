@@ -92,9 +92,6 @@ workflow {
     }
 
     // Run Subject NWB Packaging Process
-    nwb_packaging_subject(
-        ophys_mount_jsons.collect()
-    )
 
     if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
@@ -198,7 +195,6 @@ workflow {
         ophys_mount_jsons.collect(),
         ophys_mount_sync_file.collect().ifEmpty([]),
         ophys_mount_pophys_directory.collect(),
-        nwb_packaging_subject.out.subject_nwb_results.collect(),
         motion_correction.out.motion_results.collect(),
         decrosstalk_results_all.collect().ifEmpty([]), // Handle empty channel
         extraction.out.extraction_results_all.collect(),
@@ -724,55 +720,11 @@ process classifier {
 	"""
 }
 
-process nwb_packaging_subject {
-	tag 'capsule-8198603'
-	container "$REGISTRY_HOST/published/bdc9f09f-0005-4d09-aaf9-7e82abd93f19:v2"
-
-	cpus 1
-	memory '8 GB'
-
-	input:
-	path ophys_mount_jsons
-
-	output:
-	path 'capsule/results/*', emit: 'subject_nwb_results'
-
-	script:
-	"""
-	#!/usr/bin/env bash
-	set -e
-
-	export CO_CAPSULE_ID=bdc9f09f-0005-4d09-aaf9-7e82abd93f19
-	export CO_CPUS=1
-	export CO_MEMORY=8589934592
-
-	mkdir -p capsule
-	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
-    mkdir -p capsule/data/ophys_session && ln -s \$PWD/capsule/data/ophys_session /ophys_session
-
-	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8198603.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
-
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_jsons} capsule/data
-
-	echo "[${task.tag}] running capsule..."
-	cd capsule/code
-	chmod +x run
-	./run 
-
-	echo "[${task.tag}] completed!"
-	"""
-}
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v14"
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v15"
 
 	cpus 1
 	memory '8 GB'
@@ -784,7 +736,6 @@ process ophys_nwb {
     path ophys_mount_jsons
     path ophys_sync_file
     path ophys_mount_pophys_directory
-    path subject_nwb_results
     path motion_correction_results
     path decrosstalk_results
     path extraction_results
@@ -821,7 +772,6 @@ process ophys_nwb {
         cp -r ${ophys_sync_file} capsule/data/raw/behavior
     fi
     cp -r ${ophys_mount_pophys_directory} capsule/data/raw
-    cp -r ${subject_nwb_results} capsule/data/nwb
     cp -r ${motion_correction_results} capsule/data/processed
     if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
         cp -r ${decrosstalk_results} capsule/data/processed
@@ -834,7 +784,7 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
+	git clone --branch v15.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
