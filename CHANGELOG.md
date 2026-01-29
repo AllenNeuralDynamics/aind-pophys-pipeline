@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## [10.0] - 2026-01-29
+### Fixed
+* Species field is no longer missing from result NWB files
 
 ## [9.0] - 2025-11-21
 
