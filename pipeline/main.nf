@@ -726,8 +726,8 @@ process ophys_nwb {
 	tag 'capsule-9383700'
 	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v15"
 
-	cpus 1
-	memory '8 GB'
+	cpus 4
+	memory '32 GB'
 
 	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
