@@ -7,4 +7,4 @@ on:
 
 jobs:
   release:
-    uses: aind/.github/.github/workflows/release-tag-and-publish-pipeline.yml@main
+    uses: AllenNeuralDynamics/.github/.github/workflows/release-tag-and-publish-pipeline.yml@main
