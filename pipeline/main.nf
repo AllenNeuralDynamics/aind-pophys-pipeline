@@ -266,7 +266,6 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    // git clone --branch v8.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9743878.git" capsule-repo
     git clone "https://${GIT_ACCESS_TOKEN}@${GIT_HOST}/capsule-9743878.git" capsule-repo && \
     cd capsule-repo && \
     git checkout 8cafc15
