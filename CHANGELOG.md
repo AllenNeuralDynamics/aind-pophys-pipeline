@@ -9,6 +9,7 @@
 ### BREAKING CHANGES
 
 * Breaking is in reference to the previous commit 8443918. This is required to trigger the versioning workflow for the previous commit due to a bug in the third-party github workflow.
+* upgrade aind-ophys-converter-capsule to expect timestamp filenames. This is the post-lims2 input format. ([8443918](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/8443918d3a5f4fee1f0c777b814c7b84afb49ffd))
 
 
 
