@@ -18,7 +18,7 @@ The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the 
 
 * [aind-ophys-oasis-event-detection](https://github.com/AllenNeuralDynamics/aind-ophys-oasis-event-detection): Generates events for each detected ROI using the OASIS library.
 
-* [aind-ophys-processing-json-collection](https://github.com/AllenNeuralDynamics/aind-ophys-processing-json-collection): The processing JSON generated for each plane are appended together and saved into the top-level session directory.
+* [aind-metadata-manager-capsule](https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule): The processing JSON generated for each plane passing through each processing capsule are appended together and saved into the top-level session directory.
 
 # Parameters
 
