@@ -1,4 +1,18 @@
-# 0.1.0 (2026-03-16)
+# [1.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v0.1.0...v1.0.0) (2026-03-19)
+
+
+### Documentation
+
+* update reference to aind-metadata-manager-capsule ([04e8cf9](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/04e8cf9ceafac42e2f8174b27de9253109eaa65b))
+
+
+### BREAKING CHANGES
+
+* Breaking is in reference to the previous commit 8443918. This is required to trigger the versioning workflow for the previous commit due to a bug in the third-party github workflow.
+
+
+
+# [0.1.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/8212ffc7e293d484a7a5dfe6a08a49b06b0901f5...v0.1.0) (2026-03-16)
 
 
 ### Bug Fixes
