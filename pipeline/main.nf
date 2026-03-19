@@ -236,7 +236,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-9743878'
-	container "$REGISTRY_HOST/capsule/f8d08f5c-863a-48f6-8129-12ddbc8c1de8:4c7d92b2b57a84806eef0180a9e93f69"
+	container "$REGISTRY_HOST/capsule/f8d08f5c-863a-48f6-8129-12ddbc8c1de8:05f614d0210effc58065295483cecbb9"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
