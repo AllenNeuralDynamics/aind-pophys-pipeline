@@ -1,3 +1,12 @@
+## [1.0.1](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v1.0.0...v1.0.1) (2026-03-20)
+
+
+### Bug Fixes
+
+* **converter-capsule:** bump to COv10, to fix platform.json check now only applies to multiplane sessions. ([6d3f9de](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/6d3f9de5e858d34cbfdfe9612ea1d603d9433f6a))
+
+
+
 # [1.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v0.1.0...v1.0.0) (2026-03-19)
 
 
@@ -9,7 +18,6 @@
 ### BREAKING CHANGES
 
 * Breaking is in reference to the previous commit 8443918. This is required to trigger the versioning workflow for the previous commit due to a bug in the third-party github workflow.
-* upgrade aind-ophys-converter-capsule to expect timestamp filenames. This is the post-lims2 input format. ([8443918](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/8443918d3a5f4fee1f0c777b814c7b84afb49ffd))
 
 
 
