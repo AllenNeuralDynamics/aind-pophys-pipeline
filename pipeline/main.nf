@@ -4,7 +4,7 @@ nextflow.enable.dsl = 2
 
 import groovy.json.JsonSlurper
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
+params.ophys_mount_url = "${projectDir}/../data/multiplane-ophys_839909_2026-02-26_15-11-01_v2"
 
 workflow {
     // Parameterized data source selection
@@ -235,8 +235,8 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
-    tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v10"
+    tag 'capsule-3711771'
+	container "$REGISTRY_HOST/capsule/4e8add3c-7d7b-4a97-9bac-c93347fbf44d:b96d073da39e5f2c7fd47654b3a21a1f"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -256,7 +256,7 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=56956b65-72a4-4248-9718-468df22b23ff
+    export CO_CAPSULE_ID=4e8add3c-7d7b-4a97-9bac-c93347fbf44d
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -266,7 +266,8 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3711771.git" capsule-repo
+    git -C capsule-repo checkout 43808ed --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 

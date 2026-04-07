@@ -10,6 +10,10 @@
 			"mount": "2p_roi_classifier"
 		},
 		{
+			"id": "e37129e2-7666-47b6-8f10-b086cd3b30f8",
+			"mount": "multiplane-ophys_839909_2026-02-26_15-11-01_v2"
+		},
+		{
 			"id": "fb4b5cef-4505-4145-b8bd-e41d6863d7a9",
 			"mount": "schemas"
 		}
