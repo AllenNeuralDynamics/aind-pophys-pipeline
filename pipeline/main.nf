@@ -285,7 +285,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-0028549'
-	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:55985918d8829828a0ba7ee774fd1d25"
+	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:2aab5a911c2e1814fc486f5fdc0c9dd2"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -323,7 +323,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0028549.git" capsule-repo
-    git -C capsule-repo checkout f85ec46 --quiet
+    git -C capsule-repo checkout 322f197 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
