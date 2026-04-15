@@ -267,7 +267,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3711771.git" capsule-repo
-    git -C capsule-repo checkout 43808ed --quiet
+    git -C capsule-repo checkout f85ec46 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -324,7 +324,6 @@ process motion_correction {
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0028549.git" capsule-repo
     git -C capsule-repo checkout 76e6d91 --quiet
-
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
