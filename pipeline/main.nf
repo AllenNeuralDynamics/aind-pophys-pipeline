@@ -236,7 +236,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-3711771'
-	container "$REGISTRY_HOST/capsule/4e8add3c-7d7b-4a97-9bac-c93347fbf44d:07c3e35fb799abc3b07243ebd1e1e3b4"
+	container "$REGISTRY_HOST/capsule/4e8add3c-7d7b-4a97-9bac-c93347fbf44d:b96d073da39e5f2c7fd47654b3a21a1f"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -285,7 +285,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-0028549'
-	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:2aab5a911c2e1814fc486f5fdc0c9dd2"
+	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:5dca9d461d3b8d73c917b166a3f8b7cf"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
