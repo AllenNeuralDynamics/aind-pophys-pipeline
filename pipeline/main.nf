@@ -285,7 +285,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-0028549'
-	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:5dca9d461d3b8d73c917b166a3f8b7cf"
+	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:98a50dd55ef52b80b39d389229ab2426"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
