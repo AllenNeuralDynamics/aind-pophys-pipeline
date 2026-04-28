@@ -285,7 +285,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-0028549'
-	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:98a50dd55ef52b80b39d389229ab2426"
+	container "$REGISTRY_HOST/capsule/d9657327-257c-4566-a5d2-0809831f6e70:88f0bad3af110298bb207866378d872f"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -323,7 +323,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0028549.git" capsule-repo
-    git -C capsule-repo checkout 322f197 --quiet
+    git -C capsule-repo checkout f041d2df56f37fd97fc4403b6a9f4d8161d7d4aa --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -339,12 +339,12 @@ process motion_correction {
 
 // capsule - aind-ophys-movie-qc
 process movie_qc {
-	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
+    tag 'capsule-9249292'
+	container "$REGISTRY_HOST/capsule/f17f3c59-5762-400b-9c2d-9593994c42c1:d7f21d108d306adde9570b9be85a47a4"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
-	cpus 16
-	memory '128 GB'
+	cpus 1
+	memory '7.5 GB'
 
 
 	input:
@@ -380,10 +380,10 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9249292.git" capsule-repo
+    git -C capsule-repo checkout e2d8a3c2cbdea1df80341215100bf795839187e6 --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
-
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
