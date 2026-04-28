@@ -4,7 +4,8 @@ nextflow.enable.dsl = 2
 
 import groovy.json.JsonSlurper
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
+
+params.ophys_mount_url = 's3://aind-scratch-data/arielle.leon/NY129-2026-04-23_14-44-00-test'
 
 workflow {
     // Parameterized data source selection
@@ -39,16 +40,16 @@ workflow {
         }
     }
     // Data source setup
-    if (use_s3_source) {
-        ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
-        ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
-    } else {
+    // if (use_s3_source) {
+    ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
+    ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
+    ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+    // } else {
         
-        ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
-        ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
-    }
+    //     ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
+    //     ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
+    //     ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
+    // }
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
@@ -69,27 +70,27 @@ workflow {
     
     // Conditional converter execution - only run for S3 sources
     def motion_correction_input
-    if (use_s3_source) {
-        converter_capsule(ophys_data)
+    // if (use_s3_source) {
+    //     converter_capsule(ophys_data)
         
-        // Separate the directories we want to filter out
-        converter_capsule.out.converter_results
-            .flatten()
-            .filter { it.isDirectory() }
-            .branch {
-                vasculature: it.name == 'vasculature'
-                matched_tiff_vals: it.name == 'matched_tiff_vals'
-                other: true
-            }
-            .set { converter_split }
+    //     // Separate the directories we want to filter out
+    //     converter_capsule.out.converter_results
+    //         .flatten()
+    //         .filter { it.isDirectory() }
+    //         .branch {
+    //             vasculature: it.name == 'vasculature'
+    //             matched_tiff_vals: it.name == 'matched_tiff_vals'
+    //             other: true
+    //         }
+    //         .set { converter_split }
         
-        // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
-        motion_correction_input = converter_split.other
-        vasculature_dir = converter_split.vasculature
-        matched_tiff_vals_dir = converter_split.matched_tiff_vals   
-    } else {
-        motion_correction_input = ophys_data
-    }
+    //     // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
+    //     motion_correction_input = converter_split.other
+    //     vasculature_dir = converter_split.vasculature
+    //     matched_tiff_vals_dir = converter_split.matched_tiff_vals   
+    // } else {
+    motion_correction_input = ophys_data
+    // }
 
     // Run Subject NWB Packaging Process
 
@@ -283,8 +284,8 @@ process converter_capsule {
 
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
-    tag 'capsule-7474660'
-	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v19"
+    tag 'capsule-5379831'
+	container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -321,7 +322,7 @@ process motion_correction {
     cp -r ${pophys_dir} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v19.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     

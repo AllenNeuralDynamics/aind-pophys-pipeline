@@ -125,7 +125,8 @@
 			"default_value": "h5",
 			"extra_data": [
 				"h5",
-				"tiff"
+				"tiff",
+				"bruker"
 			]
 		},
 		{
