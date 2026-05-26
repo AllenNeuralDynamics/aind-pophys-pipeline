@@ -235,8 +235,8 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
-    tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v10"
+    tag 'capsule-2135944'
+	container "$REGISTRY_HOST/capsule/6794edc9-25b7-4246-bfda-972fef434a49:bbcfdb10afe3450160090f467be74b39"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -256,7 +256,7 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=56956b65-72a4-4248-9718-468df22b23ff
+    export CO_CAPSULE_ID=6794edc9-25b7-4246-bfda-972fef434a49
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -266,7 +266,7 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
+    git clone --branch main "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2135944.git" capsule-repo
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -443,7 +443,7 @@ process decrosstalk_split_json {
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
-	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v14"
+	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v15"
 
     cpus 32
     memory '250 GB'
@@ -487,7 +487,7 @@ process decrosstalk_roi_images {
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
 		git clone --filter=tree:0 --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
 	else
-		git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+		git clone --branch v15.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
 	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
@@ -664,8 +664,8 @@ process oasis_event_detection {
 
 // capsule - aind-ophys-classifier
 process classifier {
-	tag 'capsule-0630574'
-	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
+	tag 'capsule-6202932'
+	container "$REGISTRY_HOST/capsule/c85d8c32-dc5e-47cc-80b4-4b6e1a2d4baf:75a9976a7a28c8f829a9fe2e110c3bb4"
 
 	cpus 4
 	memory '64 GB'
@@ -690,7 +690,7 @@ process classifier {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=3819d125-9f03-48f3-ba09-b44c84a7a2c7
+	export CO_CAPSULE_ID=c85d8c32-dc5e-47cc-80b4-4b6e1a2d4baf
 	export CO_CPUS=4
 	export CO_MEMORY=214748364800
 
@@ -707,7 +707,7 @@ process classifier {
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
+	git clone --branch feat-model-param "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6202932.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
