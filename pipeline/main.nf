@@ -707,8 +707,13 @@ process classifier {
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch feat-model-param "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6202932.git" capsule-repo
-	mv capsule-repo/code capsule/code
+	if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
+		git -c credential.helper= clone --filter=tree:0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6202932.git" capsule-repo
+	else
+		git -c credential.helper= clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6202932.git" capsule-repo
+	fi
+	git -C capsule-repo checkout 5002bfba346c2768b1063e4e3473e7370766069d --quiet
+	mv capsule-repo/code capsule/code && ln -s \$PWD/capsule/code /code
 	rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
