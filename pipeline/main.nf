@@ -667,8 +667,8 @@ process classifier {
 	tag 'capsule-6202932'
 	container "$REGISTRY_HOST/capsule/c85d8c32-dc5e-47cc-80b4-4b6e1a2d4baf:75a9976a7a28c8f829a9fe2e110c3bb4"
 
-	cpus 4
-	memory '64 GB'
+	cpus 16
+	memory '61 GB'
 	accelerator 1
 	label 'gpu'
 
@@ -691,8 +691,8 @@ process classifier {
 	set -e
 
 	export CO_CAPSULE_ID=c85d8c32-dc5e-47cc-80b4-4b6e1a2d4baf
-	export CO_CPUS=4
-	export CO_MEMORY=214748364800
+	export CO_CPUS=16
+	export CO_MEMORY=65498251264
 
 	mkdir -p capsule
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
