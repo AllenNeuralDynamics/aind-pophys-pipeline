@@ -39,58 +39,59 @@ workflow {
             println "Added params.${key} = ${value}"
         }
     }
-    // Data source setup
-    // if (use_s3_source) {
-    ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
-    ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-    ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
-    // } else {
-        
-    //     ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
-    //     ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
-    //     ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
-    // }
-    
+    // Data source setup. On Code Ocean the data asset is attached as an S3 mount, passed in
+    // via params.ophys_mount_url. For local / HPC runs, omit that param and pre-mount the
+    // session directory under the pipeline's data/ folder, passing its name as
+    // params.local_session_dir. Channel.fromPath resolves S3 URIs and local paths alike, so
+    // the only thing that differs between the two modes is how session_root is built.
+    if (!use_s3_source && !params.containsKey('local_session_dir')) {
+        error "Local runs require --local_session_dir <name> (the session folder under data/), " +
+              "or pass --ophys_mount_url for an S3-attached asset."
+    }
+    def session_root = use_s3_source ? params.ophys_mount_url : "${base_path}${params.local_session_dir}"
+
+    ophys_data = Channel.fromPath(session_root, type: 'any')
+    ophys_mount_jsons = Channel.fromPath("${session_root}/*.json", type: 'any')
+    ophys_mount_pophys_directory = Channel.fromPath("${session_root}/pophys", type: 'dir')
+
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
-    
-    // Set ophys_mount_sync_file - look for .h5 files in behavior subdirectory when using ophys_mount_url
-    def ophys_mount_sync_file = params.ophys_mount_url ? 
-        Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any', checkIfExists: false) :
-        Channel.empty()
-    
-    // Debug: Check for all files in the behavior directory (only when using ophys_mount_url)
-    def all_behavior_files = params.ophys_mount_url ? 
-        Channel.fromPath("${params.ophys_mount_url}/behavior/*", type: 'any', checkIfExists: false) :
-        Channel.empty()
+
+    // Behavior sync file (.h5), if the session has a behavior/ subdirectory
+    def ophys_mount_sync_file = Channel.fromPath("${session_root}/behavior/*.h5", type: 'any', checkIfExists: false)
+
+    // Debug: all files in the behavior directory
+    def all_behavior_files = Channel.fromPath("${session_root}/behavior/*", type: 'any', checkIfExists: false)
 
     // Initialize channels for multiplane-specific processes
     def decrosstalk_data_process_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
     
-    // Conditional converter execution - only run for S3 sources
+    // Conditional converter execution - the converter is required for multiplane sessions:
+    // it de-interleaves the interleaved acquisition into separate per-plane HDF5 timeseries.
+    // Single-plane sessions feed raw data straight into motion correction.
     def motion_correction_input
-    // if (use_s3_source) {
-    //     converter_capsule(ophys_data)
-        
-    //     // Separate the directories we want to filter out
-    //     converter_capsule.out.converter_results
-    //         .flatten()
-    //         .filter { it.isDirectory() }
-    //         .branch {
-    //             vasculature: it.name == 'vasculature'
-    //             matched_tiff_vals: it.name == 'matched_tiff_vals'
-    //             other: true
-    //         }
-    //         .set { converter_split }
-        
-    //     // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
-    //     motion_correction_input = converter_split.other
-    //     vasculature_dir = converter_split.vasculature
-    //     matched_tiff_vals_dir = converter_split.matched_tiff_vals   
-    // } else {
-    motion_correction_input = ophys_data
-    // }
+    if (params.acquisition_data_type == "multiplane") {
+        converter_capsule(ophys_data)
+
+        // Separate the directories we want to filter out
+        converter_capsule.out.converter_results
+            .flatten()
+            .filter { it.isDirectory() }
+            .branch {
+                vasculature: it.name == 'vasculature'
+                matched_tiff_vals: it.name == 'matched_tiff_vals'
+                other: true
+            }
+            .set { converter_split }
+
+        // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
+        motion_correction_input = converter_split.other
+        vasculature_dir = converter_split.vasculature
+        matched_tiff_vals_dir = converter_split.matched_tiff_vals
+    } else {
+        motion_correction_input = ophys_data
+    }
 
     // Run Subject NWB Packaging Process
 
@@ -122,7 +123,7 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
+            converter_capsule.out.converter_results_all.collect()
         )
         
         decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
@@ -287,6 +288,11 @@ process motion_correction {
     tag 'capsule-5379831'
 	container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    // Singularity needs explicit binds for /data /results /scratch because the rootfs is
+    // read-only and `ln -s ... /data` from inside the container fails. Docker on Code Ocean
+    // tolerates the symlinks, so this option is a no-op there. workflow.containerEngine is
+    // 'singularity' under -profile hpc and 'docker' / null on Code Ocean.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
 
     cpus 16
     memory '128 GB'
@@ -310,28 +316,40 @@ process motion_correction {
     export CO_CAPSULE_ID=91a8ed4d-3b9a-49c6-9283-3f16ea5482bf
     export CO_CPUS=16
     export CO_MEMORY=137438953472
-    
+
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data capsule/results capsule/scratch
+    # On Code Ocean these symlinks make /data /results /scratch writable; on HPC the same
+    # paths are bind-mounted by Singularity (see containerOptions above), so skip the symlinks.
+    if [ -z "\${SINGULARITY_NAME:-}" ]; then
+        ln -sfn \$PWD/capsule/data /data
+        ln -sfn \$PWD/capsule/results /results
+        ln -sfn \$PWD/capsule/scratch /scratch
+    fi
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount} capsule/data
     cp -r ${ophys_jsons} capsule/data
     cp -r ${pophys_dir} capsule/data
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-    
+    # Capsule code: on Code Ocean, clone from the CO-injected git host. Off-platform, copy
+    # from a pre-cloned local checkout (params.capsule_code_dir) to avoid needing a PAT.
+    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
+        echo "[${task.tag}] cloning git repo..."
+        git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
+        mv capsule-repo/code capsule/code
+        rm -rf capsule-repo
+    else
+        echo "[${task.tag}] copying capsule code from ${params.capsule_code_dir}..."
+        cp -r ${params.capsule_code_dir}/aind-ophys-motion-correction/code capsule/code
+    fi
+
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
     echo "motion_correction parameters: --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}"
     ./run --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
-    
+
     echo "[${task.tag}] completed!"
     """
 }
