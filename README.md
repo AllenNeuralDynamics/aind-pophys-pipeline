@@ -20,6 +20,52 @@ The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the 
 
 * [aind-metadata-manager-capsule](https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule): The processing JSON generated for each plane passing through each processing capsule are appended together and saved into the top-level session directory.
 
+# Running on HPC (Slurm + Singularity)
+
+The pipeline can run off-Code-Ocean on a Slurm cluster with Singularity. **Spike status: motion_correction only.** Other capsules still reference the Code Ocean–internal Docker registry and will fail under `-profile hpc` until they are also published to GHCR.
+
+## One-time setup
+
+1. **Pre-clone the capsule code repo** to a shared filesystem (replaces the runtime `git clone` that uses a Code Ocean–injected PAT):
+
+   ```bash
+   cd /allen/aind/scratch/<user>/
+   git clone https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction.git
+   ```
+
+2. **Sync the input session from S3** into this repo's `data/` directory:
+
+   ```bash
+   aws s3 sync s3://<bucket>/<session-asset>/ \
+       /allen/aind/scratch/<user>/aind-pophys-pipeline/data/<session-name>/
+   ```
+
+3. **Discover module-load names** for your cluster (one-time):
+
+   ```bash
+   module avail nextflow
+   module avail singularity
+   ```
+
+   Then update `process.beforeScript` in `pipeline/nextflow.config` (under the `hpc` profile) with the actual module names — the placeholder is `module load nextflow singularity`.
+
+## Per-run command
+
+```bash
+nextflow run pipeline/main.nf -profile hpc \
+    --local_session_dir <session-name> \
+    --capsule_code_dir /allen/aind/scratch/<user>/ \
+    --slurm_partition <partition> \
+    --slurm_account <account> \
+    --acquisition_data_type single
+```
+
+## Notes / known limitations
+
+- The container image is pulled from `ghcr.io/allenneuraldynamics/motion-correction:latest`. `:latest` is mutable; pin a specific tag once the image is versioned.
+- Bind mounts (`-B`) are used to expose `/data`, `/results`, `/scratch` inside the container. If your Singularity is configured to disallow user binds at root paths, this will fail; ask your sysadmin or fall back to `--writable-tmpfs`.
+- Streaming directly from S3 via `--ophys_mount_url` is **not yet supported on HPC** — pre-sync to the local filesystem with `aws s3 sync` and use `--local_session_dir`.
+
 # Parameters
 
 If using in Code Ocean, use the `App Builder` panel to tune parameters. You have the option of using the `pipeline_parameters.json` in the root directory to tune parameters as well. To use this file, copy it into the `/data` directory and do not rename the file.
