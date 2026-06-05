@@ -2,12 +2,6 @@
 
 nextflow.enable.dsl = 2
 
-// Code Ocean-injected env vars. On HPC these are unset and the hpc profile
-// overrides `container` per-process, so empty fallbacks are fine here —
-// Nextflow 26's strict parser only allows `params.X = ...` at top level.
-params.REGISTRY_HOST = System.getenv('REGISTRY_HOST') ?: ''
-params.RESULTS_PATH  = System.getenv('RESULTS_PATH')  ?: 'results'
-
 params.ophys_mount_url = 's3://aind-scratch-data/arielle.leon/NY129-2026-04-23_14-44-00-test'
 
 workflow {
