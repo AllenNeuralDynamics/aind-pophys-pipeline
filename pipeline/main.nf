@@ -291,7 +291,10 @@ process motion_correction {
     // read-only and `ln -s ... /data` from inside the container fails. Docker on Code Ocean
     // tolerates the symlinks, so this option is a no-op there. workflow.containerEngine is
     // 'singularity' under -profile hpc and 'docker' / null on Code Ocean.
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    // Bind /data /results /scratch from the workdir (Code Ocean conventions).
+    // HOME / MPLCONFIGDIR are redirected to /scratch because Singularity bind-mounts the host
+    // $HOME read-only into the container, and Suite2p / matplotlib write config files at import.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch --env HOME=/scratch --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 16
     memory '128 GB'
