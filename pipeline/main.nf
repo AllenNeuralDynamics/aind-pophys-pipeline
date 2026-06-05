@@ -5,8 +5,10 @@ nextflow.enable.dsl = 2
 params.ophys_mount_url = 's3://aind-scratch-data/arielle.leon/NY129-2026-04-23_14-44-00-test'
 
 workflow {
-    // Parameterized data source selection
-    def use_s3_source = params.containsKey('ophys_mount_url')
+    // Parameterized data source selection.
+    // local_session_dir wins when both are set, so HPC runs can use the
+    // hardcoded ophys_mount_url default in this file without overriding it.
+    def use_s3_source = !params.containsKey('local_session_dir') && params.containsKey('ophys_mount_url')
     
     // Declare all variables outside conditional blocks
     def ophys_data = Channel.empty()
@@ -51,8 +53,8 @@ workflow {
     ophys_mount_jsons = Channel.fromPath("${session_root}/*.json", type: 'any')
     ophys_mount_pophys_directory = Channel.fromPath("${session_root}/pophys", type: 'dir')
 
-    def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
-    def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
+    def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: false)
+    def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: false)
 
     // Behavior sync file (.h5), if the session has a behavior/ subdirectory
     def ophys_mount_sync_file = Channel.fromPath("${session_root}/behavior/*.h5", type: 'any', checkIfExists: false)
