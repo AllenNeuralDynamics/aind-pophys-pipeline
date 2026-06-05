@@ -2,9 +2,6 @@
 
 nextflow.enable.dsl = 2
 
-import groovy.json.JsonSlurper
-
-
 params.ophys_mount_url = 's3://aind-scratch-data/arielle.leon/NY129-2026-04-23_14-44-00-test'
 
 workflow {
@@ -30,7 +27,7 @@ workflow {
     def parameter_json = file("${base_path}pipeline_parameters.json")
 
     if (parameter_json.exists()) {
-        def jsonSlurper = new JsonSlurper()
+        def jsonSlurper = new groovy.json.JsonSlurper()
         def configData = jsonSlurper.parse(parameter_json)
         
         // Add each key-value pair from JSON to params
