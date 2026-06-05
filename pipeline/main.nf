@@ -341,6 +341,8 @@ process motion_correction {
     else
         echo "[${task.tag}] copying capsule code from ${params.capsule_code_dir}..."
         cp -r ${params.capsule_code_dir}/aind-ophys-motion-correction/code capsule/code
+        # The source on /allen scratch may have restrictive perms; ensure we can traverse + execute.
+        chmod -R u+rwX capsule/code
     fi
 
     echo "[${task.tag}] running capsule..."
