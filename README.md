@@ -22,49 +22,95 @@ The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the 
 
 # Running on HPC (Slurm + Singularity)
 
-The pipeline can run off-Code-Ocean on a Slurm cluster with Singularity. **Spike status: motion_correction only.** Other capsules still reference the Code Ocean–internal Docker registry and will fail under `-profile hpc` until they are also published to GHCR.
+The pipeline can run off-Code-Ocean on a Slurm cluster. **Current scope: motion_correction only** — it's the only capsule with a published GHCR image. Other steps still reference the Code Ocean–internal Docker registry and will fail under `-profile hpc` until they are published to GHCR (see "Extending to other capsules" below).
 
 ## One-time setup
 
-1. **Pre-clone the capsule code repo** to a shared filesystem (replaces the runtime `git clone` that uses a Code Ocean–injected PAT):
+1. **Install Nextflow** if your cluster doesn't provide it as a module:
 
    ```bash
-   cd /allen/aind/scratch/<user>/
-   git clone https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction.git
+   curl -s https://get.nextflow.io | bash
+   mkdir -p ~/.local/bin
+   mv nextflow ~/.local/bin/
+   chmod +x ~/.local/bin/nextflow
+   which nextflow   # should resolve under ~/.local/bin
    ```
 
-2. **Sync the input session from S3** into this repo's `data/` directory:
+   Note: Nextflow ≥ 26 enforces strict DSL syntax. The pipeline has been updated to comply; older Nextflow versions also work.
+
+2. **Authenticate to GitHub Container Registry.** The motion-correction image is private. Create a [GitHub Personal Access Token](https://github.com/settings/tokens) (classic) with `read:packages` scope, then export both vars in your shell (and add to `~/.bashrc` to persist):
 
    ```bash
-   aws s3 sync s3://<bucket>/<session-asset>/ \
-       /allen/aind/scratch/<user>/aind-pophys-pipeline/data/<session-name>/
+   export SINGULARITY_DOCKER_USERNAME='<github-username>'
+   export SINGULARITY_DOCKER_PASSWORD='ghp_xxxxxxxxxxxx'
    ```
 
-3. **Discover module-load names** for your cluster (one-time):
+   The `hpc` profile in `pipeline/nextflow.config` forwards these vars to each Slurm worker. You must have read access to the package from the `AllenNeuralDynamics` GHCR org for the pull to succeed.
+
+3. **Stage the input session.** Because login-node home directories are usually small, symlink (don't copy) from a network share:
 
    ```bash
-   module avail nextflow
-   module avail singularity
+   mkdir -p <repo-root>/data
+   ln -s /allen/aind/scratch/<user>/<session-name> <repo-root>/data/<session-name>
+   ln -s /allen/aind/scratch/<user>/<session-name>/pipeline_parameters.json \
+         <repo-root>/data/pipeline_parameters.json
    ```
 
-   Then update `process.beforeScript` in `pipeline/nextflow.config` (under the `hpc` profile) with the actual module names — the placeholder is `module load nextflow singularity`.
+   Expected layout under `data/<session-name>/`: a `pophys/` subdir plus the standard AIND JSONs (`session.json`, `data_description.json`, `processing.json`). `pipeline_parameters.json` lives in `data/`, **not** inside the session dir.
 
-## Per-run command
+4. **(Optional) Pre-pull the Singularity image** on a login node so the first job hits cache:
+
+   ```bash
+   export NXF_SINGULARITY_CACHEDIR=/allen/aind/scratch/<user>/.singularity_cache
+   mkdir -p "$NXF_SINGULARITY_CACHEDIR"
+   singularity pull --name "$NXF_SINGULARITY_CACHEDIR/ghcr.io-allenneuraldynamics-motion-correction-latest.img" \
+       docker://ghcr.io/allenneuraldynamics/motion-correction:latest
+   ```
+
+5. **Verify the partition.** `sinfo -p <partition>` to confirm it exists and accepts your jobs. Account flags (`-A` / `--slurm_account`) are only required if `sacctmgr show assoc user=$USER` returns a non-empty account.
+
+## Submitting a run
+
+A working launcher script is checked in as `run_hpc.sh` at the repo root. From the **repo root** (not from `pipeline/`):
+
+```bash
+sbatch run_hpc.sh
+```
+
+Edit `run_hpc.sh` to point `--local_session_dir` at your symlinked session and to set `--slurm_partition`. The script runs Nextflow as a single, cheap head job (`-N 1 -n 1 -c 1 --mem=2G`); Nextflow itself dispatches the heavyweight per-task Slurm jobs.
+
+Equivalent one-shot command if you prefer to skip the wrapper:
 
 ```bash
 nextflow run pipeline/main.nf -profile hpc \
     --local_session_dir <session-name> \
-    --capsule_code_dir /allen/aind/scratch/<user>/ \
     --slurm_partition <partition> \
-    --slurm_account <account> \
-    --acquisition_data_type single
+    --acquisition_data_type single \
 ```
 
-## Notes / known limitations
+## Monitoring
 
-- The container image is pulled from `ghcr.io/allenneuraldynamics/motion-correction:latest`. `:latest` is mutable; pin a specific tag once the image is versioned.
-- Bind mounts (`-B`) are used to expose `/data`, `/results`, `/scratch` inside the container. If your Singularity is configured to disallow user binds at root paths, this will fail; ask your sysadmin or fall back to `--writable-tmpfs`.
-- Streaming directly from S3 via `--ophys_mount_url` is **not yet supported on HPC** — pre-sync to the local filesystem with `aws s3 sync` and use `--local_session_dir`.
+```bash
+squeue -u $USER             # your queued / running jobs
+scontrol show job <JOBID>   # full detail on one job
+tail -f nf_<JOBID>.out      # live Nextflow progress (head job)
+sacct -j <JOBID> --format=JobID,JobName,State,ExitCode,Elapsed,MaxRSS    # post-mortem
+```
+
+## Extending to other capsules
+
+Each pipeline step lives in its own `aind-ophys-*` repo with a Dockerfile. To add HPC support for an additional capsule:
+
+1. Publish a container image to GHCR (the existing capsule Dockerfiles target the Code Ocean registry; publishing to GHCR is a CI / release-workflow change in the capsule repo, not in this repo).
+2. Add a `withName: <process_name> { container = 'ghcr.io/...' }` override inside the `hpc` profile in `pipeline/nextflow.config`, alongside the existing `motion_correction` block.
+3. Confirm any Code Ocean–injected env vars the process script uses (`GIT_ACCESS_TOKEN`, `GIT_HOST`) have HPC equivalents — for the motion-correction spike, the `${capsule_code_dir}` param replaces the runtime `git clone`, so capsule code is staged in advance rather than fetched per job.
+4. Drop the `-until motion_correction` from the launcher to let the new step run.
+
+## Known limitations
+
+- `:latest` tags are mutable. Pin specific image tags once the GHCR images are versioned.
+- Streaming directly from S3 via `--ophys_mount_url` is not supported on HPC — pre-sync or symlink the session into `data/` and pass `--local_session_dir`.
+- The `data/schemas/` and `data/2p_roi_classifier/` Code Ocean datasets are skipped on HPC (`checkIfExists: false`); steps that need them will fail until those assets are staged locally.
 
 # Parameters
 
