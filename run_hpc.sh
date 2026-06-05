@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -N 1
 #SBATCH -n 1
-#SBATCH -c 1
-#SBATCH --mem=2G
+#SBATCH -c 4
+#SBATCH --mem=16G
 #SBATCH -p aind
 #SBATCH -t 24:00:00
 #SBATCH -o nf_%j.out
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-module load nextflow singularity
+# nextflow is on PATH (~/.local/bin); container runtime resolved at task time, not here
 
 export NXF_SINGULARITY_CACHEDIR=/allen/aind/scratch/ariellel/.singularity_cache
 mkdir -p "$NXF_SINGULARITY_CACHEDIR"
