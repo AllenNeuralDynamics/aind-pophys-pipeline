@@ -292,9 +292,10 @@ process motion_correction {
     // tolerates the symlinks, so this option is a no-op there. workflow.containerEngine is
     // 'singularity' under -profile hpc and 'docker' / null on Code Ocean.
     // Bind /data /results /scratch from the workdir (Code Ocean conventions).
-    // HOME / MPLCONFIGDIR are redirected to /scratch because Singularity bind-mounts the host
-    // $HOME read-only into the container, and Suite2p / matplotlib write config files at import.
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch --env HOME=/scratch --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
+    // Also bind capsule/scratch over the in-container $HOME so Suite2p / matplotlib can write
+    // config files at import time. Apptainer disallows --env HOME=..., so we mount a writable
+    // dir over the read-only home path the container already expects.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 16
     memory '128 GB'
