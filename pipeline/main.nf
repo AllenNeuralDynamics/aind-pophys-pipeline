@@ -4,9 +4,9 @@ nextflow.enable.dsl = 2
 
 // Code Ocean-injected env vars. On HPC these are unset and the hpc profile
 // overrides `container` per-process, so empty fallbacks are fine here —
-// Nextflow 26's strict parser just needs them defined as Groovy variables.
-REGISTRY_HOST = System.getenv('REGISTRY_HOST') ?: ''
-RESULTS_PATH  = System.getenv('RESULTS_PATH')  ?: 'results'
+// Nextflow 26's strict parser only allows `params.X = ...` at top level.
+params.REGISTRY_HOST = System.getenv('REGISTRY_HOST') ?: ''
+params.RESULTS_PATH  = System.getenv('RESULTS_PATH')  ?: 'results'
 
 params.ophys_mount_url = 's3://aind-scratch-data/arielle.leon/NY129-2026-04-23_14-44-00-test'
 
@@ -241,8 +241,8 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v10"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	container "${params.REGISTRY_HOST}/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v10"
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
@@ -289,8 +289,8 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-5379831'
-	container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	container "${params.REGISTRY_HOST}/capsule/63a8ce2e-f232-4590-9098-36b820202911"
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
     // Singularity needs explicit binds for /data /results /scratch because the rootfs is
     // read-only and `ln -s ... /data` from inside the container fails. Docker on Code Ocean
     // tolerates the symlinks, so this option is a no-op there. workflow.containerEngine is
@@ -360,8 +360,8 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	container "${params.REGISTRY_HOST}/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
 	memory '128 GB'
@@ -416,12 +416,12 @@ process movie_qc {
 // capsule - aind-ophys-decrosstalk-split-session-json
 process decrosstalk_split_json {
     tag 'capsule-4425001'
-    container "$REGISTRY_HOST/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
+    container "${params.REGISTRY_HOST}/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
 
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path motion_results
@@ -465,12 +465,12 @@ process decrosstalk_split_json {
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
-	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v14"
+	container "${params.REGISTRY_HOST}/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v14"
 
     cpus 32
     memory '250 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path decrosstalk_split
@@ -527,12 +527,12 @@ process decrosstalk_roi_images {
 // capsule - aind-ophys-extraction-suite2p
 process extraction {
     tag 'capsule-9911715'
-	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v13"
+	container "${params.REGISTRY_HOST}/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v13"
 
     cpus 4
     memory '128 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path extraction_input
@@ -581,12 +581,12 @@ process extraction {
 // capsule - aind-ophys-dff
 process dff_capsule {
     tag 'capsule-6574773'
-	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v5"
+	container "${params.REGISTRY_HOST}/published/85987e27-601c-4863-811b-71e5b4bdea37:v5"
 
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path extraction_results
@@ -635,12 +635,12 @@ process dff_capsule {
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
     tag 'capsule-8957649'
-	container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v10"
+	container "${params.REGISTRY_HOST}/published/c6394aab-0db7-47b2-90ba-864866d6755e:v10"
 
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path dff_results
@@ -687,14 +687,14 @@ process oasis_event_detection {
 // capsule - aind-ophys-classifier
 process classifier {
 	tag 'capsule-0630574'
-	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
+	container "${params.REGISTRY_HOST}/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
 
 	cpus 4
 	memory '64 GB'
 	accelerator 1
 	label 'gpu'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
 	input:
     path ophys_mount_jsons
@@ -746,12 +746,12 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v15"
+	container "${params.REGISTRY_HOST}/published/8c436e95-8607-4752-8e9f-2b62024f9326:v15"
 
 	cpus 4
 	memory '32 GB'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
 	input:
     path schemas
@@ -823,12 +823,12 @@ process ophys_nwb {
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-8324994'
-	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
+	container "${params.REGISTRY_HOST}/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
 
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path ophys_mount_jsons
@@ -883,12 +883,12 @@ process pipeline_processing_metadata_aggregator {
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
     tag 'capsule-4044810'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v10"
+	container "${params.REGISTRY_HOST}/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v10"
 
     cpus 1
     memory '8 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path motion_correction_results
