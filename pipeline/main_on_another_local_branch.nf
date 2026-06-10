@@ -2,13 +2,14 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-scratch-data/arielle.leon/NY129-2026-04-23_14-44-00-test'
+import groovy.json.JsonSlurper
+
+
+params.ophys_mount_url = 's3://aind-scratch-data/vivek.athalye/NY219_2021-08-27/'
 
 workflow {
-    // Parameterized data source selection.
-    // local_session_dir wins when both are set, so HPC runs can use the
-    // hardcoded ophys_mount_url default in this file without overriding it.
-    def use_s3_source = !params.containsKey('local_session_dir') && params.containsKey('ophys_mount_url')
+    // Parameterized data source selection
+    def use_s3_source = params.containsKey('ophys_mount_url')
     
     // Declare all variables outside conditional blocks
     def ophys_data = Channel.empty()
@@ -29,7 +30,7 @@ workflow {
     def parameter_json = file("${base_path}pipeline_parameters.json")
 
     if (parameter_json.exists()) {
-        def jsonSlurper = new groovy.json.JsonSlurper()
+        def jsonSlurper = new JsonSlurper()
         def configData = jsonSlurper.parse(parameter_json)
         
         // Add each key-value pair from JSON to params
@@ -38,59 +39,58 @@ workflow {
             println "Added params.${key} = ${value}"
         }
     }
-    // Data source setup. On Code Ocean the data asset is attached as an S3 mount, passed in
-    // via params.ophys_mount_url. For local / HPC runs, omit that param and pre-mount the
-    // session directory under the pipeline's data/ folder, passing its name as
-    // params.local_session_dir. Channel.fromPath resolves S3 URIs and local paths alike, so
-    // the only thing that differs between the two modes is how session_root is built.
-    if (!use_s3_source && !params.containsKey('local_session_dir')) {
-        error "Local runs require --local_session_dir <name> (the session folder under data/), " +
-              "or pass --ophys_mount_url for an S3-attached asset."
-    }
-    def session_root = use_s3_source ? params.ophys_mount_url : "${base_path}${params.local_session_dir}"
-
-    ophys_data = Channel.fromPath(session_root, type: 'any')
-    ophys_mount_jsons = Channel.fromPath("${session_root}/*.json", type: 'any')
-    ophys_mount_pophys_directory = Channel.fromPath("${session_root}/pophys", type: 'dir')
-
-    def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: false)
-    def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: false)
-
-    // Behavior sync file (.h5), if the session has a behavior/ subdirectory
-    def ophys_mount_sync_file = Channel.fromPath("${session_root}/behavior/*.h5", type: 'any', checkIfExists: false)
-
-    // Debug: all files in the behavior directory
-    def all_behavior_files = Channel.fromPath("${session_root}/behavior/*", type: 'any', checkIfExists: false)
+    // Data source setup
+    // if (use_s3_source) {
+    ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
+    ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
+    ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+    // } else {
+        
+    //     ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
+    //     ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
+    //     ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
+    // }
+    
+    def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
+    def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
+    
+    // Set ophys_mount_sync_file - look for .h5 files in behavior subdirectory when using ophys_mount_url
+    def ophys_mount_sync_file = params.ophys_mount_url ? 
+        Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any', checkIfExists: false) :
+        Channel.empty()
+    
+    // Debug: Check for all files in the behavior directory (only when using ophys_mount_url)
+    def all_behavior_files = params.ophys_mount_url ? 
+        Channel.fromPath("${params.ophys_mount_url}/behavior/*", type: 'any', checkIfExists: false) :
+        Channel.empty()
 
     // Initialize channels for multiplane-specific processes
     def decrosstalk_data_process_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
     
-    // Conditional converter execution - the converter is required for multiplane sessions:
-    // it de-interleaves the interleaved acquisition into separate per-plane HDF5 timeseries.
-    // Single-plane sessions feed raw data straight into motion correction.
+    // Conditional converter execution - only run for S3 sources
     def motion_correction_input
-    if (params.acquisition_data_type == "multiplane") {
-        converter_capsule(ophys_data)
-
-        // Separate the directories we want to filter out
-        converter_capsule.out.converter_results
-            .flatten()
-            .filter { it.isDirectory() }
-            .branch {
-                vasculature: it.name == 'vasculature'
-                matched_tiff_vals: it.name == 'matched_tiff_vals'
-                other: true
-            }
-            .set { converter_split }
-
-        // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
-        motion_correction_input = converter_split.other
-        vasculature_dir = converter_split.vasculature
-        matched_tiff_vals_dir = converter_split.matched_tiff_vals
-    } else {
-        motion_correction_input = ophys_data
-    }
+    // if (use_s3_source) {
+    //     converter_capsule(ophys_data)
+        
+    //     // Separate the directories we want to filter out
+    //     converter_capsule.out.converter_results
+    //         .flatten()
+    //         .filter { it.isDirectory() }
+    //         .branch {
+    //             vasculature: it.name == 'vasculature'
+    //             matched_tiff_vals: it.name == 'matched_tiff_vals'
+    //             other: true
+    //         }
+    //         .set { converter_split }
+        
+    //     // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
+    //     motion_correction_input = converter_split.other
+    //     vasculature_dir = converter_split.vasculature
+    //     matched_tiff_vals_dir = converter_split.matched_tiff_vals   
+    // } else {
+    motion_correction_input = ophys_data
+    // }
 
     // Run Subject NWB Packaging Process
 
@@ -122,7 +122,7 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            converter_capsule.out.converter_results_all.collect()
+            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
         )
         
         decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
@@ -204,6 +204,9 @@ workflow {
         oasis_event_detection.out.events_h5.collect()
     )   
 
+    ophys_mount_jsons.view { file -> 
+    "~~~~~~~~~~~~~~~~~~~~~\n${file.name}\n~~~~~~~~~~~~~~~~~~~~~"
+    }
     // Run Quality Control Aggregator
     quality_control_aggregator(
         motion_correction.out.motion_results.collect(),
@@ -221,24 +224,24 @@ workflow {
         matched_tiff_vals_dir.collect().ifEmpty([])
     )
     
-    // Run Pipeline Processing Metadata Aggregator
-    pipeline_processing_metadata_aggregator(
-        ophys_mount_jsons.collect(),
-        motion_correction.out.motion_data_process_json.collect(),
-        decrosstalk_data_process_json.collect().ifEmpty([]),
-        extraction.out.extraction_data_process_json.collect(),
-        classifier.out.classifier_jsons.collect(),
-        dff_capsule.out.dff_data_process_json.collect(),
-        oasis_event_detection.out.events_json.collect(),
-    )  
+    // // Run Pipeline Processing Metadata Aggregator
+    // pipeline_processing_metadata_aggregator(
+    //     ophys_mount_jsons.collect(),
+    //     motion_correction.out.motion_data_process_json.collect(),
+    //     decrosstalk_data_process_json.collect().ifEmpty([]),
+    //     extraction.out.extraction_data_process_json.collect(),
+    //     classifier.out.classifier_jsons.collect(),
+    //     dff_capsule.out.dff_data_process_json.collect(),
+    //     oasis_event_detection.out.events_json.collect(),
+    // )  
 }
 
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-2840051'
-	container "${params.REGISTRY_HOST}/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v10"
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v10"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
@@ -285,17 +288,8 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-5379831'
-	container "${params.REGISTRY_HOST}/capsule/63a8ce2e-f232-4590-9098-36b820202911"
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
-    // Singularity needs explicit binds for /data /results /scratch because the rootfs is
-    // read-only and `ln -s ... /data` from inside the container fails. Docker on Code Ocean
-    // tolerates the symlinks, so this option is a no-op there. workflow.containerEngine is
-    // 'singularity' under -profile hpc and 'docker' / null on Code Ocean.
-    // Bind /data /results /scratch from the workdir (Code Ocean conventions).
-    // Also bind capsule/scratch over the in-container $HOME so Suite2p / matplotlib can write
-    // config files at import time. Apptainer disallows --env HOME=..., so we mount a writable
-    // dir over the read-only home path the container already expects.
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
+	container "$REGISTRY_HOST/capsule/63a8ce2e-f232-4590-9098-36b820202911"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
@@ -319,42 +313,28 @@ process motion_correction {
     export CO_CAPSULE_ID=91a8ed4d-3b9a-49c6-9283-3f16ea5482bf
     export CO_CPUS=16
     export CO_MEMORY=137438953472
-
+    
     mkdir -p capsule
-    mkdir -p capsule/data capsule/results capsule/scratch
-    # On Code Ocean these symlinks make /data /results /scratch writable; on HPC the same
-    # paths are bind-mounted by Singularity (see containerOptions above), so skip the symlinks.
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount} capsule/data
     cp -r ${ophys_jsons} capsule/data
     cp -r ${pophys_dir} capsule/data
 
-    # Capsule code: on Code Ocean, clone from the CO-injected git host. Off-platform, copy
-    # from a pre-cloned local checkout (params.capsule_code_dir) to avoid needing a PAT.
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] copying capsule code from ${params.capsule_code_dir}..."
-        cp -r ${params.capsule_code_dir}/aind-ophys-motion-correction/code capsule/code
-        # The source on /allen scratch may have restrictive perms; ensure we can traverse + execute.
-        chmod -R u+rwX capsule/code
-    fi
-
+    echo "[${task.tag}] cloning git repo..."
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5379831.git" capsule-repo
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
+    
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
     echo "motion_correction parameters: --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}"
     ./run --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
-
+    
     echo "[${task.tag}] completed!"
     """
 }
@@ -362,9 +342,8 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-0300037'
-	container "${params.REGISTRY_HOST}/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/data/raw:/raw -B ${task.workDir}/capsule/data/zstacks:/zstacks -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
 	memory '128 GB'
@@ -389,14 +368,11 @@ process movie_qc {
 	export CO_MEMORY=137438953472
 
 	mkdir -p capsule
-	mkdir -p capsule/data capsule/data/raw capsule/data/zstacks capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/data/raw /raw
-        ln -sfn \$PWD/capsule/data/zstacks /zstacks
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
+    mkdir -p capsule/data/zstacks && ln -s \$PWD/capsule/data/zstacks /zstacks
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_results} capsule/data
@@ -405,16 +381,10 @@ process movie_qc {
         cp -r ${zstacks} capsule/data/zstacks
     fi
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -428,12 +398,12 @@ process movie_qc {
 // capsule - aind-ophys-decrosstalk-split-session-json
 process decrosstalk_split_json {
     tag 'capsule-4425001'
-    container "${params.REGISTRY_HOST}/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
+    container "$REGISTRY_HOST/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
 
     cpus 2
     memory '16 GB'
 
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path motion_results
@@ -477,12 +447,12 @@ process decrosstalk_split_json {
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
-	container "${params.REGISTRY_HOST}/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v14"
+	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v14"
 
     cpus 32
     memory '250 GB'
 
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path decrosstalk_split
@@ -539,13 +509,12 @@ process decrosstalk_roi_images {
 // capsule - aind-ophys-extraction-suite2p
 process extraction {
     tag 'capsule-9911715'
-	container "${params.REGISTRY_HOST}/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v13"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v13"
 
     cpus 4
     memory '128 GB'
 
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path extraction_input
@@ -568,27 +537,18 @@ process extraction {
     export CO_MEMORY=137438953472
 
     mkdir -p capsule
-    mkdir -p capsule/data capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${extraction_input} capsule/data
     cp -r ${ophys_jsons} capsule/data
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+    echo "[${task.tag}] cloning git repo..."
+    git clone --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -603,13 +563,12 @@ process extraction {
 // capsule - aind-ophys-dff
 process dff_capsule {
     tag 'capsule-6574773'
-	container "${params.REGISTRY_HOST}/published/85987e27-601c-4863-811b-71e5b4bdea37:v5"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v5"
 
     cpus 4
     memory '32 GB'
 
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path extraction_results
@@ -632,34 +591,25 @@ process dff_capsule {
     export CO_MEMORY=34359738368
 
     mkdir -p capsule
-    mkdir -p capsule/data capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount_json} capsule/data
     cp -r ${extraction_results} capsule/data
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v5.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+    echo "[${task.tag}] cloning git repo..."
+    git clone --branch v5.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
     echo "dff_capsule parameters: --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method}"
     ./run --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method}
-
+    
     echo "[${task.tag}] completed!"
     """
 }
@@ -667,13 +617,12 @@ process dff_capsule {
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
     tag 'capsule-8957649'
-	container "${params.REGISTRY_HOST}/published/c6394aab-0db7-47b2-90ba-864866d6755e:v10"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+	container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v10"
 
     cpus 4
     memory '32 GB'
 
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path dff_results
@@ -695,27 +644,18 @@ process oasis_event_detection {
     export CO_MEMORY=34359738368
 
     mkdir -p capsule
-    mkdir -p capsule/data capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_jsons} capsule/data
     cp -r ${dff_results} capsule/data
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8957649.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+    echo "[${task.tag}] cloning git repo..."
+    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8957649.git" capsule-repo
+	mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -729,21 +669,20 @@ process oasis_event_detection {
 // capsule - aind-ophys-classifier
 process classifier {
 	tag 'capsule-0630574'
-	container "${params.REGISTRY_HOST}/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
 
 	cpus 4
 	memory '64 GB'
 	accelerator 1
 	label 'gpu'
 
-	publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
     path ophys_mount_jsons
 	path classifier_data
 	path extraction_results
-
+    
 	output:
 	path 'capsule/results/*/*/*.json', emit: 'classifier_jsons'
     path 'capsule/results/*/classification/*classification.h5', emit: 'classifer_h5'
@@ -760,34 +699,21 @@ process classifier {
 	export CO_MEMORY=214748364800
 
 	mkdir -p capsule
-	mkdir -p capsule/data capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount_jsons} capsule/data
     cp -r ${classifier_data} capsule/data
     cp -r ${extraction_results} capsule/data
 
-    # /tmp/data/2p_roi_classifier is a Code-Ocean-attached dataset; off-platform the
-    # classifier_data input channel already populated capsule/data/2p_roi_classifier.
-    if [ -e "/tmp/data/2p_roi_classifier" ] && [ ! -e "capsule/data/2p_roi_classifier" ]; then
-        ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb
-    fi
+	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+	echo "[${task.tag}] cloning git repo..."
+	git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
+	mv capsule-repo/code capsule/code
+	rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
@@ -801,14 +727,13 @@ process classifier {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-9383700'
-	container "${params.REGISTRY_HOST}/published/8c436e95-8607-4752-8e9f-2b62024f9326:v15"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/data/schemas:/schemas -B ${task.workDir}/capsule/data/raw:/raw -B ${task.workDir}/capsule/data/raw/behavior:/behavior -B ${task.workDir}/capsule/data/nwb:/nwb -B ${task.workDir}/capsule/data/processed:/processed -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+	tag 'capsule-7197641'
+	container "$REGISTRY_HOST/capsule/0be2aae9-3cda-45de-b5f6-870c0b569819"
 
 	cpus 4
 	memory '32 GB'
 
-	publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	input:
     path schemas
@@ -835,17 +760,14 @@ process ophys_nwb {
 	export CO_MEMORY=8589934592
     echo "I AM MAKING AN NWB"
 	mkdir -p capsule
-	mkdir -p capsule/data capsule/data/schemas capsule/data/raw capsule/data/raw/behavior capsule/data/nwb capsule/data/processed capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-        ln -sfn \$PWD/capsule/data/schemas /schemas
-        ln -sfn \$PWD/capsule/data/raw /raw
-        ln -sfn \$PWD/capsule/data/raw/behavior /behavior
-        ln -sfn \$PWD/capsule/data/nwb /nwb
-        ln -sfn \$PWD/capsule/data/processed /processed
-    fi
+	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
+    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
+    mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsule/data/raw/behavior /behavior
+    mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
+    mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${schemas} capsule/data/schemas
@@ -863,16 +785,12 @@ process ophys_nwb {
     cp -r ${dff_results} capsule/data/processed
     cp -r ${event_detection_results} capsule/data/processed
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v15.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
+
+	echo "[${task.tag}] cloning git repo..."
+    git clone --branch 72-dynamically-search-through-session-data "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7197641.git" capsule-repo
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
@@ -887,13 +805,12 @@ process ophys_nwb {
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-8324994'
-	container "${params.REGISTRY_HOST}/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
 
     cpus 2
     memory '16 GB'
 
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path ophys_mount_jsons
@@ -917,12 +834,9 @@ process pipeline_processing_metadata_aggregator {
     export CO_MEMORY=17179869184
 
     mkdir -p capsule
-    mkdir -p capsule/data capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_correction_results} capsule/data
@@ -935,16 +849,10 @@ process pipeline_processing_metadata_aggregator {
     cp -r ${ophys_mount_jsons} capsule/data
     cp -r ${classifier_jsons} capsule/data
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+    echo "[${task.tag}] cloning git repo..."
+    git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -956,14 +864,13 @@ process pipeline_processing_metadata_aggregator {
 
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
-    tag 'capsule-4044810'
-	container "${params.REGISTRY_HOST}/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v10"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    tag 'capsule-4691390'
+	container "$REGISTRY_HOST/capsule/05b8a796-f8c7-4177-b486-82abfc146e49"
 
     cpus 1
     memory '8 GB'
 
-    publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path motion_correction_results
@@ -994,12 +901,9 @@ process quality_control_aggregator {
     export CO_MEMORY=8589934592
 
     mkdir -p capsule
-    mkdir -p capsule/data capsule/results capsule/scratch
-    if [ -z "\${SINGULARITY_NAME:-}" ]; then
-        ln -sfn \$PWD/capsule/data /data
-        ln -sfn \$PWD/capsule/results /results
-        ln -sfn \$PWD/capsule/scratch /scratch
-    fi
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount_jsons} capsule/data
@@ -1022,16 +926,10 @@ process quality_control_aggregator {
         cp -r ${matched_tiff_vals_dir} capsule/data
     fi
 
-    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
-        echo "[${task.tag}] cloning git repo..."
-        git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
-        mv capsule-repo/code capsule/code
-        rm -rf capsule-repo
-    else
-        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
-        cp -r /capsule/code capsule/code
-        chmod -R u+rwX capsule/code
-    fi
+    echo "[${task.tag}] cloning git repo..."
+    git clone --branch 19-test-with-bruker-data "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4691390.git" capsule-repo
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
