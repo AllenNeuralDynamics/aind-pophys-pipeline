@@ -22,7 +22,7 @@ The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the 
 
 # Running on HPC (Slurm + Singularity)
 
-The pipeline can run off-Code-Ocean on a Slurm cluster. **Current scope: motion_correction only** — it's the only capsule with a published GHCR image. Other steps still reference the Code Ocean–internal Docker registry and will fail under `-profile hpc` until they are published to GHCR (see "Extending to other capsules" below).
+The pipeline can run off-Code-Ocean on a Slurm cluster. Most processing steps now have published GHCR images and are wired up under `-profile hpc`. The remaining Code Ocean-only steps are `converter_capsule` and the two `decrosstalk_*` processes — they still reference the Code Ocean–internal Docker registry and will fail under `-profile hpc` until they are published to GHCR (see "Extending to other capsules" below). For single-plane sessions this is fine; for multiplane sessions the converter and decrosstalk steps are required.
 
 ## One-time setup
 
@@ -38,14 +38,21 @@ The pipeline can run off-Code-Ocean on a Slurm cluster. **Current scope: motion_
 
    Note: Nextflow ≥ 26 enforces strict DSL syntax. The pipeline has been updated to comply; older Nextflow versions also work.
 
-2. **Authenticate to GitHub Container Registry.** The motion-correction image is private. Create a [GitHub Personal Access Token](https://github.com/settings/tokens) (classic) with `read:packages` scope, then export both vars in your shell (and add to `~/.bashrc` to persist):
+2. **Authenticate to GitHub Container Registry.** All AIND ophys images are private. Create a [GitHub Personal Access Token](https://github.com/settings/tokens) (classic) with `read:packages` scope, then export both vars in your shell (and add to `~/.bashrc` to persist):
 
    ```bash
    export SINGULARITY_DOCKER_USERNAME='<github-username>'
    export SINGULARITY_DOCKER_PASSWORD='ghp_xxxxxxxxxxxx'
    ```
 
-   The `hpc` profile in `pipeline/nextflow.config` forwards these vars to each Slurm worker. You must have read access to the package from the `AllenNeuralDynamics` GHCR org for the pull to succeed.
+   The `hpc` profile in `pipeline/nextflow.config` forwards these vars to each Slurm worker. You must have read access to the packages from the `AllenNeuralDynamics` GHCR org for the pull to succeed.
+
+   On Apptainer-based clusters you'll see `INFO: Environment variable SINGULARITY_DOCKER_PASSWORD is set, but APPTAINER_DOCKER_PASSWORD is preferred`. To silence the warning, also set the new-prefix vars (don't unset the SINGULARITY ones — `nextflow run -profile hpc` reads those):
+
+   ```bash
+   export APPTAINER_DOCKER_USERNAME=$SINGULARITY_DOCKER_USERNAME
+   export APPTAINER_DOCKER_PASSWORD=$SINGULARITY_DOCKER_PASSWORD
+   ```
 
 3. **Stage the input session.** Because login-node home directories are usually small, symlink (don't copy) from a network share:
 
@@ -58,16 +65,35 @@ The pipeline can run off-Code-Ocean on a Slurm cluster. **Current scope: motion_
 
    Expected layout under `data/<session-name>/`: a `pophys/` subdir plus the standard AIND JSONs (`session.json`, `data_description.json`, `processing.json`). `pipeline_parameters.json` lives in `data/`, **not** inside the session dir.
 
-4. **(Optional) Pre-pull the Singularity image** on a login node so the first job hits cache:
+4. **Symlink the classifier model.** The `classifier` step reads its trained model from `data/2p_roi_classifier/`. On the AIND HPC, point it at the canonical training output:
+
+   ```bash
+   ln -s /allen/aind/scratch/ariellel/training-002/2p_roi_classifier \
+         <repo-root>/data/2p_roi_classifier
+   ```
+
+   Verify with `ls -la <repo-root>/data/2p_roi_classifier/`. If the listing is empty or you get "Too many levels of symbolic links", the `/allen` mount isn't available on the current node — confirm with `ls /allen/aind/scratch/ariellel/training-002/`.
+
+5. **Pre-pull all Singularity images.** Run `pull_images.sh` from the repo root. It pulls every GHCR image referenced by the `hpc` profile into a local cache, named in Nextflow's expected format so the workflow won't re-pull at runtime:
 
    ```bash
    export NXF_SINGULARITY_CACHEDIR=/allen/aind/scratch/<user>/.singularity_cache
-   mkdir -p "$NXF_SINGULARITY_CACHEDIR"
-   singularity pull --name "$NXF_SINGULARITY_CACHEDIR/ghcr.io-allenneuraldynamics-motion-correction-latest.img" \
-       docker://ghcr.io/allenneuraldynamics/motion-correction:latest
+   ./pull_images.sh
    ```
 
-5. **Verify the partition.** `sinfo -p <partition>` to confirm it exists and accepts your jobs. Account flags (`-A` / `--slurm_account`) are only required if `sacctmgr show assoc user=$USER` returns a non-empty account.
+   Defaults to `./singularity_cache` if `NXF_SINGULARITY_CACHEDIR` is unset. On AIND clusters, `singularity` on the login node automatically queues each pull as a short `srun` job; to avoid 9 separate queue waits, run the script from inside one interactive allocation:
+
+   ```bash
+   srun -p aibs_debug --pty bash
+   # inside the allocation:
+   ./pull_images.sh
+   ```
+
+   Set `NXF_SINGULARITY_CACHEDIR` in your shell rc / Slurm submit script so Nextflow finds the cache on subsequent runs.
+
+6. **Verify the partition.** `sinfo -p <partition>` to confirm it exists and accepts your jobs. Account flags (`-A` / `--slurm_account`) are only required if `sacctmgr show assoc user=$USER` returns a non-empty account.
+
+   Note: if a process fails inside the container with missing files referencing `/allen/...`, Singularity isn't bind-mounting the share. Add `export SINGULARITY_BINDPATH=/allen` to your shell rc and retry.
 
 ## Submitting a run
 
@@ -99,18 +125,21 @@ sacct -j <JOBID> --format=JobID,JobName,State,ExitCode,Elapsed,MaxRSS    # post-
 
 ## Extending to other capsules
 
-Each pipeline step lives in its own `aind-ophys-*` repo with a Dockerfile. To add HPC support for an additional capsule:
+Each pipeline step lives in its own `aind-ophys-*` repo with a Dockerfile. The remaining Code-Ocean-only steps are `converter_capsule`, `decrosstalk_split_json`, and `decrosstalk_roi_images`. To add HPC support for one:
 
-1. Publish a container image to GHCR (the existing capsule Dockerfiles target the Code Ocean registry; publishing to GHCR is a CI / release-workflow change in the capsule repo, not in this repo).
-2. Add a `withName: <process_name> { container = 'ghcr.io/...' }` override inside the `hpc` profile in `pipeline/nextflow.config`, alongside the existing `motion_correction` block.
-3. Confirm any Code Ocean–injected env vars the process script uses (`GIT_ACCESS_TOKEN`, `GIT_HOST`) have HPC equivalents — for the motion-correction spike, the `${capsule_code_dir}` param replaces the runtime `git clone`, so capsule code is staged in advance rather than fetched per job.
-4. Drop the `-until motion_correction` from the launcher to let the new step run.
+1. Publish a container image to GHCR. The image must:
+   - Bake the capsule code into `/capsule/code` (the process scripts in `pipeline/main.nf` copy from there when `GIT_ACCESS_TOKEN` is unset).
+   - Pre-create the bind-target directories Singularity needs: `RUN mkdir -p /data /results /scratch /capsule/code` (plus any extras the process binds — see existing `withName: ophys_nwb` and `withName: movie_qc` blocks).
+2. Add a `withName: <process_name> { container = 'ghcr.io/...' ; beforeScript = '... mkdir -p capsule/data ...' }` override inside the `hpc` profile in `pipeline/nextflow.config`, mirroring the existing entries.
+3. Add the new image to `pull_images.sh`.
+
+The process script bodies in `main.nf` already handle the Code Ocean / HPC fork: when `SINGULARITY_NAME` is set they use bind-mounts and skip the `/data` symlinks; when `GIT_ACCESS_TOKEN` is unset they copy from `/capsule/code` instead of cloning.
 
 ## Known limitations
 
-- `:latest` tags are mutable. Pin specific image tags once the GHCR images are versioned.
 - Streaming directly from S3 via `--ophys_mount_url` is not supported on HPC — pre-sync or symlink the session into `data/` and pass `--local_session_dir`.
-- The `data/schemas/` and `data/2p_roi_classifier/` Code Ocean datasets are skipped on HPC (`checkIfExists: false`); steps that need them will fail until those assets are staged locally.
+- The `data/schemas/` Code Ocean dataset is skipped on HPC (`checkIfExists: false`); steps that need it will fail until staged locally.
+- `converter_capsule`, `decrosstalk_split_json`, and `decrosstalk_roi_images` have no GHCR images yet, so multiplane sessions cannot run end-to-end under `-profile hpc`.
 
 # Parameters
 
