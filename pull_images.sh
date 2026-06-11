@@ -20,7 +20,7 @@ IMAGES=(
     ghcr.io/allenneuraldynamics/ophys-extraction:v3
     ghcr.io/allenneuraldynamics/ophys-roicat-classifier:v2
     ghcr.io/allenneuraldynamics/ophys-dff:v2
-    ghcr.io/allenneuraldynamics/oasis-event-detection:v1
+    ghcr.io/allenneuraldynamics/oasis-event-detection:v2
     ghcr.io/allenneuraldynamics/ophys-nwb-packaging:v2
     ghcr.io/allenneuraldynamics/metadata-manager:v2
     ghcr.io/allenneuraldynamics/ophys-quality-control-aggregator:v2
