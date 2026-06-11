@@ -15,7 +15,7 @@ CACHE_DIR="${NXF_SINGULARITY_CACHEDIR:-$PWD/singularity_cache}"
 mkdir -p "$CACHE_DIR"
 
 IMAGES=(
-    ghcr.io/allenneuraldynamics/motion-correction:v4
+    ghcr.io/allenneuraldynamics/motion-correction:v5
     ghcr.io/allenneuraldynamics/ophys-movie-qc:v2
     ghcr.io/allenneuraldynamics/ophys-extraction:v3
     ghcr.io/allenneuraldynamics/ophys-roicat-classifier:v2
