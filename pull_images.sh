@@ -17,7 +17,7 @@ mkdir -p "$CACHE_DIR"
 IMAGES=(
     ghcr.io/allenneuraldynamics/motion-correction:v5
     ghcr.io/allenneuraldynamics/ophys-movie-qc:v2
-    ghcr.io/allenneuraldynamics/ophys-extraction:v3
+    ghcr.io/allenneuraldynamics/ophys-extraction:v4
     ghcr.io/allenneuraldynamics/ophys-roicat-classifier:v2
     ghcr.io/allenneuraldynamics/ophys-dff:v2
     ghcr.io/allenneuraldynamics/oasis-event-detection:v2
