@@ -18,12 +18,12 @@ IMAGES=(
     ghcr.io/allenneuraldynamics/motion-correction:v5
     ghcr.io/allenneuraldynamics/ophys-movie-qc:v4
     ghcr.io/allenneuraldynamics/ophys-extraction:v4
-    ghcr.io/allenneuraldynamics/ophys-roicat-classifier:v2
-    ghcr.io/allenneuraldynamics/ophys-dff:v2
-    ghcr.io/allenneuraldynamics/oasis-event-detection:v2
-    ghcr.io/allenneuraldynamics/ophys-nwb-packaging:v2
-    ghcr.io/allenneuraldynamics/metadata-manager:v2
-    ghcr.io/allenneuraldynamics/ophys-quality-control-aggregator:v2
+    ghcr.io/allenneuraldynamics/ophys-roicat-classifier:v4
+    ghcr.io/allenneuraldynamics/ophys-dff:v4
+    ghcr.io/allenneuraldynamics/oasis-event-detection:v4
+    ghcr.io/allenneuraldynamics/ophys-nwb-packaging:v4
+    ghcr.io/allenneuraldynamics/metadata-manager:v4
+    ghcr.io/allenneuraldynamics/ophys-quality-control-aggregator:v4
 )
 
 failed=()
