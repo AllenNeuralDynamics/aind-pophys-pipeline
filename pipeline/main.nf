@@ -239,6 +239,10 @@ process converter_capsule {
     tag 'capsule-2840051'
 	container "${params.REGISTRY_HOST}/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v10"
     publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
+    // Singularity needs explicit binds for /data /results /scratch because the rootfs is
+    // read-only and `ln -s ... /data` from inside the container fails. The extra scratch:HOME
+    // bind + MPLCONFIGDIR give a writable ~/.cache, ~/.config, and matplotlib dir at import time.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 16
     memory '128 GB'
@@ -262,14 +266,25 @@ process converter_capsule {
     export CO_MEMORY=137438953472
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data capsule/results capsule/scratch
+    # On Code Ocean these symlinks make /data /results /scratch writable; on HPC the same
+    # paths are bind-mounted by Singularity (see containerOptions above), so skip the symlinks.
+    if [ -z "\${SINGULARITY_NAME:-}" ]; then
+        ln -sfn \$PWD/capsule/data /data
+        ln -sfn \$PWD/capsule/results /results
+        ln -sfn \$PWD/capsule/scratch /scratch
+    fi
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
-    mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
+        echo "[${task.tag}] cloning git repo..."
+        git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
+        mv capsule-repo/code capsule/code
+        rm -rf capsule-repo
+    else
+        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
+        cp -r /capsule/code capsule/code
+        chmod -R u+rwX capsule/code
+    fi
 
     echo "[${task.tag}] running capsule..."
     echo "Processing: \$(basename $ophys_mount)"
@@ -364,7 +379,7 @@ process movie_qc {
 	tag 'capsule-0300037'
 	container "${params.REGISTRY_HOST}/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
     publishDir "${params.RESULTS_PATH}", saveAs: { filename -> new File(filename).getName() }
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/data/raw:/raw -B ${task.workDir}/capsule/data/zstacks:/zstacks -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/data/raw:/raw -B ${task.workDir}/capsule/data/zstacks:/zstacks -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
 	cpus 16
 	memory '128 GB'
@@ -429,6 +444,10 @@ process movie_qc {
 process decrosstalk_split_json {
     tag 'capsule-4425001'
     container "${params.REGISTRY_HOST}/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
+    // Singularity needs explicit binds for /data /results /scratch because the rootfs is
+    // read-only and `ln -s ... /data` from inside the container fails. The extra scratch:HOME
+    // bind + MPLCONFIGDIR give a writable ~/.cache, ~/.config, and matplotlib dir at import time.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 2
     memory '16 GB'
@@ -452,18 +471,29 @@ process decrosstalk_split_json {
     export CO_MEMORY=17179869184
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data capsule/results capsule/scratch
+    # On Code Ocean these symlinks make /data /results /scratch writable; on HPC the same
+    # paths are bind-mounted by Singularity (see containerOptions above), so skip the symlinks.
+    if [ -z "\${SINGULARITY_NAME:-}" ]; then
+        ln -sfn \$PWD/capsule/data /data
+        ln -sfn \$PWD/capsule/results /results
+        ln -sfn \$PWD/capsule/scratch /scratch
+    fi
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_results} capsule/data
     cp -r ${ophys_jsons} capsule/data
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v1.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4425001.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
+        echo "[${task.tag}] cloning git repo..."
+        git clone --branch v1.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4425001.git" capsule-repo
+        mv capsule-repo/code capsule/code
+        rm -rf capsule-repo
+    else
+        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
+        cp -r /capsule/code capsule/code
+        chmod -R u+rwX capsule/code
+    fi
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -478,6 +508,10 @@ process decrosstalk_split_json {
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
 	container "${params.REGISTRY_HOST}/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v14"
+    // Singularity needs explicit binds for /data /results /scratch because the rootfs is
+    // read-only and `ln -s ... /data` from inside the container fails. The extra scratch:HOME
+    // bind + MPLCONFIGDIR give a writable ~/.cache, ~/.config, and matplotlib dir at import time.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 32
     memory '250 GB'
@@ -506,9 +540,14 @@ process decrosstalk_roi_images {
     export CO_MEMORY=137438953472
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data capsule/results capsule/scratch
+    # On Code Ocean these symlinks make /data /results /scratch writable; on HPC the same
+    # paths are bind-mounted by Singularity (see containerOptions above), so skip the symlinks.
+    if [ -z "\${SINGULARITY_NAME:-}" ]; then
+        ln -sfn \$PWD/capsule/data /data
+        ln -sfn \$PWD/capsule/results /results
+        ln -sfn \$PWD/capsule/scratch /scratch
+    fi
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${decrosstalk_split} capsule/data
@@ -517,14 +556,20 @@ process decrosstalk_roi_images {
     cp -r ${motion_results} capsule/data
     cp -r ${converter_files} capsule/data
 
-    echo "[${task.tag}] cloning git repo..."
-    if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
-		git clone --filter=tree:0 --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
-	else
-		git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
-	fi
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
+        echo "[${task.tag}] cloning git repo..."
+        if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
+            git clone --filter=tree:0 --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+        else
+            git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
+        fi
+        mv capsule-repo/code capsule/code
+        rm -rf capsule-repo
+    else
+        echo "[${task.tag}] using capsule code baked into image at /capsule/code..."
+        cp -r /capsule/code capsule/code
+        chmod -R u+rwX capsule/code
+    fi
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -540,7 +585,9 @@ process decrosstalk_roi_images {
 process extraction {
     tag 'capsule-9911715'
 	container "${params.REGISTRY_HOST}/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v13"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    // Bind capsule/scratch over the container's read-only $HOME so caiman/pynwb (and matplotlib)
+    // can create ~/.cache and ~/.config at import time; see motion_correction for the same fix.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 4
     memory '128 GB'
@@ -604,7 +651,7 @@ process extraction {
 process dff_capsule {
     tag 'capsule-6574773'
 	container "${params.REGISTRY_HOST}/published/85987e27-601c-4863-811b-71e5b4bdea37:v5"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 4
     memory '32 GB'
@@ -668,7 +715,7 @@ process dff_capsule {
 process oasis_event_detection {
     tag 'capsule-8957649'
 	container "${params.REGISTRY_HOST}/published/c6394aab-0db7-47b2-90ba-864866d6755e:v10"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 4
     memory '32 GB'
@@ -730,7 +777,7 @@ process oasis_event_detection {
 process classifier {
 	tag 'capsule-0630574'
 	container "${params.REGISTRY_HOST}/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
 	cpus 4
 	memory '64 GB'
@@ -803,7 +850,7 @@ process classifier {
 process ophys_nwb {
 	tag 'capsule-9383700'
 	container "${params.REGISTRY_HOST}/published/8c436e95-8607-4752-8e9f-2b62024f9326:v15"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/data/schemas:/schemas -B ${task.workDir}/capsule/data/raw:/raw -B ${task.workDir}/capsule/data/raw/behavior:/behavior -B ${task.workDir}/capsule/data/nwb:/nwb -B ${task.workDir}/capsule/data/processed:/processed -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/data/schemas:/schemas -B ${task.workDir}/capsule/data/raw:/raw -B ${task.workDir}/capsule/data/raw/behavior:/behavior -B ${task.workDir}/capsule/data/nwb:/nwb -B ${task.workDir}/capsule/data/processed:/processed -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
 	cpus 4
 	memory '32 GB'
@@ -888,7 +935,7 @@ process ophys_nwb {
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-8324994'
 	container "${params.REGISTRY_HOST}/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 2
     memory '16 GB'
@@ -958,7 +1005,7 @@ process pipeline_processing_metadata_aggregator {
 process quality_control_aggregator {
     tag 'capsule-4044810'
 	container "${params.REGISTRY_HOST}/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v10"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch" : '' }
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
 
     cpus 1
     memory '8 GB'
