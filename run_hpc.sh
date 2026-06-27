@@ -20,4 +20,4 @@ nextflow run pipeline/main.nf -profile hpc \
     --capsule_code_dir /allen/aind/scratch/ariellel/capsules \
     --slurm_partition aind \
     --acquisition_data_type single \
-    -until motion_correction
+    -resume
