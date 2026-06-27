@@ -485,10 +485,7 @@ process decrosstalk_split_json {
     fi
 
     echo "[${task.tag}] copying data to capsule..."
-    # -L dereferences the motion_correction output symlink (see movie_qc): the capsule globs into
-    # plane_0, which must be real files under the bind-mounted capsule/data, not a symlink into the
-    # masked HOME workdir.
-    cp -rL ${motion_results} capsule/data
+    cp -r ${motion_results} capsule/data
     cp -r ${ophys_jsons} capsule/data
 
     if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
@@ -630,7 +627,10 @@ process extraction {
     fi
 
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${extraction_input} capsule/data
+    # -L dereferences the motion_correction output symlink (see movie_qc): the capsule globs into
+    # plane_0 for *registered.h5, which must be real files under the bind-mounted capsule/data, not
+    # a symlink into the masked HOME workdir.
+    cp -rL ${extraction_input} capsule/data
     cp -r ${ophys_jsons} capsule/data
 
     if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
