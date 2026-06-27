@@ -414,7 +414,11 @@ process movie_qc {
     fi
 
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_results} capsule/data
+    # -L dereferences the motion_correction output symlink so plane_0 lands as real files under
+    # capsule/data (the only path bind-mounted into the container). A bare symlink here is both
+    # skipped by the capsule's Path.rglob (Python <3.13 won't recurse symlinked dirs) and dangling
+    # inside the container, since $HOME — where the Nextflow workdir lives — is masked by a bind.
+    cp -rL ${motion_results} capsule/data
     cp -r ${ophys_jsons} capsule/data/raw
     if [ -n "${zstacks}" ] && [ "${zstacks}" != "[]" ]; then
         cp -r ${zstacks} capsule/data/zstacks
@@ -481,7 +485,10 @@ process decrosstalk_split_json {
     fi
 
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_results} capsule/data
+    # -L dereferences the motion_correction output symlink (see movie_qc): the capsule globs into
+    # plane_0, which must be real files under the bind-mounted capsule/data, not a symlink into the
+    # masked $HOME workdir.
+    cp -rL ${motion_results} capsule/data
     cp -r ${ophys_jsons} capsule/data
 
     if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
