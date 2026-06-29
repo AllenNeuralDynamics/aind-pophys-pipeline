@@ -10,8 +10,9 @@
 
 set -euo pipefail
 
-# load nextflow (and its Java dependency); container runtime resolved at task time, not here
-module load nextflow
+# nextflow lives in ~/.local/bin; SLURM jobs don't inherit login PATH, so add it explicitly.
+# container runtime resolved at task time, not here
+export PATH="$HOME/.local/bin:$PATH"
 
 export NXF_SINGULARITY_CACHEDIR=/allen/aind/scratch/ariellel/.singularity_cache
 mkdir -p "$NXF_SINGULARITY_CACHEDIR"
