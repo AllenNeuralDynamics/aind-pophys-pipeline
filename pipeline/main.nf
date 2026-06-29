@@ -346,9 +346,12 @@ process motion_correction {
     fi
 
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount} capsule/data
+    # Hard-link the raw data (-l) instead of duplicating bytes; -L follows the Nextflow
+    # staging symlink to the real file so the link targets the actual /allen inode (zero
+    # extra space, same filesystem). Falls back to a real copy if the dest is cross-device.
+    cp -rlL ${ophys_mount} capsule/data 2>/dev/null || cp -r ${ophys_mount} capsule/data
     cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
+    cp -rlL ${pophys_dir} capsule/data 2>/dev/null || cp -r ${pophys_dir} capsule/data
 
     # Capsule code: on Code Ocean, clone from the CO-injected git host. Off-platform, copy
     # from a pre-cloned local checkout (params.capsule_code_dir) to avoid needing a PAT.
@@ -556,7 +559,9 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${decrosstalk_split} capsule/data
     cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
+    # Hard-link the raw pophys data instead of copying bytes; falls back to a real copy
+    # if the dest is cross-device. See motion_correction for the -rlL rationale.
+    cp -rlL ${pophys_dir} capsule/data 2>/dev/null || cp -r ${pophys_dir} capsule/data
     cp -r ${motion_results} capsule/data
     cp -r ${converter_files} capsule/data
 
@@ -907,7 +912,9 @@ process ophys_nwb {
     if [ -n "${ophys_sync_file}" ] && [ "${ophys_sync_file}" != "[]" ]; then
         cp -r ${ophys_sync_file} capsule/data/raw/behavior
     fi
-    cp -r ${ophys_mount_pophys_directory} capsule/data/raw
+    # Hard-link the raw pophys data instead of copying bytes; falls back to a real copy
+    # if the dest is cross-device. See motion_correction for the -rlL rationale.
+    cp -rlL ${ophys_mount_pophys_directory} capsule/data/raw 2>/dev/null || cp -r ${ophys_mount_pophys_directory} capsule/data/raw
     cp -r ${motion_correction_results} capsule/data/processed
     if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
         cp -r ${decrosstalk_results} capsule/data/processed
