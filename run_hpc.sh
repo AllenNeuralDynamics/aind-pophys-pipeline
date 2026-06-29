@@ -10,7 +10,8 @@
 
 set -euo pipefail
 
-# nextflow is on PATH (~/.local/bin); container runtime resolved at task time, not here
+# load nextflow (and its Java dependency); container runtime resolved at task time, not here
+module load nextflow
 
 export NXF_SINGULARITY_CACHEDIR=/allen/aind/scratch/ariellel/.singularity_cache
 mkdir -p "$NXF_SINGULARITY_CACHEDIR"
