@@ -789,7 +789,9 @@ process oasis_event_detection {
 process classifier {
 	tag 'capsule-0630574'
 	container "${params.REGISTRY_HOST}/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v4"
-    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '' }
+    // --shm-size is a Docker-only flag (Code Ocean/awsbatch); Apptainer rejects it, so it
+    // goes in the non-singularity branch only. Singularity gets the bind mounts instead.
+    containerOptions { workflow.containerEngine == 'singularity' ? "-B ${task.workDir}/capsule/data:/data -B ${task.workDir}/capsule/results:/results -B ${task.workDir}/capsule/scratch:/scratch -B ${task.workDir}/capsule/scratch:${System.getenv('HOME')} --env MPLCONFIGDIR=/scratch/.matplotlib" : '--shm-size 4g' }
 
 	cpus 4
 	memory '64 GB'
