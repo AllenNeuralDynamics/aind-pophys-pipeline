@@ -215,8 +215,8 @@ workflow {
         dff_capsule.out.dff_qc_json.collect(),
         oasis_event_detection.out.event_qc_png.collect(),
         oasis_event_detection.out.events_json.collect(),
-        classifier.out.classifier_jsons.collect(),
-        classifier.out.classifier_png.collect(),
+        classifier.out.classifier_jsons.collect().ifEmpty([]),
+        classifier.out.classifier_png.collect().ifEmpty([]),
         ophys_mount_jsons.collect(),
         vasculature_dir.collect().ifEmpty([]),
         matched_tiff_vals_dir.collect().ifEmpty([])
@@ -228,7 +228,7 @@ workflow {
         motion_correction.out.motion_data_process_json.collect(),
         decrosstalk_data_process_json.collect().ifEmpty([]),
         extraction.out.extraction_data_process_json.collect(),
-        classifier.out.classifier_jsons.collect(),
+        classifier.out.classifier_jsons.collect().ifEmpty([]),
         dff_capsule.out.dff_data_process_json.collect(),
         oasis_event_detection.out.events_json.collect(),
     )  
@@ -807,9 +807,9 @@ process classifier {
 	path extraction_results
 
 	output:
-    path 'capsule/results/**/*.json', emit: 'classifier_jsons'
+    path 'capsule/results/**/*.json', emit: 'classifier_jsons', optional: true
     path 'capsule/results/**/*classification.h5', emit: 'classifer_h5'
-    path 'capsule/results/**/*.png', emit: 'classifier_png'
+    path 'capsule/results/**/*.png', emit: 'classifier_png', optional: true
 	path 'capsule/results/*'
 
 	script:
@@ -997,7 +997,9 @@ process pipeline_processing_metadata_aggregator {
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${ophys_mount_jsons} capsule/data
-    cp -r ${classifier_jsons} capsule/data
+    if [ -n "${classifier_jsons}" ] && [ "${classifier_jsons}" != "[]" ]; then
+        cp -r ${classifier_jsons} capsule/data
+    fi
 
     if [ -n "\${GIT_ACCESS_TOKEN:-}" ] && [ -n "\${GIT_HOST:-}" ]; then
         echo "[${task.tag}] cloning git repo..."
@@ -1077,8 +1079,12 @@ process quality_control_aggregator {
     cp -r ${dff_results} capsule/data
     cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${oasis_event_json} capsule/data
-    cp -r ${classifier_jsons} capsule/data
-    cp -r ${classifier_pngs} capsule/data
+    if [ -n "${classifier_jsons}" ] && [ "${classifier_jsons}" != "[]" ]; then
+        cp -r ${classifier_jsons} capsule/data
+    fi
+    if [ -n "${classifier_pngs}" ] && [ "${classifier_pngs}" != "[]" ]; then
+        cp -r ${classifier_pngs} capsule/data
+    fi
     if [ -n "${vasculature_dir}" ] && [ "${vasculature_dir}" != "[]" ]; then
         cp -r ${vasculature_dir} capsule/data
     fi
