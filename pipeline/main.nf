@@ -54,7 +54,8 @@ workflow {
     ophys_mount_pophys_directory = Channel.fromPath("${session_root}/pophys", type: 'dir')
 
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: false)
-    def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: false)
+    // Keep the directory itself so classifier sees /data/2p_roi_classifier/* at runtime.
+    def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier", type: 'any', checkIfExists: false)
 
     // Behavior sync file (.h5), if the session has a behavior/ subdirectory
     def ophys_mount_sync_file = Channel.fromPath("${session_root}/behavior/*.h5", type: 'any', checkIfExists: false)
