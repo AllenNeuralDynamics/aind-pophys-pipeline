@@ -200,7 +200,7 @@ workflow {
         motion_correction.out.motion_results.collect(),
         decrosstalk_results_all.collect().ifEmpty([]), // Handle empty channel
         extraction.out.extraction_results_all.collect(),
-        classifier.out.classifer_h5.collect(),
+        classifier.out.classifer_h5.collect().ifEmpty([]),
         dff_capsule.out.dff_results_all.collect(),
         oasis_event_detection.out.events_h5.collect()
     )   
@@ -808,7 +808,7 @@ process classifier {
 
 	output:
     path 'capsule/results/**/*.json', emit: 'classifier_jsons', optional: true
-    path 'capsule/results/**/*classification.h5', emit: 'classifer_h5'
+    path 'capsule/results/**/*.h5', emit: 'classifer_h5', optional: true
     path 'capsule/results/**/*.png', emit: 'classifier_png', optional: true
 	path 'capsule/results/*'
 
@@ -923,7 +923,9 @@ process ophys_nwb {
         cp -r ${decrosstalk_results} capsule/data/processed
     fi
     cp -r ${extraction_results} capsule/data/processed
-    cp -r ${classifer_h5} capsule/data/processed
+    if [ -n "${classifer_h5}" ] && [ "${classifer_h5}" != "[]" ]; then
+        cp -r ${classifer_h5} capsule/data/processed
+    fi
     cp -r ${dff_results} capsule/data/processed
     cp -r ${event_detection_results} capsule/data/processed
 
