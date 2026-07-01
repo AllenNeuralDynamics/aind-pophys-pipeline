@@ -807,9 +807,9 @@ process classifier {
 	path extraction_results
 
 	output:
-	path 'capsule/results/*/*/*.json', emit: 'classifier_jsons'
-    path 'capsule/results/*/classification/*classification.h5', emit: 'classifer_h5'
-	path 'capsule/results/*/*/*.png', emit: 'classifier_png'
+    path 'capsule/results/**/*.json', emit: 'classifier_jsons'
+    path 'capsule/results/**/*classification.h5', emit: 'classifer_h5'
+    path 'capsule/results/**/*.png', emit: 'classifier_png'
 	path 'capsule/results/*'
 
 	script:
