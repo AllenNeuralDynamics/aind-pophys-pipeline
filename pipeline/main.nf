@@ -1108,6 +1108,16 @@ process quality_control_aggregator {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
+    # Temporary HPC workaround: some published images are missing pytz.
+    # Install only when absent so Code Ocean runs are unaffected.
+    python - <<'PY'
+    import importlib.util
+    import subprocess
+    import sys
+
+    if importlib.util.find_spec("pytz") is None:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--no-cache-dir", "pytz"])
+    PY
     ./run ${image_type_arg}
 
     echo "[${task.tag}] completed!"
