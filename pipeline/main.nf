@@ -810,7 +810,7 @@ process classifier {
     path 'capsule/results/**/*.json', emit: 'classifier_jsons', optional: true
     path 'capsule/results/**/*.h5', emit: 'classifer_h5', optional: true
     path 'capsule/results/**/*.png', emit: 'classifier_png', optional: true
-	path 'capsule/results/*'
+	path 'capsule/results/*', optional: true
 
 	script:
 	"""
