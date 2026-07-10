@@ -31,7 +31,7 @@
     "model-name": "",
     "border-size": "10",
     "processor_full_name": "pipeline user",
-    "modality": "calcium_imaging",
+    "modality": "pophys",
     "aggregate_quality_control": "0",
     "verbose": "1",
     "skip_ancillary_files": "0",
