@@ -22,6 +22,11 @@
 			"id": "PeTDLWkOAq4846Yc",
 			"name": "Metadata Manager",
 			"icon": "📂"
+		},
+		{
+			"id": "ClsfCat01xY7z9Qw",
+			"name": "Classification",
+			"icon": "📂"
 		}
 	],
 	"parameters": [
@@ -211,6 +216,26 @@
 			"default_value": "0"
 		},
 		{
+			"id": "St2pPrm9xKq3Lm07",
+			"category": "0MIbi200f8w3BECK",
+			"name": "suite2p_params",
+			"param_name": "suite2p_params",
+			"description": "Serialized JSON string of Suite2p parameters to override defaults (Suite2p-based init modes only). Applied after suite2p_ops.",
+			"type": "text",
+			"value_type": "string",
+			"default_value": ""
+		},
+		{
+			"id": "St2pOps4vRt8Nw21",
+			"category": "0MIbi200f8w3BECK",
+			"name": "suite2p_ops",
+			"param_name": "suite2p_ops",
+			"description": "Path to a Suite2p ops.npy file to load parameters from (Suite2p-based init modes only).",
+			"type": "text",
+			"value_type": "string",
+			"default_value": ""
+		},
+		{
 			"id": "gjQV3xZvyxpDAAdI",
 			"category": "G6KbQxbdyPWxTFRp",
 			"name": "long_window",
@@ -247,6 +272,40 @@
 			"default_value": "mad"
 		},
 		{
+			"id": "DffMeth5yBz2Qp63",
+			"category": "G6KbQxbdyPWxTFRp",
+			"name": "method",
+			"param_name": "method",
+			"description": "dF/F algorithm: 'triexp' (triexponential baseline fit) or 'percentile' (rolling-percentile baseline).",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "triexp",
+			"extra_data": [
+				"triexp",
+				"percentile"
+			]
+		},
+		{
+			"id": "SgAnl7cJd1Xf94Ra",
+			"category": "G6KbQxbdyPWxTFRp",
+			"name": "sigma_anneal_steps",
+			"param_name": "sigma_anneal_steps",
+			"description": "IRLS sigma-annealing steps (triexp only). 1-2 disable annealing; higher graduates further.",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "1"
+		},
+		{
+			"id": "TrxCfg0mHn6Vt38b",
+			"category": "G6KbQxbdyPWxTFRp",
+			"name": "triexp_config_overrides",
+			"param_name": "triexp_config_overrides",
+			"description": "JSON object of overrides for set_dff_config (triexp only).",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "{}"
+		},
+		{
 			"id": "jPYqk1O32mabRR3y",
 			"category": "PeTDLWkOAq4846Yc",
 			"name": "processor_full_name",
@@ -262,15 +321,6 @@
 			"param_name": "modality",
 			"type": "text",
 			"value_type": "string"
-		},
-		{
-			"id": "hZCHHf0pxvm3vh07",
-			"category": "PeTDLWkOAq4846Yc",
-			"name": "pipeline_version",
-			"param_name": "pipeline_version",
-			"type": "text",
-			"value_type": "string",
-			"default_value": "\"\""
 		},
 		{
 			"id": "MWbuO7hhGGgG7sZD",
@@ -306,6 +356,16 @@
 			"param_name": "data_summary",
 			"type": "text",
 			"value_type": "string"
+		},
+		{
+			"id": "MdmProcNm08fG3hI4",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "process_name",
+			"param_name": "process_name",
+			"description": "Process name to use when creating the derived data description",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "processed"
 		},
 		{
 			"id": "ctwzhZAAH2W1iPIw",
@@ -352,6 +412,45 @@
 			"type": "text",
 			"value_type": "string",
 			"default_value": "/scratch"
+		},
+		{
+			"id": "ClsSoma04mN5oP6q",
+			"category": "ClsfCat01xY7z9Qw",
+			"name": "soma_classifier_path",
+			"param_name": "soma-classifier-path",
+			"description": "Path of the classifier model, comma-delimited",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "/data/2p_roi_classifier/soma.classification_training.autoclassifier.onnx"
+		},
+		{
+			"id": "ClsDend05rS7tU8v",
+			"category": "ClsfCat01xY7z9Qw",
+			"name": "dendrite_classifier_path",
+			"param_name": "dendrite-classifier-path",
+			"description": "Path of the classifier model, comma-delimited",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "/data/2p_roi_classifier/dendrite.classification_training.autoclassifier.onnx"
+		},
+		{
+			"id": "ClsMdlNm06xY9zA0",
+			"category": "ClsfCat01xY7z9Qw",
+			"name": "model_name",
+			"param_name": "model-name",
+			"description": "Identifier recorded in data_process.json. Defaults to the directory name of --soma-classifier-path.",
+			"type": "text",
+			"value_type": "string"
+		},
+		{
+			"id": "ClsBrdSz07bC1dE2",
+			"category": "ClsfCat01xY7z9Qw",
+			"name": "border_size",
+			"param_name": "border-size",
+			"description": "Distance from border for ROI to be classified on the border",
+			"type": "text",
+			"value_type": "integer",
+			"default_value": "10"
 		}
 	]
 }

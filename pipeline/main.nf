@@ -235,8 +235,8 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
-    tag 'capsule-2135944'
-	container "$REGISTRY_HOST/capsule/6794edc9-25b7-4246-bfda-972fef434a49:bbcfdb10afe3450160090f467be74b39"
+    tag 'capsule-2840051'
+	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v11"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -256,7 +256,7 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=6794edc9-25b7-4246-bfda-972fef434a49
+    export CO_CAPSULE_ID=56956b65-72a4-4248-9718-468df22b23ff
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -266,7 +266,7 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch main "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2135944.git" capsule-repo
+    git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -505,7 +505,7 @@ process decrosstalk_roi_images {
 // capsule - aind-ophys-extraction-suite2p
 process extraction {
     tag 'capsule-9911715'
-	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v13"
+	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v14"
 
     cpus 4
     memory '128 GB'
@@ -524,6 +524,8 @@ process extraction {
 
 
     script:
+    def suite2p_params_arg = params.containsKey('suite2p_params') && params.suite2p_params ? "--suite2p_params '${params.suite2p_params}'" : ""
+    def suite2p_ops_arg = params.containsKey('suite2p_ops') && params.suite2p_ops ? "--suite2p_ops ${params.suite2p_ops}" : ""
     """
     #!/usr/bin/env bash
     set -e
@@ -542,7 +544,7 @@ process extraction {
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v13.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
+    git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -550,7 +552,7 @@ process extraction {
     cd capsule/code
     chmod +x run
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
-    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}n --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}
+    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
 
     echo "[${task.tag}] completed!"
     """
@@ -559,7 +561,7 @@ process extraction {
 // capsule - aind-ophys-dff
 process dff_capsule {
     tag 'capsule-6574773'
-	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v5"
+	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v6"
 
     cpus 4
     memory '32 GB'
@@ -596,15 +598,15 @@ process dff_capsule {
     cp -r ${extraction_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v5.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
+    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    echo "dff_capsule parameters: --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method}"
-    ./run --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method}
+    echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
+    ./run --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
     
     echo "[${task.tag}] completed!"
     """
@@ -664,11 +666,11 @@ process oasis_event_detection {
 
 // capsule - aind-ophys-classifier
 process classifier {
-	tag 'capsule-6202932'
-	container "$REGISTRY_HOST/capsule/c85d8c32-dc5e-47cc-80b4-4b6e1a2d4baf:75a9976a7a28c8f829a9fe2e110c3bb4"
+	tag 'capsule-0630574'
+	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v5"
 
 	cpus 16
-	memory '61 GB'
+	memory '60 GB'
 	accelerator 1
 	label 'gpu'
 
@@ -686,13 +688,14 @@ process classifier {
 	path 'capsule/results/*'
 
 	script:
+	def model_name_arg = params.containsKey('model-name') && params['model-name'] ? "--model-name ${params['model-name']}" : ""
 	"""
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=c85d8c32-dc5e-47cc-80b4-4b6e1a2d4baf
+	export CO_CAPSULE_ID=3819d125-9f03-48f3-ba09-b44c84a7a2c7
 	export CO_CPUS=16
-	export CO_MEMORY=65498251264
+	export CO_MEMORY=64424509440
 
 	mkdir -p capsule
 	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
@@ -704,22 +707,17 @@ process classifier {
     cp -r ${classifier_data} capsule/data
     cp -r ${extraction_results} capsule/data
 
-	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 35d1284e-4dfa-4ac3-9ba8-5ea1ae2fdaeb
+	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
 
 	echo "[${task.tag}] cloning git repo..."
-	if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
-		git -c credential.helper= clone --filter=tree:0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6202932.git" capsule-repo
-	else
-		git -c credential.helper= clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6202932.git" capsule-repo
-	fi
-	git -C capsule-repo checkout 5002bfba346c2768b1063e4e3473e7370766069d --quiet
-	mv capsule-repo/code capsule/code && ln -s \$PWD/capsule/code /code
+	git clone --branch v5.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
+	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run
+	./run --input-dir ${params.input_dir} --output-dir ${params.output_dir} --tmp-dir ${params.temp_dir} --soma-classifier-path ${params['soma-classifier-path']} --dendrite-classifier-path ${params['dendrite-classifier-path']} --border-size ${params['border-size']} ${model_name_arg}
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -729,7 +727,7 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v15"
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v16"
 
 	cpus 4
 	memory '32 GB'
@@ -789,7 +787,7 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v15.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
+	git clone --branch v16.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -797,7 +795,7 @@ process ophys_nwb {
 	cd capsule/code
 	chmod +x run
 	ls -R /data
-    ./run
+    ./run --input_directory ${params.input_dir} --output_directory ${params.output_dir}
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -805,8 +803,8 @@ process ophys_nwb {
 
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-8324994'
-	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v2"
+    tag 'capsule-8250608'
+	container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v6"
 
     cpus 2
     memory '16 GB'
@@ -851,14 +849,14 @@ process pipeline_processing_metadata_aggregator {
     cp -r ${classifier_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v2.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
+    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + params.processor_full_name : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('pipeline_version') ? '--pipeline_version ' + params.pipeline_version : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') ? '--data_summary ' + params.data_summary : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''}
+    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + params.processor_full_name : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') ? '--data_summary ' + params.data_summary : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} ${params.containsKey('process_name') ? '--process_name ' + params.process_name : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_name "\$PIPELINE_NAME" --pipeline_version "\$PIPELINE_VERSION"
     echo "[${task.tag}] completed!"
     """
 }
