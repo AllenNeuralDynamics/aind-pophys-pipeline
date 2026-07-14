@@ -577,7 +577,7 @@ process dff_capsule {
     path 'capsule/results/*', emit: 'capsule_results'
     path 'capsule/results/*/*/*data_process.json', emit: 'dff_data_process_json', optional: true
     path 'capsule/results/*/*/*.json', emit: 'dff_qc_json', optional: true
-    path 'capsule/results/*/dff/*', emit: 'dff_results_all'
+    path 'capsule/results/*/dff/*.h5', emit: 'dff_results_all'
 
     script:
     """
