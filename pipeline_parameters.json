@@ -36,7 +36,6 @@
     "verbose": "1",
     "skip_ancillary_files": "0",
     "data_summary": "",
-    "process_name": "processed",
     "acquisition_data_type": "single",
     "debug": "0",
     "input_dir": "/data",

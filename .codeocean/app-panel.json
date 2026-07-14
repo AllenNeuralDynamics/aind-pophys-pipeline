@@ -358,16 +358,6 @@
 			"value_type": "string"
 		},
 		{
-			"id": "MdmProcNm08fG3hI4",
-			"category": "PeTDLWkOAq4846Yc",
-			"name": "process_name",
-			"param_name": "process_name",
-			"description": "Process name to use when creating the derived data description",
-			"type": "text",
-			"value_type": "string",
-			"default_value": "processed"
-		},
-		{
 			"id": "ClsSoma04mN5oP6q",
 			"category": "ClsfCat01xY7z9Qw",
 			"name": "soma_classifier_path",
