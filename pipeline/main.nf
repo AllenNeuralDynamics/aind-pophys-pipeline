@@ -467,9 +467,9 @@ process decrosstalk_roi_images {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=1383b25a-ecd2-4c56-8b7f-cde811c0b053
-    export CO_CPUS=16
-    export CO_MEMORY=137438953472
+    export CO_CAPSULE_ID=40066ae9-6ca5-4534-b88e-d6d0628e2079
+    export CO_CPUS=8
+    export CO_MEMORY=68719476736
 
     mkdir -p capsule
     mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
