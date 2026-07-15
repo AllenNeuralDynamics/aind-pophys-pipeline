@@ -1,3 +1,17 @@
+# [2.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v1.0.1...v2.0.0) (2026-07-15)
+
+
+### Features
+
+* last v1 update ([#54](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/54)) ([fbc76b2](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/fbc76b2a7c2cba702dff7359d49e355dcc5675a2))
+
+
+### BREAKING CHANGES
+
+* extraction init default changed from 'sparsery' to 'mean'
+
+
+
 ## [1.0.1](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v1.0.0...v1.0.1) (2026-03-20)
 
 
