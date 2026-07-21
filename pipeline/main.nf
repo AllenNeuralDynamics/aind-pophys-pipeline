@@ -91,6 +91,9 @@ workflow {
         motion_correction_input = ophys_data
     }
 
+    // TEMP: stop after converter_capsule for isolated dev testing (revert before merge)
+    return
+
     // Run Subject NWB Packaging Process
 
     if (params.acquisition_data_type == "multiplane"){
