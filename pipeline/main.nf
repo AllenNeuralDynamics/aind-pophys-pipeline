@@ -235,8 +235,8 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
-    tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v11"
+    tag 'capsule-9191145'
+	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:40fffb632f2ca3eaab64bd59158e0256"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -256,7 +256,7 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=56956b65-72a4-4248-9718-468df22b23ff
+    export CO_CAPSULE_ID=ba2e9806-5561-4853-90ba-1bc269b42ff6
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -266,7 +266,8 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
+    git -C capsule-repo checkout 1939c5a --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
