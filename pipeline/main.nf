@@ -192,9 +192,9 @@ workflow {
     // Run Pipeline Processing Metadata Aggregator
     pipeline_processing_metadata_aggregator(
         ophys_mount_jsons.collect(),
-        motion_correction.out.motion_data_process_json.collect(),
+        motion_correction.out.motion_processing_json.collect(),
         decrosstalk_data_process_json.collect().ifEmpty([]),
-        extraction.out.extraction_data_process_json.collect(),
+        extraction.out.extraction_processing_json.collect(),
         classifier.out.classifier_jsons.collect(),
         dff_capsule.out.dff_data_process_json.collect(),
         oasis_event_detection.out.events_json.collect(),
@@ -205,7 +205,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-9191145'
-	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:e7c460e31aba31f7bf86d9e2927f90df"
+	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:dbd14e5226789c0a7e9640853e1b7c63"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -236,7 +236,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout 8a5d58e --quiet
+    git -C capsule-repo checkout e2c76b6 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -254,7 +254,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:21a8e588e6caa789f835954ea22d8090"
+	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:46ced66ca6cfadd1f545c657e4083633"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -268,7 +268,7 @@ process motion_correction {
     output:
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
-    path 'capsule/results/*/*/*data_process.json', emit: 'motion_data_process_json'
+    path 'capsule/results/*/*/processing.json', emit: 'motion_processing_json'
     path 'capsule/results/*/motion_correction/*', emit: 'motion_results'
 
     script:
@@ -292,7 +292,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
-    git -C capsule-repo checkout 6983ee9 --quiet
+    git -C capsule-repo checkout 07b7965 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -478,7 +478,7 @@ process decrosstalk_roi_images {
 // capsule - aind-ophys-extraction
 process extraction {
     tag 'capsule-8797010'
-	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:28f0ad915f894d9a731809dc50db9d6f"
+	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:65bbd8fb7cf27a63aba2fc68ac537b35"
 
     cpus 8
     memory '64 GB'
@@ -491,8 +491,8 @@ process extraction {
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
-    path 'capsule/results/*/*/*data_process.json', emit: 'extraction_data_process_json', optional: true
-    path 'capsule/results/*/*/*.json', emit: 'extraction_qc_json', optional: true
+    path 'capsule/results/*/*/processing.json', emit: 'extraction_processing_json', optional: true
+    path 'capsule/results/*/*/quality_control.json', emit: 'extraction_qc_json', optional: true
     path 'capsule/results/*/extraction/*', emit: 'extraction_results_all'
 
 
@@ -518,7 +518,7 @@ process extraction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
-    git -C capsule-repo checkout 577b0a7 --quiet
+    git -C capsule-repo checkout 1808ad4 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
