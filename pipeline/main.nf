@@ -806,6 +806,9 @@ process pipeline_processing_metadata_aggregator {
     tag 'capsule-8250608'
 	container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v6"
 
+    // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
+    cache false
+
     cpus 2
     memory '16 GB'
 
