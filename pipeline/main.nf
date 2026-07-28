@@ -91,11 +91,6 @@ workflow {
         motion_correction_input = ophys_data
     }
 
-    // TEMP: stop after converter_capsule for isolated dev testing (revert before merge)
-    return
-
-    // Run Subject NWB Packaging Process
-
     if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
         motion_correction(
@@ -104,51 +99,19 @@ workflow {
             ophys_mount_pophys_directory.collect(),
         )
         z_stacks = converter_capsule.out.local_stacks
-        
-        // Run movie qc
-        movie_qc(
-            motion_correction.out.motion_results_all.flatten(),
-            ophys_mount_jsons.collect(),
-            z_stacks.collect().ifEmpty([])
-        )
 
-        // Run decrosstalk split to prep for decrosstalk_roi_images
-        decrosstalk_split_json(
-            motion_correction.out.motion_results_all.collect(),
-            ophys_mount_jsons.collect()
-        )
-
-        // Run decrosstalk using ROI images
-        decrosstalk_roi_images(
-            decrosstalk_split_json.out.capsule_results.flatten(),
-            ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
-            motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
-        )
-        
-        decrosstalk_data_process_json = decrosstalk_roi_images.out.decrosstalk_data_process_json
-        decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
-
-        // Run extraction Suite2P
+        // TEMP: feed mc output directly to extraction, skipping decrosstalk (not yet upgraded to v2)
         extraction(
-            decrosstalk_roi_images.out.capsule_results.flatten(),
+            motion_correction.out.motion_results_all.flatten(),
             ophys_mount_jsons.collect()
         )
-        
+
     } else {
-        // Run motion correction for single plane (adjusted input order)
+        // Run motion correction for single plane
         motion_correction(
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect()
-        )
-
-        // Run movie qc
-        movie_qc(
-            motion_correction.out.motion_results_all.flatten(),
-            ophys_mount_jsons.collect(),
-            z_stacks.collect().ifEmpty([])
         )
 
         extraction(
@@ -156,6 +119,9 @@ workflow {
             ophys_mount_jsons.collect()
         )
     }
+
+    // TEMP: stop after extraction - remaining capsules not yet upgraded to v2 (revert before merge)
+    return
 
     // Run classification
     classifier(
@@ -509,13 +475,13 @@ process decrosstalk_roi_images {
 }
 
 
-// capsule - aind-ophys-extraction-suite2p
+// capsule - aind-ophys-extraction
 process extraction {
-    tag 'capsule-9911715'
-	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v14"
+    tag 'capsule-8797010'
+	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:28f0ad915f894d9a731809dc50db9d6f"
 
-    cpus 4
-    memory '128 GB'
+    cpus 8
+    memory '64 GB'
 
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
@@ -537,9 +503,9 @@ process extraction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=5e1d659c-e149-4a57-be83-12f5a448a0c9
-    export CO_CPUS=4
-    export CO_MEMORY=137438953472
+    export CO_CAPSULE_ID=1ba6e32d-2a8a-4084-a449-2878724fb15d
+    export CO_CPUS=8
+    export CO_MEMORY=68719476736
 
     mkdir -p capsule
     mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
@@ -551,9 +517,10 @@ process extraction {
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v14.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
+    git -C capsule-repo checkout 577b0a7 --quiet
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
