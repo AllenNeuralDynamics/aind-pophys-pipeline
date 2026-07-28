@@ -1,3 +1,12 @@
+# [2.1.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v2.0.0...v2.1.0) (2026-07-28)
+
+
+### Features
+
+* v1 qc patch ([#56](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/56)) ([#57](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/57)) ([e735c3e](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/e735c3e14e9f391d513ac0903fd8fbe7d721db2b))
+
+
+
 # [2.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v1.0.1...v2.0.0) (2026-07-15)
 
 
