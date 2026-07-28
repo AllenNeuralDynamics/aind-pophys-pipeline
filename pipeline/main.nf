@@ -338,7 +338,7 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v10"
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v11"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
 	cpus 16
@@ -378,7 +378,7 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -806,6 +806,9 @@ process pipeline_processing_metadata_aggregator {
     tag 'capsule-8250608'
 	container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v6"
 
+    // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
+    cache false
+
     cpus 2
     memory '16 GB'
 
@@ -864,7 +867,7 @@ process pipeline_processing_metadata_aggregator {
 // capsule - aind-quality-control-aggregator
 process quality_control_aggregator {
     tag 'capsule-4044810'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v10"
+	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v11"
 
     cpus 1
     memory '8 GB'
@@ -926,7 +929,8 @@ process quality_control_aggregator {
     fi
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+    git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
+
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
