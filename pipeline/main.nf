@@ -236,7 +236,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout e2c76b6 --quiet
+    git -C capsule-repo checkout ce263cf --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -254,7 +254,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:46ced66ca6cfadd1f545c657e4083633"
+	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:a6a7e85b5e2613bd0886ccb3aae0a747"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     cpus 16
@@ -292,7 +292,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
-    git -C capsule-repo checkout 07b7965 --quiet
+    git -C capsule-repo checkout e827072 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -518,7 +518,7 @@ process extraction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
-    git -C capsule-repo checkout 1808ad4 --quiet
+    git -C capsule-repo checkout bbed86e --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
