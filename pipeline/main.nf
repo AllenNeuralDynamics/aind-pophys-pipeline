@@ -483,10 +483,10 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] cloning git repo..."
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout a6e42f2 --quiet
+        git -C capsule-repo checkout f1a2654 --quiet
 	else
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout a6e42f2 --quiet
+        git -C capsule-repo checkout f1a2654 --quiet
 	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
