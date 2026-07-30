@@ -64,7 +64,8 @@ workflow {
         Channel.empty()
 
     // Initialize channels for multiplane-specific processes
-    def decrosstalk_data_process_json = Channel.empty()
+    def decrosstalk_processing_json = Channel.empty()
+    def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
     
     // Conditional converter execution - only run for S3 sources
@@ -100,9 +101,30 @@ workflow {
         )
         z_stacks = converter_capsule.out.local_stacks
 
-        // TEMP: feed mc output directly to extraction, skipping decrosstalk (not yet upgraded to v2)
+        // Split the motion-corrected planes into pairs for decrosstalk
+        decrosstalk_split_json(
+            motion_correction.out.motion_results_all.collect(),
+            ophys_mount_jsons.collect()
+        )
+
+        // Remove paired-plane crosstalk. Restored now that the capsule is
+        // v2-upgraded: extraction prefers *decrosstalk.h5 over *registered.h5,
+        // so while this was bypassed multiplane extraction ran on the wrong
+        // input and everything downstream of it inherited that.
+        decrosstalk_roi_images(
+            decrosstalk_split_json.out.capsule_results.flatten(),
+            ophys_mount_jsons.collect(),
+            ophys_mount_pophys_directory.collect(),
+            motion_correction.out.motion_results_all.collect(),
+            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
+        )
+
+        decrosstalk_processing_json = decrosstalk_roi_images.out.decrosstalk_processing_json
+        decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
+        decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
+
         extraction(
-            motion_correction.out.motion_results_all.flatten(),
+            decrosstalk_roi_images.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
 
@@ -120,7 +142,23 @@ workflow {
         )
     }
 
-    // TEMP: stop after extraction - remaining capsules not yet upgraded to v2 (revert before merge)
+    // Run DF / F. Independent of the classifier, so it runs while the
+    // classifier is still on v1.
+    if (params.acquisition_data_type == "multiplane"){
+        dff_capsule(
+            extraction.out.capsule_results.flatten(),
+            ophys_mount_jsons.collect(),
+            // motion_correction.out.motion_results_csv.collect()
+        )
+    } else {
+        dff_capsule(
+            extraction.out.capsule_results.collect(),
+            ophys_mount_jsons.collect(),
+            // motion_correction.out.motion_results_csv.collect()
+        )
+    }
+
+    // TEMP: stop after dF/F - remaining capsules not yet upgraded to v2 (revert before merge)
     return
 
     // Run classification
@@ -131,33 +169,19 @@ workflow {
     )
 
     if (params.acquisition_data_type == "multiplane"){
-        // Run DF / F
-        dff_capsule(
-            extraction.out.capsule_results.flatten(),
-            ophys_mount_jsons.collect(),
-            // motion_correction.out.motion_results_csv.collect()
-        )
-
         // Run Oasis Event detection
         oasis_event_detection(
             dff_capsule.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
     } else {
-        // Run DF / F
-        dff_capsule(
-            extraction.out.capsule_results.collect(),
-            ophys_mount_jsons.collect(),
-            // motion_correction.out.motion_results_csv.collect()
-        )
-
         // Run Oasis Event detection
         oasis_event_detection(
             dff_capsule.out.capsule_results.collect(),
             ophys_mount_jsons.collect()
         )
     }
-    
+
     // Run Ophys NWB Packaging for Multiplane
     ophys_nwb(
         nwb_schemas.collect(),
@@ -193,10 +217,10 @@ workflow {
     pipeline_processing_metadata_aggregator(
         ophys_mount_jsons.collect(),
         motion_correction.out.motion_processing_json.collect(),
-        decrosstalk_data_process_json.collect().ifEmpty([]),
+        decrosstalk_processing_json.collect().ifEmpty([]),
         extraction.out.extraction_processing_json.collect(),
         classifier.out.classifier_jsons.collect(),
-        dff_capsule.out.dff_data_process_json.collect(),
+        dff_capsule.out.dff_processing_json.collect(),
         oasis_event_detection.out.events_json.collect(),
     )  
 }
@@ -413,8 +437,9 @@ process decrosstalk_split_json {
 
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
-    tag 'capsule-0006475'
-	container "$REGISTRY_HOST/capsule/bdbf5945-9a00-4b80-a866-8606cc460178:abed68393862124c8f6f9b034ef9ee95"
+    tag 'capsule-4886340'
+    // DEV pin: the registry hash goes stale on every capsule rebuild.
+	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:dfdb67b05b1024c5bb9325f3e3a4a8c8"
 
     cpus 8
     memory '64 GB'
@@ -430,7 +455,8 @@ process decrosstalk_roi_images {
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
-    path 'capsule/results/*/*/*data_process.json', emit: 'decrosstalk_data_process_json', optional: true
+    path 'capsule/results/*/*/processing.json', emit: 'decrosstalk_processing_json', optional: true
+    path 'capsule/results/*/*/quality_control.json', emit: 'decrosstalk_qc_json', optional: true
     path 'capsule/results/*/decrosstalk/*', emit: 'decrosstalk_results_all'
     
     script:
@@ -438,7 +464,7 @@ process decrosstalk_roi_images {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=40066ae9-6ca5-4534-b88e-d6d0628e2079
+    export CO_CAPSULE_ID=38507fd5-eb29-4b40-9474-28448305e619
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
@@ -456,11 +482,11 @@ process decrosstalk_roi_images {
 
     echo "[${task.tag}] cloning git repo..."
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0006475.git" capsule-repo
-        git -C capsule-repo checkout dd704fc --quiet
+		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
+        git -C capsule-repo checkout a6e42f2 --quiet
 	else
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0006475.git" capsule-repo
-        git -C capsule-repo checkout dd704fc --quiet
+		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
+        git -C capsule-repo checkout a6e42f2 --quiet
 	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
@@ -468,7 +494,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug ${params.debug}
+    ./run --debug ${params.debug} --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -526,7 +552,7 @@ process extraction {
     cd capsule/code
     chmod +x run
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
-    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
+    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg} --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -534,8 +560,9 @@ process extraction {
 
 // capsule - aind-ophys-dff
 process dff_capsule {
-    tag 'capsule-6574773'
-	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v6"
+    tag 'capsule-7970481'
+    // DEV pin: the registry hash goes stale on every capsule rebuild.
+	container "$REGISTRY_HOST/capsule/909d4275-fc32-4b81-a3f3-f5bf6cedece1:ffae466914396f130f04e538563bb89c"
 
     cpus 4
     memory '32 GB'
@@ -549,8 +576,8 @@ process dff_capsule {
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
-    path 'capsule/results/*/*/*data_process.json', emit: 'dff_data_process_json', optional: true
-    path 'capsule/results/*/*/*.json', emit: 'dff_qc_json', optional: true
+    path 'capsule/results/*/*/processing.json', emit: 'dff_processing_json', optional: true
+    path 'capsule/results/*/*/quality_control.json', emit: 'dff_qc_json', optional: true
     path 'capsule/results/*/dff/*.h5', emit: 'dff_results_all'
 
     script:
@@ -558,7 +585,7 @@ process dff_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=85987e27-601c-4863-811b-71e5b4bdea37
+    export CO_CAPSULE_ID=909d4275-fc32-4b81-a3f3-f5bf6cedece1
     export CO_CPUS=4
     export CO_MEMORY=34359738368
 
@@ -572,7 +599,8 @@ process dff_capsule {
     cp -r ${extraction_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7970481.git" capsule-repo
+    git -C capsule-repo checkout add3282 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -580,8 +608,8 @@ process dff_capsule {
     cd capsule/code
     chmod +x run
     echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
-    ./run --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
-    
+    ./run --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}' --verify 1
+
     echo "[${task.tag}] completed!"
     """
 }
