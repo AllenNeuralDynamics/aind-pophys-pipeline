@@ -158,9 +158,6 @@ workflow {
         )
     }
 
-    // TEMP: stop after dF/F - remaining capsules not yet upgraded to v2 (revert before merge)
-    return
-
     // Run classification
     classifier(
         ophys_mount_jsons.collect(),
@@ -227,10 +224,28 @@ workflow {
 
 
 // Process: aind-pophys-converter-capsule
+// PUBLISHING THE v2 METADATA DOCUMENTS
+//
+// The saveAs below flattens every published file to its basename. Under v1 that
+// was safe because every file a capsule wrote into <plane>/<step>/ was
+// <plane>_-prefixed and therefore globally unique. Under v2 the standardised
+// documents are processing.json and quality_control.json -- unprefixed, because
+// write_standard_file() hardcodes those names -- so on a MULTIPLANE session the
+// N concurrent per-plane tasks all publish the same target, the second fails
+// with "Failed to publish file", and the run dies (errorStrategy = retry means
+// it thrashes maxRetries times first).
+//
+// saveAs returning null skips publishing without affecting the emit channels,
+// and every process that outputs these documents also outputs
+// 'capsule/results/*', which publishes the per-plane directory wholesale -- so
+// they still reach $RESULTS_PATH at their correct nested path
+// (<plane>/<step>/processing.json), which is what DataProcess.output_path
+// resolves against. Only the duplicate flattened copy is dropped.
+
 process converter_capsule {
     tag 'capsule-9191145'
 	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:dbd14e5226789c0a7e9640853e1b7c63"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
@@ -279,7 +294,7 @@ process converter_capsule {
 process motion_correction {
     tag 'capsule-2071646'
 	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:a6a7e85b5e2613bd0886ccb3aae0a747"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     cpus 16
     memory '128 GB'
@@ -334,7 +349,7 @@ process motion_correction {
 process movie_qc {
 	tag 'capsule-0300037'
 	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v11"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
 	cpus 16
 	memory '128 GB'
@@ -394,7 +409,7 @@ process decrosstalk_split_json {
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     input:
     path motion_results
@@ -444,7 +459,7 @@ process decrosstalk_roi_images {
     cpus 8
     memory '64 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     input:
     path decrosstalk_split
@@ -509,7 +524,7 @@ process extraction {
     cpus 8
     memory '64 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     input:
     path extraction_input
@@ -567,7 +582,7 @@ process dff_capsule {
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     input:
     path extraction_results
@@ -622,7 +637,7 @@ process oasis_event_detection {
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     input:
     path dff_results
@@ -676,7 +691,7 @@ process classifier {
 	accelerator 1
 	label 'gpu'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
 	input:
     path ophys_mount_jsons
@@ -690,7 +705,7 @@ process classifier {
 	path 'capsule/results/*'
 
 	script:
-	def model_name_arg = params.containsKey('model-name') && params['model-name'] ? "--model-name ${params['model-name']}" : ""
+	def model_name_arg = params.containsKey('model-name') && params['model-name'] ? "--model_name ${params['model-name']}" : ""
 	"""
 	#!/usr/bin/env bash
 	set -e
@@ -719,7 +734,7 @@ process classifier {
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run --input-dir ${params.input_dir} --output-dir ${params.output_dir} --tmp-dir ${params.temp_dir} --soma-classifier-path ${params['soma-classifier-path']} --dendrite-classifier-path ${params['dendrite-classifier-path']} --border-size ${params['border-size']} ${model_name_arg}
+	./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --tmp_dir ${params.temp_dir} --soma_classifier_path ${params['soma-classifier-path']} --dendrite_classifier_path ${params['dendrite-classifier-path']} --border_size ${params['border-size']} ${model_name_arg} --verify 1
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -734,7 +749,7 @@ process ophys_nwb {
 	cpus 4
 	memory '32 GB'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
 	input:
     path schemas
@@ -797,7 +812,7 @@ process ophys_nwb {
 	cd capsule/code
 	chmod +x run
 	ls -R /data
-    ./run --input_directory ${params.input_dir} --output_directory ${params.output_dir}
+    ./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --verify 1
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -814,7 +829,7 @@ process pipeline_processing_metadata_aggregator {
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     input:
     path ophys_mount_jsons
@@ -874,7 +889,7 @@ process quality_control_aggregator {
     cpus 1
     memory '8 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
     input:
     path motion_correction_results
