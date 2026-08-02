@@ -67,11 +67,18 @@ workflow {
     def decrosstalk_processing_json = Channel.empty()
     def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
+
+    // Only produced when the converter runs (S3 sources only).
+    def converter_processing_json = Channel.empty()
+    def converter_qc_json = Channel.empty()
     
     // Conditional converter execution - only run for S3 sources
     def motion_correction_input
     if (use_s3_source) {
         converter_capsule(ophys_data)
+
+        converter_processing_json = converter_capsule.out.converter_processing_json
+        converter_qc_json = converter_capsule.out.converter_qc_json
         
         // Separate the directories we want to filter out
         converter_capsule.out.converter_results
@@ -100,6 +107,12 @@ workflow {
             ophys_mount_pophys_directory.collect(),
         )
         z_stacks = converter_capsule.out.local_stacks
+
+        movie_qc(
+            motion_correction.out.motion_results_all.flatten(),
+            ophys_mount_jsons.collect(),
+            z_stacks.collect().ifEmpty([])
+        )
 
         // Split the motion-corrected planes into pairs for decrosstalk
         decrosstalk_split_json(
@@ -134,6 +147,12 @@ workflow {
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect()
+        )
+
+        movie_qc(
+            motion_correction.out.motion_results_all.flatten(),
+            ophys_mount_jsons.collect(),
+            z_stacks.collect().ifEmpty([])
         )
 
         extraction(
@@ -193,33 +212,49 @@ workflow {
         oasis_event_detection.out.events_h5.collect()
     )   
 
-    // Run Quality Control Aggregator
-    quality_control_aggregator(
-        motion_correction.out.motion_results.collect(),
-        movie_qc.out.movie_qc_json.collect(),
-        movie_qc.out.movie_qc_png.collect(),
-        decrosstalk_results_all.collect().ifEmpty([]),
-        extraction.out.extraction_qc_json.collect(),
-        dff_capsule.out.dff_qc_json.collect(),
-        oasis_event_detection.out.event_qc_png.collect(),
-        oasis_event_detection.out.events_json.collect(),
-        classifier.out.classifier_jsons.collect(),
-        classifier.out.classifier_png.collect(),
-        ophys_mount_jsons.collect(),
-        vasculature_dir.collect().ifEmpty([]),
-        matched_tiff_vals_dir.collect().ifEmpty([])
-    )
-    
-    // Run Pipeline Processing Metadata Aggregator
+    // Aggregate every capsule's v2 metadata into the run-level
+    // processing.json / quality_control.json.
+    //
+    // quality_control_aggregator is gone: v2 deletes QCEvaluation, so that
+    // capsule is unbuildable, and aind-metadata-manager >=0.3.1 does the same
+    // job behind --aggregate_quality_control.
+    //
+    // Every capsule writes bare processing.json / quality_control.json --
+    // write_standard_file() hardcodes those names -- so on a multiplane run
+    // each per-plane channel carries N identically-named files. Mixing them
+    // into two channels keeps this call short; the stageAs on the aggregator's
+    // inputs is what actually prevents Nextflow rejecting the task for
+    // duplicate input file names.
+    def all_processing_json = converter_processing_json
+        .mix(motion_correction.out.motion_processing_json)
+        .mix(movie_qc.out.movie_qc_processing_json)
+        .mix(decrosstalk_processing_json)
+        .mix(extraction.out.extraction_processing_json)
+        .mix(dff_capsule.out.dff_processing_json)
+        .mix(classifier.out.classifier_processing_json)
+        .mix(oasis_event_detection.out.oasis_processing_json)
+        .mix(ophys_nwb.out.nwb_processing_json)
+
+    def all_quality_control_json = converter_qc_json
+        .mix(motion_correction.out.motion_qc_json)
+        .mix(movie_qc.out.movie_qc_qc_json)
+        .mix(decrosstalk_qc_json)
+        .mix(extraction.out.extraction_qc_json)
+        .mix(dff_capsule.out.dff_qc_json)
+        .mix(classifier.out.classifier_qc_json)
+        .mix(oasis_event_detection.out.oasis_qc_json)
+        .mix(ophys_nwb.out.nwb_qc_json)
+
+    // ifEmpty([]) so an all-empty channel still runs the aggregator. Without
+    // it collect() emits nothing, the process is silently skipped, and the run
+    // "succeeds" with no run-level processing.json at all. With it, the
+    // aggregator runs and raises on zero metrics -- a loud failure beats a
+    // missing document.
     pipeline_processing_metadata_aggregator(
         ophys_mount_jsons.collect(),
-        motion_correction.out.motion_processing_json.collect(),
-        decrosstalk_processing_json.collect().ifEmpty([]),
-        extraction.out.extraction_processing_json.collect(),
-        classifier.out.classifier_jsons.collect(),
-        dff_capsule.out.dff_processing_json.collect(),
-        oasis_event_detection.out.events_json.collect(),
-    )  
+        all_processing_json.collect().ifEmpty([]),
+        all_quality_control_json.collect().ifEmpty([])
+    )
 }
 
 
@@ -258,6 +293,8 @@ process converter_capsule {
     path 'capsule/results/*', emit: 'converter_results', optional: true
     path 'capsule/results/*/*', emit: 'converter_results_all', optional: true
     path 'capsule/results/*/*local*', emit: 'local_stacks', optional: true
+    path 'capsule/results/processing.json', emit: 'converter_processing_json', optional: true
+    path 'capsule/results/quality_control.json', emit: 'converter_qc_json', optional: true
 
     script:
     """
@@ -308,6 +345,7 @@ process motion_correction {
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
     path 'capsule/results/*/*/processing.json', emit: 'motion_processing_json'
+    path 'capsule/results/*/*/quality_control.json', emit: 'motion_qc_json', optional: true
     path 'capsule/results/*/motion_correction/*', emit: 'motion_results'
 
     script:
@@ -347,8 +385,8 @@ process motion_correction {
 
 // capsule - aind-ophys-movie-qc
 process movie_qc {
-	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v11"
+	tag 'capsule-1405420'
+	container "$REGISTRY_HOST/capsule/f7a69ad2-d265-49e9-8c2d-0ef4c8623d6a:9dccd4d984b9ab32fe6b3ecf18093e8e"
     publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
 
 	cpus 16
@@ -362,7 +400,8 @@ process movie_qc {
 
 	output:
 	path 'capsule/results/*'
-	path 'capsule/results/*/*/*.json', emit:'movie_qc_json'
+	path 'capsule/results/*/*/processing.json', emit: 'movie_qc_processing_json', optional: true
+	path 'capsule/results/*/*/quality_control.json', emit: 'movie_qc_qc_json', optional: true
 	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png'
 
 	script:
@@ -388,14 +427,15 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1405420.git" capsule-repo
+	git -C capsule-repo checkout 461d740 --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -631,8 +671,8 @@ process dff_capsule {
 
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
-    tag 'capsule-8957649'
-	container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v10"
+    tag 'capsule-2084204'
+	container "$REGISTRY_HOST/capsule/4a6e16cf-11b7-418a-af14-277a9393a78a:9c000f7fe5578927ebd5cd6eab082b93"
 
     cpus 4
     memory '32 GB'
@@ -646,7 +686,8 @@ process oasis_event_detection {
     output:
     path 'capsule/results/*'
     path 'capsule/results/*/*/plots/*', emit: 'event_qc_png', optional: true
-    path 'capsule/results/*/*/*json', emit: 'events_json', optional: true
+    path 'capsule/results/*/*/processing.json', emit: 'oasis_processing_json', optional: true
+    path 'capsule/results/*/*/quality_control.json', emit: 'oasis_qc_json', optional: true
     path 'capsule/results/*/events/*.h5', emit: 'events_h5'
 
     script:
@@ -654,7 +695,7 @@ process oasis_event_detection {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=c6394aab-0db7-47b2-90ba-864866d6755e
+    export CO_CAPSULE_ID=4a6e16cf-11b7-418a-af14-277a9393a78a
     export CO_CPUS=4
     export CO_MEMORY=34359738368
 
@@ -668,14 +709,15 @@ process oasis_event_detection {
     cp -r ${dff_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v10.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8957649.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2084204.git" capsule-repo
+    git -C capsule-repo checkout 585c666 --quiet
 	mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -683,8 +725,8 @@ process oasis_event_detection {
 
 // capsule - aind-ophys-classifier
 process classifier {
-	tag 'capsule-0630574'
-	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v5"
+	tag 'capsule-2559740'
+	container "$REGISTRY_HOST/capsule/326747bf-af46-45ee-a24f-ebf55a12a4d2:c987e159a0520b42295a98247ca55026"
 
 	cpus 16
 	memory '60 GB'
@@ -699,7 +741,8 @@ process classifier {
 	path extraction_results
     
 	output:
-	path 'capsule/results/*/*/*.json', emit: 'classifier_jsons'
+	path 'capsule/results/*/*/processing.json', emit: 'classifier_processing_json', optional: true
+	path 'capsule/results/*/*/quality_control.json', emit: 'classifier_qc_json', optional: true
     path 'capsule/results/*/classification/*classification.h5', emit: 'classifer_h5'
 	path 'capsule/results/*/*/*.png', emit: 'classifier_png'
 	path 'capsule/results/*'
@@ -710,7 +753,7 @@ process classifier {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=3819d125-9f03-48f3-ba09-b44c84a7a2c7
+	export CO_CAPSULE_ID=326747bf-af46-45ee-a24f-ebf55a12a4d2
 	export CO_CPUS=16
 	export CO_MEMORY=64424509440
 
@@ -727,7 +770,8 @@ process classifier {
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v5.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2559740.git" capsule-repo
+	git -C capsule-repo checkout 0fcf707 --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -743,8 +787,8 @@ process classifier {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v16"
+	tag 'capsule-2318520'
+	container "$REGISTRY_HOST/capsule/0f0522d4-2447-46cf-9d5d-324eae19d3a9:688254b9395b1ca641a7f67ae5a1eed4"
 
 	cpus 4
 	memory '32 GB'
@@ -765,13 +809,15 @@ process ophys_nwb {
 
 	output:
 	path 'capsule/results/*'
+	path 'capsule/results/*/processing.json', emit: 'nwb_processing_json', optional: true
+	path 'capsule/results/*/quality_control.json', emit: 'nwb_qc_json', optional: true
 
 	script:
 	"""
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=8c436e95-8607-4752-8e9f-2b62024f9326
+	export CO_CAPSULE_ID=0f0522d4-2447-46cf-9d5d-324eae19d3a9
 	export CO_CPUS=1
 	export CO_MEMORY=8589934592
     echo "I AM MAKING AN NWB"
@@ -804,7 +850,8 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v16.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2318520.git" capsule-repo
+	git -C capsule-repo checkout fd252af --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -820,8 +867,8 @@ process ophys_nwb {
 
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-8250608'
-	container "$REGISTRY_HOST/published/d51df783-d892-4304-a129-238a9baea72a:v6"
+    tag 'capsule-8324994'
+	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v4"
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
@@ -829,16 +876,16 @@ process pipeline_processing_metadata_aggregator {
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+    // NOT the null-ing saveAs the per-plane capsules use. This is the one task
+    // whose processing.json / quality_control.json MUST reach the results root
+    // -- they are the run-level documents. It is a single fan-in task, so the
+    // basename collision that motivated the null cannot occur here.
+    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
 
     input:
     path ophys_mount_jsons
-    path motion_correction_results
-    path decrosstalk_results
-    path extraction_results
-    path classifier_jsons
-    path dff_results
-    path oasis_event_detection_results
+    path(processing_json, stageAs: 'processing_??/*')
+    path(quality_control_json, stageAs: 'quality_control_??/*')
 
     output:
     path 'capsule/results/*'
@@ -848,7 +895,7 @@ process pipeline_processing_metadata_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=d51df783-d892-4304-a129-238a9baea72a
+    export CO_CAPSULE_ID=22261566-0b4f-42aa-bcaa-58efa55bf653
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
@@ -857,19 +904,26 @@ process pipeline_processing_metadata_aggregator {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
+    # Preserve the numbered directory stageAs gave each file. A flat cp would
+    # collapse every processing.json back onto one name and keep only the last;
+    # aind-metadata-manager rglobs for them, so the nesting costs nothing.
+    stage_nested() {
+        for f in "\$@"; do
+            [ -e "\$f" ] || continue
+            d="capsule/data/\$(dirname "\$f")"
+            mkdir -p "\$d"
+            cp -r "\$f" "\$d/"
+        done
+    }
+
     echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_correction_results} capsule/data
-    if [ -e "${decrosstalk_results}" ]; then
-        cp -r ${decrosstalk_results} capsule/data
-    fi
-    cp -r ${extraction_results} capsule/data
-    cp -r ${dff_results} capsule/data
-    cp -r ${oasis_event_detection_results} capsule/data
     cp -r ${ophys_mount_jsons} capsule/data
-    cp -r ${classifier_jsons} capsule/data
+    stage_nested ${processing_json}
+    stage_nested ${quality_control_json}
+    echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8250608.git" capsule-repo
+    git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -877,85 +931,6 @@ process pipeline_processing_metadata_aggregator {
     cd capsule/code
     chmod +x run
     ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
-    echo "[${task.tag}] completed!"
-    """
-}
-
-// capsule - aind-quality-control-aggregator
-process quality_control_aggregator {
-    tag 'capsule-4044810'
-	container "$REGISTRY_HOST/published/4a698b5c-f5f6-4671-8234-dc728d049a68:v11"
-
-    cpus 1
-    memory '8 GB'
-
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
-
-    input:
-    path motion_correction_results
-    path movie_qc_json
-    path movie_qc_png
-    path decrosstalk_results
-    path extraction_results
-    path dff_results
-    path oasis_event_detection_results
-    path oasis_event_json
-    path classifier_jsons
-    path classifier_pngs
-    path ophys_mount_jsons
-    path vasculature_dir
-    path matched_tiff_vals_dir
-
-    output:
-    path 'capsule/results/*'
-
-    script:
-    def image_type_arg = params.acquisition_data_type == "multiplane" ? "--image_type=multiplane" : ""
-    """
-    #!/usr/bin/env bash
-    set -e
-
-    export CO_CAPSULE_ID=4a698b5c-f5f6-4671-8234-dc728d049a68
-    export CO_CPUS=1
-    export CO_MEMORY=8589934592
-
-    mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
-
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_jsons} capsule/data
-    cp -r ${motion_correction_results} capsule/data
-    cp -r ${movie_qc_json} capsule/data
-    cp -r ${movie_qc_png} capsule/data
-    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
-        cp -r ${decrosstalk_results} capsule/data
-    fi
-    cp -r ${extraction_results} capsule/data
-    cp -r ${dff_results} capsule/data
-    cp -r ${oasis_event_detection_results} capsule/data
-    cp -r ${oasis_event_json} capsule/data
-    cp -r ${classifier_jsons} capsule/data
-    cp -r ${classifier_pngs} capsule/data
-    if [ -n "${vasculature_dir}" ] && [ "${vasculature_dir}" != "[]" ]; then
-        cp -r ${vasculature_dir} capsule/data
-    fi
-    if [ -n "${matched_tiff_vals_dir}" ] && [ "${matched_tiff_vals_dir}" != "[]" ]; then
-        cp -r ${matched_tiff_vals_dir} capsule/data
-    fi
-
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4044810.git" capsule-repo
-
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-
-    echo "[${task.tag}] running capsule..."
-    cd capsule/code
-    chmod +x run
-    ./run ${image_type_arg}
-
     echo "[${task.tag}] completed!"
     """
 }
