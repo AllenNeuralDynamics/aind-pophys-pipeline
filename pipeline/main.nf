@@ -671,8 +671,8 @@ process dff_capsule {
 
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
-    tag 'capsule-2084204'
-	container "$REGISTRY_HOST/capsule/4a6e16cf-11b7-418a-af14-277a9393a78a:9c000f7fe5578927ebd5cd6eab082b93"
+    tag 'capsule-3856982'
+	container "$REGISTRY_HOST/capsule/7b66080e-50f4-4c27-8345-86248812b00f:9b9d818158ac546612d2090107bcdb83"
 
     cpus 4
     memory '32 GB'
@@ -695,7 +695,7 @@ process oasis_event_detection {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=4a6e16cf-11b7-418a-af14-277a9393a78a
+    export CO_CAPSULE_ID=7b66080e-50f4-4c27-8345-86248812b00f
     export CO_CPUS=4
     export CO_MEMORY=34359738368
 
@@ -709,7 +709,7 @@ process oasis_event_detection {
     cp -r ${dff_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2084204.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3856982.git" capsule-repo
     git -C capsule-repo checkout 585c666 --quiet
 	mv capsule-repo/code capsule/code
     rm -rf capsule-repo
