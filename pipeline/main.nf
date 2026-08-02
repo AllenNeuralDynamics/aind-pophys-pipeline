@@ -725,8 +725,8 @@ process oasis_event_detection {
 
 // capsule - aind-ophys-classifier
 process classifier {
-	tag 'capsule-2559740'
-	container "$REGISTRY_HOST/capsule/326747bf-af46-45ee-a24f-ebf55a12a4d2:c987e159a0520b42295a98247ca55026"
+	tag 'capsule-2013356'
+	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:c987e159a0520b42295a98247ca55026"
 
 	cpus 16
 	memory '60 GB'
@@ -753,7 +753,7 @@ process classifier {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=326747bf-af46-45ee-a24f-ebf55a12a4d2
+	export CO_CAPSULE_ID=570e9cb2-be0f-4972-ad49-90b3fe8ab690
 	export CO_CPUS=16
 	export CO_MEMORY=64424509440
 
@@ -770,7 +770,7 @@ process classifier {
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2559740.git" capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2013356.git" capsule-repo
 	git -C capsule-repo checkout 0fcf707 --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
@@ -787,8 +787,8 @@ process classifier {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-2318520'
-	container "$REGISTRY_HOST/capsule/0f0522d4-2447-46cf-9d5d-324eae19d3a9:688254b9395b1ca641a7f67ae5a1eed4"
+	tag 'capsule-8338960'
+	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:688254b9395b1ca641a7f67ae5a1eed4"
 
 	cpus 4
 	memory '32 GB'
@@ -817,7 +817,7 @@ process ophys_nwb {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=0f0522d4-2447-46cf-9d5d-324eae19d3a9
+	export CO_CAPSULE_ID=f804beaa-2ac3-46c7-82b7-f46b19531aa9
 	export CO_CPUS=1
 	export CO_MEMORY=8589934592
     echo "I AM MAKING AN NWB"
@@ -850,7 +850,7 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2318520.git" capsule-repo
+	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
 	git -C capsule-repo checkout fd252af --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
