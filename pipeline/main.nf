@@ -6,6 +6,22 @@ import groovy.json.JsonSlurper
 
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 
+// Every capsule writes into capsule/results/<plane>/<step>/. publishDir's
+// saveAs used to reduce that to a bare basename, which made the per-plane
+// DIRECTORY the published target -- and six processes publish
+// 'capsule/results/*', so they all raced to publish the same <plane> path.
+// Whole steps were dropped silently: on 2026-07-31 decrosstalk landed for
+// 4 of 8 planes, and for 0 of 8 on the two runs before it. Preserving the
+// relative path gives every artifact a unique target, so nothing collides.
+// It also removes the need to null processing.json / quality_control.json:
+// nested under <plane>/<step>/ they are already unique per task.
+CAPSULE_RESULTS = 'capsule/results/'
+publishRelative = { String filename ->
+    filename.startsWith(CAPSULE_RESULTS)
+        ? filename.substring(CAPSULE_RESULTS.length())
+        : filename
+}
+
 workflow {
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
@@ -285,28 +301,10 @@ workflow {
 
 
 // Process: aind-pophys-converter-capsule
-// PUBLISHING THE v2 METADATA DOCUMENTS
-//
-// The saveAs below flattens every published file to its basename. Under v1 that
-// was safe because every file a capsule wrote into <plane>/<step>/ was
-// <plane>_-prefixed and therefore globally unique. Under v2 the standardised
-// documents are processing.json and quality_control.json -- unprefixed, because
-// write_standard_file() hardcodes those names -- so on a MULTIPLANE session the
-// N concurrent per-plane tasks all publish the same target, the second fails
-// with "Failed to publish file", and the run dies (errorStrategy = retry means
-// it thrashes maxRetries times first).
-//
-// saveAs returning null skips publishing without affecting the emit channels,
-// and every process that outputs these documents also outputs
-// 'capsule/results/*', which publishes the per-plane directory wholesale -- so
-// they still reach $RESULTS_PATH at their correct nested path
-// (<plane>/<step>/processing.json), which is what DataProcess.output_path
-// resolves against. Only the duplicate flattened copy is dropped.
-
 process converter_capsule {
     tag 'capsule-9191145'
-	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:dbd14e5226789c0a7e9640853e1b7c63"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:c69311411b5aa698661bdf928802df54"
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     cpus 16
     memory '128 GB'
@@ -338,7 +336,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout ce263cf --quiet
+    git -C capsule-repo checkout 9689ac9 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -356,8 +354,8 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:a6a7e85b5e2613bd0886ccb3aae0a747"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:6c6d71cbe34c717f70ad0ce55cccdc27"
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     cpus 16
     memory '128 GB'
@@ -395,7 +393,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
-    git -C capsule-repo checkout e827072 --quiet
+    git -C capsule-repo checkout 3b43db3 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -412,8 +410,8 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-5974042'
-	container "$REGISTRY_HOST/capsule/1e1ee66e-db39-4cc8-b760-08ed26f0c9e8:c612a6074e610ec3842da5536d31c1d1"
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+	container "$REGISTRY_HOST/capsule/1e1ee66e-db39-4cc8-b760-08ed26f0c9e8:38b6fda9b131bbdf516706319abda1c5"
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
 	cpus 16
 	memory '128 GB'
@@ -454,7 +452,7 @@ process movie_qc {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5974042.git" capsule-repo
-	git -C capsule-repo checkout 461d740 --quiet
+	git -C capsule-repo checkout 87e2229 --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -475,7 +473,7 @@ process decrosstalk_split_json {
     cpus 2
     memory '16 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
     path motion_results
@@ -520,12 +518,12 @@ process decrosstalk_split_json {
 process decrosstalk_roi_images {
     tag 'capsule-4886340'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:dfdb67b05b1024c5bb9325f3e3a4a8c8"
+	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:e3f261e2567c1d424023f5297aab29bb"
 
     cpus 8
     memory '64 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
     path decrosstalk_split
@@ -564,10 +562,10 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] cloning git repo..."
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout f1a2654 --quiet
+        git -C capsule-repo checkout 2faabf9 --quiet
 	else
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout f1a2654 --quiet
+        git -C capsule-repo checkout 2faabf9 --quiet
 	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
@@ -585,12 +583,12 @@ process decrosstalk_roi_images {
 // capsule - aind-ophys-extraction
 process extraction {
     tag 'capsule-8797010'
-	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:65bbd8fb7cf27a63aba2fc68ac537b35"
+	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:f67939617ea77ac06fb014f568178153"
 
     cpus 8
     memory '64 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
     path extraction_input
@@ -625,7 +623,7 @@ process extraction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
-    git -C capsule-repo checkout bbed86e --quiet
+    git -C capsule-repo checkout 830ea13 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -643,12 +641,12 @@ process extraction {
 process dff_capsule {
     tag 'capsule-7970481'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/909d4275-fc32-4b81-a3f3-f5bf6cedece1:ffae466914396f130f04e538563bb89c"
+	container "$REGISTRY_HOST/capsule/909d4275-fc32-4b81-a3f3-f5bf6cedece1:6056c484354ca6d514ceb4383b1d1159"
 
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
     path extraction_results
@@ -681,7 +679,7 @@ process dff_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7970481.git" capsule-repo
-    git -C capsule-repo checkout add3282 --quiet
+    git -C capsule-repo checkout c80519f --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -698,12 +696,12 @@ process dff_capsule {
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
     tag 'capsule-3856982'
-	container "$REGISTRY_HOST/capsule/7b66080e-50f4-4c27-8345-86248812b00f:9b9d818158ac546612d2090107bcdb83"
+	container "$REGISTRY_HOST/capsule/7b66080e-50f4-4c27-8345-86248812b00f:d9479e70906b327cd51957ca1e6a6ae5"
 
     cpus 4
     memory '32 GB'
 
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
     path dff_results
@@ -736,7 +734,7 @@ process oasis_event_detection {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3856982.git" capsule-repo
-    git -C capsule-repo checkout 585c666 --quiet
+    git -C capsule-repo checkout 79d9a25 --quiet
 	mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -752,14 +750,14 @@ process oasis_event_detection {
 // capsule - aind-ophys-classifier
 process classifier {
 	tag 'capsule-2013356'
-	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:c987e159a0520b42295a98247ca55026"
+	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:df9afb564627f3caab82fa3948d8fad4"
 
 	cpus 16
 	memory '60 GB'
 	accelerator 1
 	label 'gpu'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: publishRelative
 
 	input:
     path ophys_mount_jsons
@@ -797,7 +795,7 @@ process classifier {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2013356.git" capsule-repo
-	git -C capsule-repo checkout 0fcf707 --quiet
+	git -C capsule-repo checkout bc1ab41 --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -814,12 +812,12 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-8338960'
-	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:688254b9395b1ca641a7f67ae5a1eed4"
+	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:8017c5cfd9a621d38d6a380d4518ec54"
 
 	cpus 4
 	memory '32 GB'
 
-	publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() in ['processing.json', 'quality_control.json'] ? null : new File(filename).getName() }
+	publishDir "$RESULTS_PATH", saveAs: publishRelative
 
 	input:
     path schemas
@@ -877,7 +875,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
-	git -C capsule-repo checkout fd252af --quiet
+	git -C capsule-repo checkout ab3ac08 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -902,11 +900,10 @@ process pipeline_processing_metadata_aggregator {
     cpus 2
     memory '16 GB'
 
-    // NOT the null-ing saveAs the per-plane capsules use. This is the one task
-    // whose processing.json / quality_control.json MUST reach the results root
-    // -- they are the run-level documents. It is a single fan-in task, so the
-    // basename collision that motivated the null cannot occur here.
-    publishDir "$RESULTS_PATH", saveAs: { filename -> new File(filename).getName() }
+    // This task's processing.json / quality_control.json are the run-level
+    // documents, and they sit directly under capsule/results/, so the shared
+    // saveAs publishes them at the results root -- where they belong.
+    publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
     path ophys_mount_jsons
