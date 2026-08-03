@@ -210,15 +210,22 @@ workflow {
     // nwb never reads them -- it rglobs for <plane>_*<part>, epoch_locations.json
     // and the sync h5 -- so they are dropped rather than staged into numbered
     // directories the way the aggregator needs.
+    //
+    // .flatten() is load-bearing. A `path` output whose glob matches several
+    // files emits ONE List per task, not one item per file, so a bare
+    // .filter { it.name in ... } tests a List: Groovy's GPath turns List.name
+    // into a list OF names, which is never `in` a list of strings, so the
+    // predicate is always true and the filter silently passes everything.
+    // That cost a full run. flatten() first, then filter, then re-collect.
     def metadata_json = ['processing.json', 'quality_control.json']
     ophys_nwb(
         nwb_schemas.collect(),
         ophys_mount_jsons.collect(),
         ophys_mount_sync_file.collect().ifEmpty([]),
         ophys_mount_pophys_directory.collect(),
-        motion_correction.out.motion_results.filter { !(it.name in metadata_json) }.collect(),
-        decrosstalk_results_all.filter { !(it.name in metadata_json) }.collect().ifEmpty([]),
-        extraction.out.extraction_results_all.filter { !(it.name in metadata_json) }.collect(),
+        motion_correction.out.motion_results.flatten().filter { !(it.name in metadata_json) }.collect(),
+        decrosstalk_results_all.flatten().filter { !(it.name in metadata_json) }.collect().ifEmpty([]),
+        extraction.out.extraction_results_all.flatten().filter { !(it.name in metadata_json) }.collect(),
         classifier.out.classifer_h5.collect(),
         dff_capsule.out.dff_results_all.collect(),
         oasis_event_detection.out.events_h5.collect()
@@ -237,6 +244,11 @@ workflow {
     // into two channels keeps this call short; the stageAs on the aggregator's
     // inputs is what actually prevents Nextflow rejecting the task for
     // duplicate input file names.
+    //
+    // The trailing .flatten() normalises the mix. Most of these emit one bare
+    // path per task, but decrosstalk handles a PAIR per task, so its depth-2
+    // globs match twice and it emits a List -- mixing the two shapes would
+    // hand stageAs a nested collection to number.
     def all_processing_json = converter_processing_json
         .mix(motion_correction.out.motion_processing_json)
         .mix(movie_qc.out.movie_qc_processing_json)
@@ -246,6 +258,7 @@ workflow {
         .mix(classifier.out.classifier_processing_json)
         .mix(oasis_event_detection.out.oasis_processing_json)
         .mix(ophys_nwb.out.nwb_processing_json)
+        .flatten()
 
     def all_quality_control_json = converter_qc_json
         .mix(motion_correction.out.motion_qc_json)
@@ -256,6 +269,7 @@ workflow {
         .mix(classifier.out.classifier_qc_json)
         .mix(oasis_event_detection.out.oasis_qc_json)
         .mix(ophys_nwb.out.nwb_qc_json)
+        .flatten()
 
     // ifEmpty([]) so an all-empty channel still runs the aggregator. Without
     // it collect() emits nothing, the process is silently skipped, and the run
