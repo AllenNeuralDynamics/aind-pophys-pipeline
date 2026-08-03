@@ -199,14 +199,26 @@ workflow {
     }
 
     // Run Ophys NWB Packaging for Multiplane
+    //
+    // The three per-step channels below glob <plane>/<step>/*, which under v2
+    // sweeps up the bare processing.json / quality_control.json those steps now
+    // write. Collected across 8 planes that is 8 files per name into one path
+    // input, which Nextflow rejects outright:
+    //   "input file name collision -- There are multiple input files for each
+    //    of the following file names: processing.json, quality_control.json"
+    // Under v1 the same globs were safe because every file was <plane>_-prefixed.
+    // nwb never reads them -- it rglobs for <plane>_*<part>, epoch_locations.json
+    // and the sync h5 -- so they are dropped rather than staged into numbered
+    // directories the way the aggregator needs.
+    def metadata_json = ['processing.json', 'quality_control.json']
     ophys_nwb(
         nwb_schemas.collect(),
         ophys_mount_jsons.collect(),
         ophys_mount_sync_file.collect().ifEmpty([]),
         ophys_mount_pophys_directory.collect(),
-        motion_correction.out.motion_results.collect(),
-        decrosstalk_results_all.collect().ifEmpty([]), // Handle empty channel
-        extraction.out.extraction_results_all.collect(),
+        motion_correction.out.motion_results.filter { !(it.name in metadata_json) }.collect(),
+        decrosstalk_results_all.filter { !(it.name in metadata_json) }.collect().ifEmpty([]),
+        extraction.out.extraction_results_all.filter { !(it.name in metadata_json) }.collect(),
         classifier.out.classifer_h5.collect(),
         dff_capsule.out.dff_results_all.collect(),
         oasis_event_detection.out.events_h5.collect()
