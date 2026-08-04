@@ -6,21 +6,32 @@ import groovy.json.JsonSlurper
 
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 
-// Strips the capsule/results/ prefix from a published path.
-//
-// Currently equivalent to the previous new File(filename).getName(): saveAs is
-// invoked ONCE per task with the per-plane DIRECTORY ("capsule/results/VISp_0"),
-// never with the files inside it, because Nextflow folds nested outputs into the
-// parent-directory publish whenever the parent is itself a declared output.
-// Verified 2026-08-03 by printing the argument. The earlier variant that returned
-// null for processing.json / quality_control.json was a no-op for the same reason
-// -- saveAs never saw those names. Kept in this form because it is the behaviour
-// the code reads as having.
+// saveAs is invoked once per MATCH of each output glob, so a process declaring
+// 'capsule/results/*' gets one call per plane directory AND one per file sitting
+// at that level. Keeping the relative path means an artifact published from a
+// nested glob lands at <plane>/<step>/..., and a directory match publishes its
+// subtree there.
 CAPSULE_RESULTS = 'capsule/results/'
+RUN_LEVEL_DOCS = ['processing.json', 'quality_control.json']
+
 publishRelative = { String filename ->
     filename.startsWith(CAPSULE_RESULTS)
         ? filename.substring(CAPSULE_RESULTS.length())
         : filename
+}
+
+// For a capsule that writes its own processing.json / quality_control.json at
+// the TOP of capsule/results/ rather than under <plane>/<step>/. Those would
+// publish to the results ROOT, which is where the aggregator writes the
+// run-level pair -- two tasks, one target, last writer wins. Skipping the
+// publish costs nothing: the documents still travel on their emit channels into
+// the aggregator, which is what actually produces the run-level pair. Only the
+// converter needs this today (verified 2026-08-04 from runs b462ae9b and
+// 2368efda, whose root processing.json held the converter's single
+// "Raw movie conversion to HDF5" process while the aggregator had not run).
+publishRelativeSkipRunLevel = { String filename ->
+    def rel = publishRelative(filename)
+    rel in RUN_LEVEL_DOCS ? null : rel
 }
 
 workflow {
@@ -305,7 +316,7 @@ workflow {
 process converter_capsule {
     tag 'capsule-9191145'
 	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:c69311411b5aa698661bdf928802df54"
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
 
     cpus 16
     memory '128 GB'
@@ -519,7 +530,7 @@ process decrosstalk_split_json {
 process decrosstalk_roi_images {
     tag 'capsule-4886340'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:e3f261e2567c1d424023f5297aab29bb"
+	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:c41d3d3c2f1a63a82af2df6d0cc850a4"
 
     cpus 8
     memory '64 GB'
@@ -563,10 +574,10 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] cloning git repo..."
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 2faabf9 --quiet
+        git -C capsule-repo checkout 8f3ac28 --quiet
 	else
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 2faabf9 --quiet
+        git -C capsule-repo checkout 8f3ac28 --quiet
 	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
