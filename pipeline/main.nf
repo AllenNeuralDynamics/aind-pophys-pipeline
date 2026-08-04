@@ -6,15 +6,16 @@ import groovy.json.JsonSlurper
 
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 
-// Every capsule writes into capsule/results/<plane>/<step>/. publishDir's
-// saveAs used to reduce that to a bare basename, which made the per-plane
-// DIRECTORY the published target -- and six processes publish
-// 'capsule/results/*', so they all raced to publish the same <plane> path.
-// Whole steps were dropped silently: on 2026-07-31 decrosstalk landed for
-// 4 of 8 planes, and for 0 of 8 on the two runs before it. Preserving the
-// relative path gives every artifact a unique target, so nothing collides.
-// It also removes the need to null processing.json / quality_control.json:
-// nested under <plane>/<step>/ they are already unique per task.
+// Strips the capsule/results/ prefix from a published path.
+//
+// Currently equivalent to the previous new File(filename).getName(): saveAs is
+// invoked ONCE per task with the per-plane DIRECTORY ("capsule/results/VISp_0"),
+// never with the files inside it, because Nextflow folds nested outputs into the
+// parent-directory publish whenever the parent is itself a declared output.
+// Verified 2026-08-03 by printing the argument. The earlier variant that returned
+// null for processing.json / quality_control.json was a no-op for the same reason
+// -- saveAs never saw those names. Kept in this form because it is the behaviour
+// the code reads as having.
 CAPSULE_RESULTS = 'capsule/results/'
 publishRelative = { String filename ->
     filename.startsWith(CAPSULE_RESULTS)
@@ -812,7 +813,7 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-8338960'
-	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:8017c5cfd9a621d38d6a380d4518ec54"
+	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:ff457277a6bfa62d68328bc7e92b3884"
 
 	cpus 4
 	memory '32 GB'
@@ -875,7 +876,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
-	git -C capsule-repo checkout ab3ac08 --quiet
+	git -C capsule-repo checkout 350796a --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
