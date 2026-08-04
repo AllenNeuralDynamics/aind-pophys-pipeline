@@ -824,7 +824,7 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-8338960'
-	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:ff457277a6bfa62d68328bc7e92b3884"
+	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:9f917604aec20e95fd5bbc4a0409720e"
 
 	cpus 4
 	memory '32 GB'
