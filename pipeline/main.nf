@@ -366,7 +366,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:6c6d71cbe34c717f70ad0ce55cccdc27"
+	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:d8cd0b2bf47afd19f65074dc2ef2510a"
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     cpus 16
