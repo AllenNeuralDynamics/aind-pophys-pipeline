@@ -35,6 +35,7 @@
     "aggregate_quality_control": "0",
     "verbose": "1",
     "skip_ancillary_files": "0",
+    "upgrade_legacy_metadata": "True",
     "data_summary": "",
     "acquisition_data_type": "single",
     "debug": "0",

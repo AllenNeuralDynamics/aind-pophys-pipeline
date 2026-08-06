@@ -352,6 +352,15 @@
 			"default_value": "0"
 		},
 		{
+			"id": "Gp7L3T3olEJMj5Ga",
+			"category": "PeTDLWkOAq4846Yc",
+			"name": "upgrade_legacy_metadata",
+			"param_name": "upgrade_legacy_metadata",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "True"
+		},
+		{
 			"id": "nUUF3L7CJ2uoKzTz",
 			"category": "PeTDLWkOAq4846Yc",
 			"name": "data_summary",
