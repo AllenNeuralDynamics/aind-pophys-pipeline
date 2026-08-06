@@ -903,8 +903,8 @@ process ophys_nwb {
 
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-8324994'
-	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v4"
+    tag 'capsule-7054171'
+	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:479dbb5d4ab01c1d8761e4315d70fef4"
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
@@ -930,7 +930,7 @@ process pipeline_processing_metadata_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=22261566-0b4f-42aa-bcaa-58efa55bf653
+    export CO_CAPSULE_ID=fe78a736-913b-4ce0-8959-375e3d6b66e5
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
@@ -958,7 +958,8 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7054171.git" capsule-repo
+    git -C capsule-repo checkout 75aecef --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
