@@ -904,7 +904,7 @@ process ophys_nwb {
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-7054171'
-	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:479dbb5d4ab01c1d8761e4315d70fef4"
+	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:1ad601d86fad50ea9f210caf0456b8da"
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
@@ -959,7 +959,7 @@ process pipeline_processing_metadata_aggregator {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7054171.git" capsule-repo
-    git -C capsule-repo checkout 75aecef --quiet
+    git -C capsule-repo checkout f2c5c7d --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
