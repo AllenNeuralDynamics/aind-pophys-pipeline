@@ -133,6 +133,7 @@ workflow {
             motion_correction_input.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
+            converter_processing_json.flatten().collect().ifEmpty([]),
         )
         z_stacks = converter_capsule.out.local_stacks
 
@@ -174,7 +175,8 @@ workflow {
         motion_correction(
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect()
+            ophys_mount_pophys_directory.collect(),
+            converter_processing_json.flatten().collect().ifEmpty([]),
         )
 
         movie_qc(
@@ -246,6 +248,25 @@ workflow {
     // predicate is always true and the filter silently passes everything.
     // That cost a full run. flatten() first, then filter, then re-collect.
     def metadata_json = ['processing.json', 'quality_control.json']
+
+    // The same six steps whose results NWB packages, but their processing.json
+    // documents, so NWB can record them as its upstreams in dependency_graph.
+    // They travel on their own stageAs'd input rather than inside the results
+    // inputs above, because those deliberately strip processing.json to avoid
+    // the input-name collision. flatten() before collect(): decrosstalk runs
+    // per PAIR, so its depth-2 glob matches twice and it emits a List per task.
+    // Built here rather than reusing all_processing_json, which is assembled
+    // after this call and includes NWB's own output.
+    def nwb_upstream_processing_json = motion_correction.out.motion_processing_json
+        .mix(decrosstalk_processing_json)
+        .mix(extraction.out.extraction_processing_json)
+        .mix(dff_capsule.out.dff_processing_json)
+        .mix(classifier.out.classifier_processing_json)
+        .mix(oasis_event_detection.out.oasis_processing_json)
+        .flatten()
+        .collect()
+        .ifEmpty([])
+
     ophys_nwb(
         nwb_schemas.collect(),
         ophys_mount_jsons.collect(),
@@ -256,8 +277,9 @@ workflow {
         extraction.out.extraction_results_all.flatten().filter { !(it.name in metadata_json) }.collect(),
         classifier.out.classifer_h5.collect(),
         dff_capsule.out.dff_results_all.collect(),
-        oasis_event_detection.out.events_h5.collect()
-    )   
+        oasis_event_detection.out.events_h5.collect(),
+        nwb_upstream_processing_json
+    )
 
     // Aggregate every capsule's v2 metadata into the run-level
     // processing.json / quality_control.json.
@@ -376,6 +398,10 @@ process motion_correction {
     path ophys_mount
     path ophys_jsons
     path pophys_dir
+    // The converter's processing.json, so this step can record it as its
+    // upstream in dependency_graph. stageAs keeps each file in its own numbered
+    // directory: every one is named processing.json, so a flat stage collides.
+    path(upstream_processing_json, stageAs: 'processing_??/*')
 
     output:
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
@@ -398,10 +424,22 @@ process motion_correction {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
+    # Preserve the numbered directory stageAs gave each file; a flat cp would
+    # collapse every processing.json onto one name. The collector rglobs.
+    stage_nested() {
+        for f in "\$@"; do
+            [ -e "\$f" ] || continue
+            d="capsule/data/\$(dirname "\$f")"
+            mkdir -p "\$d"
+            cp -r "\$f" "\$d/"
+        done
+    }
+
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${ophys_mount} capsule/data
     cp -r ${ophys_jsons} capsule/data
     cp -r ${pophys_dir} capsule/data
+    stage_nested ${upstream_processing_json}
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
@@ -842,6 +880,12 @@ process ophys_nwb {
 	path classifer_h5
 	path dff_results
 	path event_detection_results
+    // Every upstream processing.json, so NWB packaging can record what it
+    // packaged in dependency_graph. These are deliberately NOT the same objects
+    // as the *_results inputs above: those are filtered to strip processing.json
+    // and quality_control.json, because staging them flat collides on the bare
+    // filename. stageAs gives each its own numbered directory instead.
+    path(upstream_processing_json, stageAs: 'processing_??/*')
 
 	output:
 	path 'capsule/results/*'
@@ -883,6 +927,19 @@ process ophys_nwb {
     cp -r ${dff_results} capsule/data/processed
     cp -r ${event_detection_results} capsule/data/processed
 
+    # Preserve the numbered directory stageAs gave each file; a flat cp would
+    # collapse every processing.json onto one name. The collector rglobs.
+    stage_nested() {
+        for f in "\$@"; do
+            [ -e "\$f" ] || continue
+            d="capsule/data/\$(dirname "\$f")"
+            mkdir -p "\$d"
+            cp -r "\$f" "\$d/"
+        done
+    }
+    stage_nested ${upstream_processing_json}
+    echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) upstream processing.json"
+
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
@@ -904,7 +961,7 @@ process ophys_nwb {
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-7054171'
-	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:1ad601d86fad50ea9f210caf0456b8da"
+	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:5c26703a879a7b43ea3b79f2ffb9e996"
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
@@ -959,7 +1016,7 @@ process pipeline_processing_metadata_aggregator {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7054171.git" capsule-repo
-    git -C capsule-repo checkout f2c5c7d --quiet
+    git -C capsule-repo checkout 94e12c0 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
