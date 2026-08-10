@@ -929,16 +929,21 @@ process ophys_nwb {
 
     # Preserve the numbered directory stageAs gave each file; a flat cp would
     # collapse every processing.json onto one name. The collector rglobs.
+    #
+    # These must land under data/processed/, not data/: this capsule resolves
+    # processed_dir = input_dir / "processed" and searches THAT, so documents
+    # staged one level up are invisible to it (verified from run bb739583,
+    # where NWB's dependency_graph came back empty for exactly this reason).
     stage_nested() {
         for f in "\$@"; do
             [ -e "\$f" ] || continue
-            d="capsule/data/\$(dirname "\$f")"
+            d="capsule/data/processed/\$(dirname "\$f")"
             mkdir -p "\$d"
             cp -r "\$f" "\$d/"
         done
     }
     stage_nested ${upstream_processing_json}
-    echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) upstream processing.json"
+    echo "[${task.tag}] staged \$(find capsule/data/processed -name processing.json | wc -l) upstream processing.json"
 
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
