@@ -800,7 +800,7 @@ process oasis_event_detection {
 // capsule - aind-ophys-classifier
 process classifier {
 	tag 'capsule-2013356'
-	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:f5dfe483dc5a9e6f50914a5361a0f676"
+	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:c83f9cbb1d8cf8d63062abe8b77c42a3"
 
 	cpus 16
 	memory '60 GB'
@@ -845,7 +845,7 @@ process classifier {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2013356.git" capsule-repo
-	git -C capsule-repo checkout ecdbf6b --quiet
+	git -C capsule-repo checkout 54b0dea --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -949,7 +949,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
-	git -C capsule-repo checkout 65cc226 --quiet
+	git -C capsule-repo checkout 00648ba --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -966,7 +966,7 @@ process ophys_nwb {
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-7054171'
-	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:5c26703a879a7b43ea3b79f2ffb9e996"
+	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:04e03d120a53b0a35fa4980683259505"
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
@@ -1021,7 +1021,7 @@ process pipeline_processing_metadata_aggregator {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7054171.git" capsule-repo
-    git -C capsule-repo checkout 94e12c0 --quiet
+    git -C capsule-repo checkout b2ecb5d --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
