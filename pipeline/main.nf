@@ -357,7 +357,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-9191145'
-	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:912965ec39979275dc06a0e58f608fbf"
+	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:c85addfe3daa068c8728c36f2d351a18"
     publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
 
     cpus 16
@@ -390,7 +390,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout 3cc2ad1 --quiet
+    git -C capsule-repo checkout e1de8a6 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -408,7 +408,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:3cbadd47db4aeede8836d6c02c4106ef"
+	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:34565ab0aa5c691939ffa3e3acd6d16c"
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     cpus 16
@@ -463,7 +463,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
-    git -C capsule-repo checkout 4975c3a --quiet
+    git -C capsule-repo checkout 3d3d091 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
