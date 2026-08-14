@@ -80,6 +80,13 @@ workflow {
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
+    // Runtime model assets. checkIfExists is false on purpose: an absent mount
+    // must reach the capsule wrapper, which names the missing file and the
+    // expected SHA-256, rather than dying at channel creation with no context.
+    // Consumers link the read-only mount straight into capsule/data, so these
+    // channels exist only to make the asset a task staging dependency.
+    def cellpose_data = Channel.fromPath("${base_path}cellpose_models/*", type: 'any', checkIfExists: false)
+    def roinet_data = Channel.fromPath("${base_path}roinet/*", type: 'any', checkIfExists: false)
     
     // Set ophys_mount_sync_file - look for .h5 files in behavior subdirectory when using ophys_mount_url
     def ophys_mount_sync_file = params.ophys_mount_url ? 
@@ -127,6 +134,13 @@ workflow {
         motion_correction_input = ophys_data
     }
 
+    // TEMP (proj_19 converter validation): stop the run after the converter so
+    // its in-pipeline output can be inspected. Set STOP_AFTER_CONVERTER = false,
+    // or delete this guard and its matching closing brace below, to restore the
+    // full pipeline.
+    def STOP_AFTER_CONVERTER = true
+    if (!STOP_AFTER_CONVERTER) {
+
     if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
         motion_correction(
@@ -158,7 +172,8 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
+            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
+            cellpose_data.collect().ifEmpty([])
         )
 
         decrosstalk_processing_json = decrosstalk_roi_images.out.decrosstalk_processing_json
@@ -167,7 +182,8 @@ workflow {
 
         extraction(
             decrosstalk_roi_images.out.capsule_results.flatten(),
-            ophys_mount_jsons.collect()
+            ophys_mount_jsons.collect(),
+            cellpose_data.collect().ifEmpty([])
         )
 
     } else {
@@ -187,7 +203,8 @@ workflow {
 
         extraction(
             motion_correction.out.motion_results_all.collect(),
-            ophys_mount_jsons.collect()
+            ophys_mount_jsons.collect(),
+            cellpose_data.collect().ifEmpty([])
         )
     }
 
@@ -212,6 +229,7 @@ workflow {
         ophys_mount_jsons.collect(),
         classifier_data.collect(),
         extraction.out.capsule_results.flatten(),
+        roinet_data.collect().ifEmpty([]),
     )
 
     if (params.acquisition_data_type == "multiplane"){
@@ -331,13 +349,15 @@ workflow {
         all_processing_json.collect().ifEmpty([]),
         all_quality_control_json.collect().ifEmpty([])
     )
+
+    }  // end TEMP STOP_AFTER_CONVERTER guard
 }
 
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-9191145'
-	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:400f8b242439d735d0c2b2668af0e6cb"
+	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:8aac59726ae740860ecfbc5bf39133a4"
     publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
 
     cpus 16
@@ -370,7 +390,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout 1ae2373 --quiet
+    git -C capsule-repo checkout c483317 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -581,6 +601,7 @@ process decrosstalk_roi_images {
     path pophys_dir
     path motion_results
     path converter_files
+    path cellpose_data
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -608,6 +629,11 @@ process decrosstalk_roi_images {
     cp -r ${pophys_dir} capsule/data
     cp -r ${motion_results} capsule/data
     cp -r ${converter_files} capsule/data
+
+    # Read-only asset: linked at its stable /data path, never copied.
+    # The capsule wrapper verifies each file and its SHA-256 before
+    # constructing Cellpose.
+    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
 
     echo "[${task.tag}] cloning git repo..."
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
@@ -643,6 +669,7 @@ process extraction {
     input:
     path extraction_input
     path ophys_jsons
+    path cellpose_data
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -670,6 +697,11 @@ process extraction {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${extraction_input} capsule/data
     cp -r ${ophys_jsons} capsule/data
+
+    # Read-only asset: linked at its stable /data path, never copied.
+    # The capsule wrapper verifies each file and its SHA-256 before
+    # constructing Cellpose.
+    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
@@ -813,6 +845,7 @@ process classifier {
     path ophys_mount_jsons
 	path classifier_data
 	path extraction_results
+	path roinet_data
     
 	output:
 	path 'capsule/results/*/*/processing.json', emit: 'classifier_processing_json', optional: true
@@ -842,6 +875,7 @@ process classifier {
     cp -r ${extraction_results} capsule/data
 
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
+	ln -s "/tmp/data/roinet" "capsule/data/roinet" # id: 7e4bd8f4-8881-4541-94b4-d1ac714d4a07
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2013356.git" capsule-repo
