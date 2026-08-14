@@ -138,7 +138,7 @@ workflow {
     // its in-pipeline output can be inspected. Set STOP_AFTER_CONVERTER = false,
     // or delete this guard and its matching closing brace below, to restore the
     // full pipeline.
-    def STOP_AFTER_CONVERTER = true
+    def STOP_AFTER_CONVERTER = false
     if (!STOP_AFTER_CONVERTER) {
 
     if (params.acquisition_data_type == "multiplane"){
