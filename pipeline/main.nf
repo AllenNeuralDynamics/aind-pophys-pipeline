@@ -2,9 +2,152 @@
 
 nextflow.enable.dsl = 2
 
-import groovy.json.JsonSlurper
-
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
+
+def parse_key_value_file(path) {
+    def values = [:]
+    file(path).eachLine { raw_line ->
+        def line = raw_line.trim()
+        if (!line || line.startsWith('#')) {
+            return
+        }
+        def separator = line.indexOf('=')
+        if (separator <= 0) {
+            throw new IllegalArgumentException("Invalid manifest line: ${raw_line}")
+        }
+        def key = line.substring(0, separator).trim()
+        def value = line.substring(separator + 1).trim()
+        if (value.size() >= 2 && ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'")))) {
+            value = value.substring(1, value.size() - 1)
+        }
+        if (values.containsKey(key)) {
+            throw new IllegalArgumentException("Duplicate manifest key: ${key}")
+        }
+        values[key] = value
+    }
+    values
+}
+
+def validate_capsule_versions(versions) {
+    def stages = [
+        'CONVERTER',
+        'MOTION_CORRECTION',
+        'MOVIE_QC',
+        'DECROSSTALK_SPLIT',
+        'DECROSSTALK_ROI_IMAGES',
+        'EXTRACTION',
+        'DFF',
+        'OASIS',
+        'CLASSIFIER',
+        'NWB',
+        'AGGREGATOR'
+    ]
+    def sha_pattern = ~/^[0-9a-f]{40}$/
+    def required = []
+    stages.each { stage ->
+        required << "${stage}_CAPSULE_SOURCE_MODE"
+        required << "${stage}_IMAGE_CO"
+        def mode = versions["${stage}_CAPSULE_SOURCE_MODE"]
+        if (mode == 'git') {
+            required << "${stage}_CAPSULE_REPO"
+            required << "${stage}_CAPSULE_COMMIT"
+            required << "${stage}_LIBRARY_COMMIT"
+        } else if (mode == 'published') {
+            required << "${stage}_CAPSULE_ID"
+            required << "${stage}_REF"
+        } else {
+            throw new IllegalArgumentException(
+                "Unsupported ${stage}_CAPSULE_SOURCE_MODE: ${mode}; expected git or published"
+            )
+        }
+    }
+    def missing = required.findAll { key -> !versions[key] }
+    if (missing) {
+        throw new IllegalArgumentException("Missing capsule manifest keys: ${missing.join(', ')}")
+    }
+    stages.each { stage ->
+        if (versions["${stage}_CAPSULE_SOURCE_MODE"] == 'git') {
+            ['CAPSULE_COMMIT', 'LIBRARY_COMMIT'].each { suffix ->
+                def key = "${stage}_${suffix}"
+                if (!(versions[key] ==~ sha_pattern)) {
+                    throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
+                }
+            }
+        }
+        def capsule_id = versions["${stage}_CO_CAPSULE_ID"]
+        if (capsule_id && !versions["${stage}_IMAGE_CO"].contains(capsule_id)) {
+            throw new IllegalArgumentException(
+                "${stage}_IMAGE_CO does not contain ${stage}_CO_CAPSULE_ID"
+            )
+        }
+    }
+    versions
+}
+
+def parse_capsule_versions() {
+    def custom = file("${baseDir}/capsule_versions_custom.env")
+    def defaults = file("${baseDir}/capsule_versions.env")
+    def manifest = custom.exists() ? custom : defaults
+    if (!manifest.exists()) {
+        throw new IllegalArgumentException("Capsule manifest not found: ${manifest}")
+    }
+    println "Using capsule manifest: ${manifest}"
+    validate_capsule_versions(parse_key_value_file(manifest))
+}
+
+params.versions = parse_capsule_versions()
+
+def backend = params.backend ?: 'codeocean'
+if (!(backend in ['codeocean', 'local', 'slurm'])) {
+    throw new IllegalArgumentException(
+        "Unsupported backend: ${backend}; expected codeocean, local, or slurm"
+    )
+}
+def image_suffix = backend == 'codeocean' ? '_IMAGE_CO' : '_IMAGE_OFFCO'
+def registry_host = System.getenv('REGISTRY_HOST') ?: ''
+def image_stages = [
+    'CONVERTER',
+    'MOTION_CORRECTION',
+    'MOVIE_QC',
+    'DECROSSTALK_SPLIT',
+    'DECROSSTALK_ROI_IMAGES',
+    'EXTRACTION',
+    'DFF',
+    'OASIS',
+    'CLASSIFIER',
+    'NWB',
+    'AGGREGATOR'
+]
+params.stage_images = [:]
+image_stages.each { stage ->
+    def image_ref = params.versions["${stage}${image_suffix}"]
+    if (!image_ref) {
+        throw new IllegalArgumentException(
+            "No ${backend} image configured for ${stage}; add ${stage}${image_suffix}"
+        )
+    }
+    params.stage_images[stage] = backend == 'codeocean' && registry_host
+        ? "${registry_host}/${image_ref}"
+        : image_ref
+}
+
+def gitCloneFunction = '''
+clone_repo() {
+    local repo_url="$1"
+    local commit_hash="$2"
+
+    echo "cloning git repo: ${repo_url} (commit: ${commit_hash})..."
+    git clone "${repo_url}" capsule-repo
+    git -C capsule-repo -c core.fileMode=false checkout "${commit_hash}" --quiet
+    test -d capsule-repo/code || {
+        echo "capsule repository has no code/ directory: ${repo_url}" >&2
+        exit 1
+    }
+    mv capsule-repo/code capsule/code
+    rm -rf capsule-repo
+}
+'''
 
 // saveAs is invoked once per MATCH of each output glob, so a process declaring
 // 'capsule/results/*' gets one call per plane directory AND one per file sitting
@@ -57,7 +200,7 @@ workflow {
     def parameter_json = file("${base_path}pipeline_parameters.json")
 
     if (parameter_json.exists()) {
-        def jsonSlurper = new JsonSlurper()
+        def jsonSlurper = new groovy.json.JsonSlurper()
         def configData = jsonSlurper.parse(parameter_json)
         
         // Add each key-value pair from JSON to params
@@ -315,11 +458,9 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-9191145'
-	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:c69311411b5aa698661bdf928802df54"
+    def container_name = params.stage_images['CONVERTER']
+    container container_name
     publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
-
-    cpus 16
-    memory '128 GB'
 
     input:
     path ophys_mount, name: 'capsule/data'
@@ -347,10 +488,8 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout 9689ac9 --quiet
-    mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['CONVERTER_CAPSULE_REPO']}" "${params.versions['CONVERTER_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     echo "Processing: \$(basename $ophys_mount)"
@@ -366,11 +505,9 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:6c6d71cbe34c717f70ad0ce55cccdc27"
+    def container_name = params.stage_images['MOTION_CORRECTION']
+    container container_name
     publishDir "$RESULTS_PATH", saveAs: publishRelative
-
-    cpus 16
-    memory '128 GB'
 
     input:
     path ophys_mount
@@ -404,10 +541,8 @@ process motion_correction {
     cp -r ${pophys_dir} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
-    git -C capsule-repo checkout 3b43db3 --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['MOTION_CORRECTION_CAPSULE_REPO']}" "${params.versions['MOTION_CORRECTION_CAPSULE_COMMIT']}"
     
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -422,11 +557,9 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-5974042'
-	container "$REGISTRY_HOST/capsule/1e1ee66e-db39-4cc8-b760-08ed26f0c9e8:38b6fda9b131bbdf516706319abda1c5"
+    def container_name = params.stage_images['MOVIE_QC']
+    container container_name
     publishDir "$RESULTS_PATH", saveAs: publishRelative
-
-	cpus 16
-	memory '128 GB'
 
 
 	input:
@@ -445,6 +578,7 @@ process movie_qc {
 	#!/usr/bin/env bash
 	set -e
 
+	export CO_CAPSULE_ID=1e1ee66e-db39-4cc8-b760-08ed26f0c9e8
 	export CO_CPUS=16
 	export CO_MEMORY=137438953472
 
@@ -463,10 +597,8 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5974042.git" capsule-repo
-	git -C capsule-repo checkout 87e2229 --quiet
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['MOVIE_QC_CAPSULE_REPO']}" "${params.versions['MOVIE_QC_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -480,10 +612,8 @@ process movie_qc {
 // capsule - aind-ophys-decrosstalk-split-session-json
 process decrosstalk_split_json {
     tag 'capsule-4425001'
-    container "$REGISTRY_HOST/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
-
-    cpus 2
-    memory '16 GB'
+    def container_name = params.stage_images['DECROSSTALK_SPLIT']
+    container container_name
 
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
@@ -499,7 +629,7 @@ process decrosstalk_split_json {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462
+    export CO_CAPSULE_ID=${params.versions['DECROSSTALK_SPLIT_CO_CAPSULE_ID']}
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
@@ -513,7 +643,7 @@ process decrosstalk_split_json {
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v1.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4425001.git" capsule-repo
+    git clone --branch ${params.versions['DECROSSTALK_SPLIT_REF']} "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-${params.versions['DECROSSTALK_SPLIT_CAPSULE_ID']}.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -530,10 +660,8 @@ process decrosstalk_split_json {
 process decrosstalk_roi_images {
     tag 'capsule-4886340'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:c41d3d3c2f1a63a82af2df6d0cc850a4"
-
-    cpus 8
-    memory '64 GB'
+    def container_name = params.stage_images['DECROSSTALK_ROI_IMAGES']
+    container container_name
 
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
@@ -572,15 +700,8 @@ process decrosstalk_roi_images {
     cp -r ${converter_files} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 8f3ac28 --quiet
-	else
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 8f3ac28 --quiet
-	fi
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['DECROSSTALK_ROI_IMAGES_CAPSULE_REPO']}" "${params.versions['DECROSSTALK_ROI_IMAGES_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -595,10 +716,8 @@ process decrosstalk_roi_images {
 // capsule - aind-ophys-extraction
 process extraction {
     tag 'capsule-8797010'
-	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:f67939617ea77ac06fb014f568178153"
-
-    cpus 8
-    memory '64 GB'
+    def container_name = params.stage_images['EXTRACTION']
+    container container_name
 
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
@@ -634,10 +753,8 @@ process extraction {
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
-    git -C capsule-repo checkout 830ea13 --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['EXTRACTION_CAPSULE_REPO']}" "${params.versions['EXTRACTION_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -653,10 +770,8 @@ process extraction {
 process dff_capsule {
     tag 'capsule-7970481'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/909d4275-fc32-4b81-a3f3-f5bf6cedece1:6056c484354ca6d514ceb4383b1d1159"
-
-    cpus 4
-    memory '32 GB'
+    def container_name = params.stage_images['DFF']
+    container container_name
 
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
@@ -690,10 +805,8 @@ process dff_capsule {
     cp -r ${extraction_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7970481.git" capsule-repo
-    git -C capsule-repo checkout c80519f --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['DFF_CAPSULE_REPO']}" "${params.versions['DFF_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -708,10 +821,8 @@ process dff_capsule {
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
     tag 'capsule-3856982'
-	container "$REGISTRY_HOST/capsule/7b66080e-50f4-4c27-8345-86248812b00f:d9479e70906b327cd51957ca1e6a6ae5"
-
-    cpus 4
-    memory '32 GB'
+    def container_name = params.stage_images['OASIS']
+    container container_name
 
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
@@ -745,10 +856,8 @@ process oasis_event_detection {
     cp -r ${dff_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3856982.git" capsule-repo
-    git -C capsule-repo checkout 79d9a25 --quiet
-	mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['OASIS_CAPSULE_REPO']}" "${params.versions['OASIS_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -762,12 +871,8 @@ process oasis_event_detection {
 // capsule - aind-ophys-classifier
 process classifier {
 	tag 'capsule-2013356'
-	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:df9afb564627f3caab82fa3948d8fad4"
-
-	cpus 16
-	memory '60 GB'
-	accelerator 1
-	label 'gpu'
+    def container_name = params.stage_images['CLASSIFIER']
+    container container_name
 
 	publishDir "$RESULTS_PATH", saveAs: publishRelative
 
@@ -806,10 +911,8 @@ process classifier {
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2013356.git" capsule-repo
-	git -C capsule-repo checkout bc1ab41 --quiet
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['CLASSIFIER_CAPSULE_REPO']}" "${params.versions['CLASSIFIER_CAPSULE_COMMIT']}"
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
@@ -824,10 +927,8 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-8338960'
-	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:ff457277a6bfa62d68328bc7e92b3884"
-
-	cpus 4
-	memory '32 GB'
+    def container_name = params.stage_images['NWB']
+    container container_name
 
 	publishDir "$RESULTS_PATH", saveAs: publishRelative
 
@@ -886,10 +987,8 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
-	git -C capsule-repo checkout 350796a --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['NWB_CAPSULE_REPO']}" "${params.versions['NWB_CAPSULE_COMMIT']}"
 
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
@@ -904,13 +1003,11 @@ process ophys_nwb {
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-8324994'
-	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v4"
+    def container_name = params.stage_images['AGGREGATOR']
+    container container_name
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
-
-    cpus 2
-    memory '16 GB'
 
     // This task's processing.json / quality_control.json are the run-level
     // documents, and they sit directly under capsule/results/, so the shared
@@ -930,7 +1027,7 @@ process pipeline_processing_metadata_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=22261566-0b4f-42aa-bcaa-58efa55bf653
+    export CO_CAPSULE_ID=${params.versions['AGGREGATOR_CO_CAPSULE_ID']}
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
@@ -958,7 +1055,7 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v4.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
+    git clone --branch ${params.versions['AGGREGATOR_REF']} "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-${params.versions['AGGREGATOR_CAPSULE_ID']}.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 

@@ -1,4 +1,11 @@
 /data/
 
+# Local Nextflow state and backend overrides
+pipeline/capsule_versions_custom.env
+pipeline/.nextflow/
+pipeline/.nextflow.log*
+pipeline/work/
+pipeline/results/
+
 # PyCharm folder
 .idea/
