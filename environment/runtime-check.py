@@ -35,6 +35,7 @@ def main():
     direct = json.loads(dist.read_text("direct_url.json"))
     if direct.get("dir_info", {}).get("editable") or not direct["url"].endswith(wheel["wheel"]):
         raise ValueError("Processing library must be installed from the noneditable wheel")
+    stage = source["stage"]
     entrypoint = ENTRYPOINTS[source["stage"]]
     module = importlib.import_module(entrypoint[0])
     if not callable(getattr(module, entrypoint[1], None)):

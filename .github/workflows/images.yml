@@ -9,8 +9,8 @@ on:
         default: DECROSSTALK_SPLIT
         type: string
       publish:
-        description: Publish candidate tags to a pre-created private GHCR package
-          (never promotes production pins)
+        description: Publish candidate tags to GHCR (first publish is private;
+          never promotes production pins)
         default: false
         type: boolean
 

@@ -231,8 +231,8 @@ def validate():
                     "visibility": row[3], "python": PYTHON[row[0]]} for row in rows}
 
 
-def require_private_package(image):
-    """Require a pre-created private GHCR package before any push."""
+def require_private_package(image, allow_missing=False):
+    """Check GHCR visibility before or after publishing a candidate."""
     match = re.fullmatch(r"ghcr\.io/([^/]+)/([a-z0-9-]+)", image)
     if not match or match[1].lower() != IMAGE_ORG.lower():
         raise ValueError(f"Invalid GHCR candidate image: {image}")
@@ -241,17 +241,24 @@ def require_private_package(image):
         [
             "gh", "api",
             f"orgs/{IMAGE_ORG}/packages/container/{package}",
+            "--include",
             "--jq", ".visibility",
         ],
         capture_output=True,
         text=True,
     )
-    if result.returncode != 0:
+    status = re.search(r"^HTTP/\S+\s+(\d{3})\b", result.stdout, re.MULTILINE)
+    if status is None:
+        raise ValueError(f"{image}: unable to determine GHCR package status")
+    status_code = int(status[1])
+    if status_code == 404 and allow_missing:
+        return "absent; first GHCR publish defaults to private"
+    if result.returncode != 0 or status_code != 200:
         raise ValueError(
-            f"{image}: package must be pre-created as private and accessible "
-            "to this workflow before publishing"
+            f"{image}: unable to verify private GHCR package (HTTP {status_code})"
         )
-    if result.stdout.strip() != "private":
+    visibility = result.stdout.strip().splitlines()[-1]
+    if visibility != "private":
         raise ValueError(f"{image}: refusing to publish to a non-private package")
     return "private"
 
@@ -422,7 +429,7 @@ def build(args, rows):
         for stage in stages:
             if rows[stage]["visibility"] != "private":
                 raise ValueError(f"{stage}: publishing requires private visibility")
-            require_private_package(rows[stage]["image"])
+            require_private_package(rows[stage]["image"], allow_missing=True)
     for stage in stages:
         preflight(stage)
     subprocess.run(["docker", "buildx", "version"], check=True)
@@ -449,6 +456,8 @@ def build(args, rows):
             "--output", f"type=oci,dest={output / 'image.tar'}"
         ]
         subprocess.run(command, check=True)
+        if args.publish:
+            require_private_package(image)
         metadata = json.loads((output / "metadata.json").read_text())
         report = [sys.executable, str(ENVIRONMENT / "image-report.py"), "--image", image,
                   "--digest", metadata["containerimage.digest"], "--stage", stage,
@@ -475,6 +484,7 @@ def main():
     ready.add_argument("stage", choices=STAGES)
     private = commands.add_parser("private-check")
     private.add_argument("image")
+    private.add_argument("--allow-missing", action="store_true")
     builder = commands.add_parser("build")
     builder.add_argument("stages")
     builder.add_argument("--tag", required=True)
@@ -483,7 +493,10 @@ def main():
     if args.command == "capture":
         capture(args)
     elif args.command == "private-check":
-        print(json.dumps({"image": args.image, "visibility": require_private_package(args.image)}))
+        print(json.dumps({
+            "image": args.image,
+            "visibility": require_private_package(args.image, args.allow_missing),
+        }))
     else:
         rows = validate()
         if args.command == "matrix":

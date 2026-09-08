@@ -31,19 +31,31 @@ class ImageCandidateTests(unittest.TestCase):
         self.assertEqual({row["visibility"] for row in rows.values()}, {"private"})
 
     def test_private_package_guard_rejects_missing_or_public_packages(self):
-        missing = SimpleNamespace(returncode=1, stdout="", stderr="")
+        missing = SimpleNamespace(
+            returncode=1, stdout="HTTP/2.0 404 Not Found\n\n{}\n", stderr=""
+        )
         with patch.object(candidates.subprocess, "run", return_value=missing):
-            with self.assertRaisesRegex(ValueError, "pre-created as private"):
+            with self.assertRaisesRegex(ValueError, "HTTP 404"):
                 candidates.require_private_package(
                     "ghcr.io/allenneuraldynamics/pophys-dff"
                 )
-        public = SimpleNamespace(returncode=0, stdout="public\n", stderr="")
+            self.assertIn(
+                "absent",
+                candidates.require_private_package(
+                    "ghcr.io/allenneuraldynamics/pophys-dff", allow_missing=True
+                ),
+            )
+        public = SimpleNamespace(
+            returncode=0, stdout="HTTP/2.0 200 OK\n\npublic\n", stderr=""
+        )
         with patch.object(candidates.subprocess, "run", return_value=public):
             with self.assertRaisesRegex(ValueError, "non-private"):
                 candidates.require_private_package(
                     "ghcr.io/allenneuraldynamics/pophys-dff"
                 )
-        private = SimpleNamespace(returncode=0, stdout="private\n", stderr="")
+        private = SimpleNamespace(
+            returncode=0, stdout="HTTP/2.0 200 OK\n\nprivate\n", stderr=""
+        )
         with patch.object(candidates.subprocess, "run", return_value=private):
             self.assertEqual(
                 candidates.require_private_package(
