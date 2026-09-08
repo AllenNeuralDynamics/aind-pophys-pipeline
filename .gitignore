@@ -6,6 +6,7 @@ pipeline/.nextflow/
 pipeline/.nextflow.log*
 pipeline/work/
 pipeline/results/
+__pycache__/
 
 # PyCharm folder
 .idea/

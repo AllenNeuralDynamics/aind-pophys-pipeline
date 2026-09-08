@@ -1,0 +1,24 @@
+# GHCR build of the aind-ophys-extraction environment, for off-Code-Ocean backends.
+#
+# Derived from the capsule's environment/Dockerfile at the manifest-pinned
+# commit (EXTRACTION_CAPSULE_COMMIT=621b50b..., library d5b8b8c). Transform vs the
+# CO Dockerfile:
+#   - FROM points at the PUBLIC Code Ocean base registry (registry.codeocean.com),
+#     verified anonymously pullable, instead of the org registry $REGISTRY_HOST.
+#   - CO's git-ask-pass / --mount=type=secret token plumbing is dropped: every git
+#     install here is a public repo, so no credential is needed off-CO.
+# Installer pins are preserved; a fresh dependency resolution is not a
+# guarantee of byte-identical reproduction of the historical CO image.
+ARG REGISTRY_HOST=registry.codeocean.com
+FROM $REGISTRY_HOST/codeocean/mambaforge3:23.1.0-4-python3.10.12-ubuntu22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV CAIMAN_TEMP=/scratch
+
+RUN mamba install -y \
+        caiman==1.10.3 \
+    && mamba clean -ya
+
+RUN pip3 install -U --no-cache-dir \
+    -e git+https://github.com/AllenNeuralDynamics/aind-ophys-extraction-library.git@d5b8b8c#egg=aind-ophys-extraction-library

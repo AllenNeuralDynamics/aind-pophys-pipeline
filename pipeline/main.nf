@@ -56,9 +56,12 @@ def validate_capsule_versions(versions) {
         } else if (mode == 'published') {
             required << "${stage}_CAPSULE_ID"
             required << "${stage}_REF"
+        } else if (mode == 'co_git') {
+            required << "${stage}_CAPSULE_ID"
+            required << "${stage}_CAPSULE_COMMIT"
         } else {
             throw new IllegalArgumentException(
-                "Unsupported ${stage}_CAPSULE_SOURCE_MODE: ${mode}; expected git or published"
+                "Unsupported ${stage}_CAPSULE_SOURCE_MODE: ${mode}; expected git, co_git, or published"
             )
         }
     }
@@ -74,6 +77,11 @@ def validate_capsule_versions(versions) {
                     throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
                 }
             }
+        } else if (versions["${stage}_CAPSULE_SOURCE_MODE"] == 'co_git' &&
+                !(versions["${stage}_CAPSULE_COMMIT"] ==~ /^[0-9a-f]{7,40}$/)) {
+            throw new IllegalArgumentException(
+                "${stage}_CAPSULE_COMMIT must be a 7-40 character lowercase SHA"
+            )
         }
         def capsule_id = versions["${stage}_CO_CAPSULE_ID"]
         if (capsule_id && !versions["${stage}_IMAGE_CO"].contains(capsule_id)) {
@@ -223,6 +231,8 @@ workflow {
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
+    def cellpose_data = Channel.fromPath("${base_path}cellpose_models/*", type: 'any', checkIfExists: false)
+    def roinet_data = Channel.fromPath("${base_path}roinet/*", type: 'any', checkIfExists: false)
     
     // Set ophys_mount_sync_file - look for .h5 files in behavior subdirectory when using ophys_mount_url
     def ophys_mount_sync_file = params.ophys_mount_url ? 
@@ -276,6 +286,7 @@ workflow {
             motion_correction_input.flatten(),
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
+            converter_processing_json.flatten().collect().ifEmpty([]),
         )
         z_stacks = converter_capsule.out.local_stacks
 
@@ -300,7 +311,8 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect()
+            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
+            cellpose_data.collect().ifEmpty([])
         )
 
         decrosstalk_processing_json = decrosstalk_roi_images.out.decrosstalk_processing_json
@@ -309,7 +321,8 @@ workflow {
 
         extraction(
             decrosstalk_roi_images.out.capsule_results.flatten(),
-            ophys_mount_jsons.collect()
+            ophys_mount_jsons.collect(),
+            cellpose_data.collect().ifEmpty([])
         )
 
     } else {
@@ -317,7 +330,8 @@ workflow {
         motion_correction(
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect()
+            ophys_mount_pophys_directory.collect(),
+            converter_processing_json.flatten().collect().ifEmpty([]),
         )
 
         movie_qc(
@@ -328,7 +342,8 @@ workflow {
 
         extraction(
             motion_correction.out.motion_results_all.collect(),
-            ophys_mount_jsons.collect()
+            ophys_mount_jsons.collect(),
+            cellpose_data.collect().ifEmpty([])
         )
     }
 
@@ -353,6 +368,7 @@ workflow {
         ophys_mount_jsons.collect(),
         classifier_data.collect(),
         extraction.out.capsule_results.flatten(),
+        roinet_data.collect().ifEmpty([]),
     )
 
     if (params.acquisition_data_type == "multiplane"){
@@ -389,6 +405,18 @@ workflow {
     // predicate is always true and the filter silently passes everything.
     // That cost a full run. flatten() first, then filter, then re-collect.
     def metadata_json = ['processing.json', 'quality_control.json']
+    // Provenance travels separately from the flat scientific inputs to avoid
+    // collisions between identically named per-plane documents.
+    def nwb_upstream_processing_json = motion_correction.out.motion_processing_json
+        .mix(decrosstalk_processing_json)
+        .mix(extraction.out.extraction_processing_json)
+        .mix(dff_capsule.out.dff_processing_json)
+        .mix(classifier.out.classifier_processing_json)
+        .mix(oasis_event_detection.out.oasis_processing_json)
+        .flatten()
+        .collect()
+        .ifEmpty([])
+
     ophys_nwb(
         nwb_schemas.collect(),
         ophys_mount_jsons.collect(),
@@ -399,7 +427,8 @@ workflow {
         extraction.out.extraction_results_all.flatten().filter { !(it.name in metadata_json) }.collect(),
         classifier.out.classifer_h5.collect(),
         dff_capsule.out.dff_results_all.collect(),
-        oasis_event_detection.out.events_h5.collect()
+        oasis_event_detection.out.events_h5.collect(),
+        nwb_upstream_processing_json
     )   
 
     // Aggregate every capsule's v2 metadata into the run-level
@@ -514,6 +543,8 @@ process motion_correction {
     path ophys_jsons
     path pophys_dir
 
+    path(upstream_processing_json, stageAs: 'processing_??/*')
+
     output:
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
     path 'capsule/results/*/motion_correction/*transform.csv', emit: 'motion_results_csv'
@@ -539,6 +570,16 @@ process motion_correction {
     cp -r ${ophys_mount} capsule/data
     cp -r ${ophys_jsons} capsule/data
     cp -r ${pophys_dir} capsule/data
+
+    stage_nested() {
+        for f in "\$@"; do
+            [ -e "\$f" ] || continue
+            d="capsule/data/\$(dirname "\$f")"
+            mkdir -p "\$d"
+            cp -r "\$f" "\$d/"
+        done
+    }
+    stage_nested ${upstream_processing_json}
 
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -671,6 +712,7 @@ process decrosstalk_roi_images {
     path pophys_dir
     path motion_results
     path converter_files
+    path cellpose_data
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -699,6 +741,8 @@ process decrosstalk_roi_images {
     cp -r ${motion_results} capsule/data
     cp -r ${converter_files} capsule/data
 
+    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
+
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
     clone_repo "${params.versions['DECROSSTALK_ROI_IMAGES_CAPSULE_REPO']}" "${params.versions['DECROSSTALK_ROI_IMAGES_CAPSULE_COMMIT']}"
@@ -724,6 +768,7 @@ process extraction {
     input:
     path extraction_input
     path ophys_jsons
+    path cellpose_data
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -751,6 +796,8 @@ process extraction {
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${extraction_input} capsule/data
     cp -r ${ophys_jsons} capsule/data
+
+    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -880,6 +927,7 @@ process classifier {
     path ophys_mount_jsons
 	path classifier_data
 	path extraction_results
+	path roinet_data
     
 	output:
 	path 'capsule/results/*/*/processing.json', emit: 'classifier_processing_json', optional: true
@@ -909,6 +957,7 @@ process classifier {
     cp -r ${extraction_results} capsule/data
 
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
+	ln -s "/tmp/data/roinet" "capsule/data/roinet"
 
 	echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -943,6 +992,7 @@ process ophys_nwb {
 	path classifer_h5
 	path dff_results
 	path event_detection_results
+    path(upstream_processing_json, stageAs: 'processing_??/*')
 
 	output:
 	path 'capsule/results/*'
@@ -984,6 +1034,18 @@ process ophys_nwb {
     cp -r ${dff_results} capsule/data/processed
     cp -r ${event_detection_results} capsule/data/processed
 
+    # NWB searches data/processed, not data, for upstream provenance.
+    stage_nested() {
+        for f in "\$@"; do
+            [ -e "\$f" ] || continue
+            d="capsule/data/processed/\$(dirname "\$f")"
+            mkdir -p "\$d"
+            cp -r "\$f" "\$d/"
+        done
+    }
+    stage_nested ${upstream_processing_json}
+    echo "[${task.tag}] staged \$(find capsule/data/processed -name processing.json | wc -l) upstream processing.json"
+
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
@@ -1002,7 +1064,7 @@ process ophys_nwb {
 
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-8324994'
+    tag 'capsule-7054171'
     def container_name = params.stage_images['AGGREGATOR']
     container container_name
 
@@ -1055,14 +1117,15 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch ${params.versions['AGGREGATOR_REF']} "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-${params.versions['AGGREGATOR_CAPSULE_ID']}.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-${params.versions['AGGREGATOR_CAPSULE_ID']}.git" capsule-repo
+    git -C capsule-repo checkout ${params.versions['AGGREGATOR_CAPSULE_COMMIT']} --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
+    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} ${params.containsKey('upgrade_legacy_metadata') ? '--upgrade_legacy_metadata ' + params.upgrade_legacy_metadata : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
     echo "[${task.tag}] completed!"
     """
 }
