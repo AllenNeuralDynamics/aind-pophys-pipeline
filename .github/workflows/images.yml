@@ -1,0 +1,70 @@
+name: Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      stages:
+        description: "all, one stage, or comma-separated stages (e.g. DFF,OASIS)"
+        required: true
+        default: DECROSSTALK_SPLIT
+        type: string
+      publish:
+        description: Publish candidate tags to a pre-created private GHCR package
+          (never promotes production pins)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  select:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - id: select
+        env:
+          STAGES: ${{ inputs.stages }}
+        run: |
+          python -m unittest tests.test_pipeline_contract tests.test_image_candidates
+          echo "matrix=$(python environment/candidates.py matrix "$STAGES")" >> "$GITHUB_OUTPUT"
+
+  build:
+    if: ${{ !inputs.publish }}
+    needs: select
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    permissions:
+      contents: read
+    uses: ./.github/workflows/image-candidate.yml
+    with:
+      stage: ${{ matrix.stage }}
+      publish: false
+    secrets:
+      library-token: ${{ secrets.SERVICE_TOKEN }}
+
+  publish:
+    if: ${{ inputs.publish }}
+    needs: select
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/image-candidate.yml
+    with:
+      stage: ${{ matrix.stage }}
+      publish: true
+    secrets:
+      library-token: ${{ secrets.SERVICE_TOKEN }}

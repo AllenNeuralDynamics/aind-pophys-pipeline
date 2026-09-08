@@ -1,0 +1,28 @@
+{
+  "build_requires": [
+    "setuptools"
+  ],
+  "capsule_ref": "cbd08485bea7a0939249583183352f86c663e9c0",
+  "capsule_source_mode": "git",
+  "declared_dependencies": [
+    "aind-data-schema==2.9.0",
+    "aind-data-schema-models==6.2.0",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
+    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
+    "roicat[all]==1.7.3",
+    "sparse==0.18.0",
+    "h5py==3.16.0",
+    "matplotlib==3.10.8",
+    "numpy==2.4.4",
+    "pillow==12.1.1",
+    "pydantic-settings==2.14.2",
+    "pytz==2026.3.post1"
+  ],
+  "distribution": "aind-ophys-classifier-library",
+  "library_commit": "8f278e0faf39921b0c8afbf581cc31a06aa57af4",
+  "library_repo": "aind-ophys-classifier-library",
+  "pyproject_sha256": "0c6919b67dc54687473ebfde99a1202be1d0d89c3aff63c3bcf4bc9f42b5ab1d",
+  "python": "3.12",
+  "requires_python": ">=3.11,<3.13",
+  "stage": "CLASSIFIER"
+}

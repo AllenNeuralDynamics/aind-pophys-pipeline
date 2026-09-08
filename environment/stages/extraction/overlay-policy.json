@@ -1,0 +1,31 @@
+{
+  "build_log_sha256": "e96be5d44a02ad5a474fd5ec56d1bc2d4f509bdce7a372f4a2c2e845ad467747",
+  "source_library_commit": "d5b8b8ce6648b4772d5326d551a6ca89fa20e5bc",
+  "suite2p_commit": "ae0e9313b881f1d4bb51d7461f4796532a76e8aa",
+  "replacements": {
+    "h5py": {"before": "3.9.0", "after": "3.11.0"},
+    "matplotlib": {"before": "3.8.0", "after": "3.10.9"},
+    "python-json-logger": {"before": "2.0.7", "after": "4.1.0"},
+    "pyyaml": {"before": "6.0", "after": "6.0.3"},
+    "typing-extensions": {"before": "4.7.1", "after": "4.16.0"}
+  },
+  "protected": {
+    "caiman": "1.10.3",
+    "numpy": "1.26.4",
+    "scipy": "1.14.1",
+    "scikit-image": "0.24.0",
+    "opencv-python": "4.7.0"
+  },
+  "conda_only": {
+    "opencv-python": {"conda_package": "py-opencv", "version": "4.7.0"}
+  },
+  "shared_namespace": {
+    "module": "cv2",
+    "conda_distribution": "opencv-python",
+    "conda_version": "4.7.0",
+    "pip_distribution": "opencv-python-headless",
+    "pip_version": "4.11.0.86",
+    "expected_import_version": "4.11.0",
+    "risk": "The historical pip step overlays cv2 files owned by conda under a different distribution name. This is not namespace-safe; the effective import must be measured in the built candidate."
+  }
+}

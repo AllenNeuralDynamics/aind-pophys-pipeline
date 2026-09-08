@@ -1,0 +1,27 @@
+{
+  "base_distribution": "Debian trixie",
+  "base_image": "mambaorg/micromamba:2.3.2@sha256:955819619f303e2aa1dc1ba89beefe7f326a378b3d0782a4a0d28b1cf11b68b6",
+  "build_log_sha256": "e96be5d44a02ad5a474fd5ec56d1bc2d4f509bdce7a372f4a2c2e845ad467747",
+  "channels": [
+    "conda-forge"
+  ],
+  "conda_lock_sha256": "13e0fc9662184f4d84f1b52c396c8ded712607378c496e3c92ee9224660aa321",
+  "counts": {
+    "candidate": 419,
+    "failed": 0,
+    "parse_failure": 0,
+    "processed": 419,
+    "skipped": 0
+  },
+  "historical_transaction_packages": 180,
+  "packages_sha256": "27f919e59dec0fc82caa6ec3f959e4aba0e85502ea2c6bf01c97b689737d50c7",
+  "platform": "linux-64",
+  "solver": "2.3.2",
+  "solver_problems": [],
+  "spec_sha256": "1cd04cbf8cf968f9a35c984657e4f3f114d3d4359a639de1e5d0071132ed6e68",
+  "success": true,
+  "virtual_packages": {
+    "__glibc": "2.41",
+    "__linux": "5.15"
+  }
+}

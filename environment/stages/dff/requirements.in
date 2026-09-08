@@ -1,0 +1,12 @@
+aind-ophys-utils==0.1.0
+joblib==1.5.3
+aind-data-schema==2.9.0
+aind-data-schema-models==6.2.0
+aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10
+log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e8b6f4228d0dd37e867b52de0286fffccb#subdirectory=python
+h5py
+matplotlib
+numpy
+scipy
+pydantic>=2.7
+pydantic-settings>=2.8.1

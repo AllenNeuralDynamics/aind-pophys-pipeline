@@ -1,20 +1,15 @@
 # syntax=docker/dockerfile:1
-# Conda pre-pip builds and the reviewed pip overlay are locked separately.
-FROM mambaorg/micromamba:2.3.2@sha256:955819619f303e2aa1dc1ba89beefe7f326a378b3d0782a4a0d28b1cf11b68b6 AS runtime-base
-USER root
-ENV CAIMAN_TEMP=/scratch \
-    PATH=/opt/conda/bin:$PATH \
-    MPLBACKEND=Agg \
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime-base
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    MPLBACKEND=Agg
 RUN --mount=type=cache,target=/var/lib/apt/lists \
     --mount=type=cache,target=/var/cache/apt \
     apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates git time libgomp1 libglib2.0-0t64 libgl1 \
+    bash ca-certificates git time libgomp1 libglib2.0-0 \
     && mkdir -p /opt/image
-COPY stages/extraction/conda-linux-64.lock /opt/conda-linux-64.lock
-RUN --mount=type=cache,target=/opt/conda/pkgs \
-    micromamba install --yes --always-copy --name base --file /opt/conda-linux-64.lock
 
 FROM runtime-base AS dependencies
 RUN --mount=type=cache,target=/var/lib/apt/lists \
@@ -23,25 +18,22 @@ RUN --mount=type=cache,target=/var/lib/apt/lists \
 COPY builder-requirements.txt /opt/builder-requirements.txt
 RUN python -m venv /opt/build && /opt/build/bin/pip install --no-cache-dir -r /opt/builder-requirements.txt
 COPY --chmod=0755 git-askpass.sh /opt/git-askpass.sh
-COPY stages/extraction/requirements.lock /opt/requirements.lock
-COPY stages/extraction/build.constraints /opt/build.constraints
-COPY stages/extraction/overlay-policy.json /opt/image/overlay-policy.json
-COPY conda-overlay-check.py /opt/image/conda-overlay-check.py
+ARG STAGE_DIR
+COPY stages/${STAGE_DIR}/requirements.lock /opt/requirements.lock
+COPY stages/${STAGE_DIR}/build.constraints /opt/build.constraints
 COPY fetch_sources.py /opt/fetch_sources.py
-RUN python /opt/image/conda-overlay-check.py prepare \
-    --policy /opt/image/overlay-policy.json --lock /opt/requirements.lock --output /opt/pip-overlay.lock
 RUN --mount=type=secret,id=github_token \
     GIT_ASKPASS=/opt/git-askpass.sh GIT_TERMINAL_PROMPT=0 \
     /opt/build/bin/python /opt/fetch_sources.py \
-    --requirements /opt/pip-overlay.lock \
+    --requirements /opt/requirements.lock \
     --directory /sources \
-    --output /opt/pip-overlay.local.lock
+    --output /opt/requirements.local.lock
 RUN /opt/build/bin/pip wheel --no-cache-dir --no-deps --build-constraint /opt/build.constraints \
-    -r /opt/pip-overlay.local.lock -w /wheels
+    -r /opt/requirements.local.lock -w /wheels
 
 FROM dependencies AS library
 COPY build-library.py fetch_library.py /opt/
-COPY stages/extraction/source.json /opt/image/source.json
+COPY stages/${STAGE_DIR}/source.json /opt/image/source.json
 RUN --mount=type=secret,id=github_token \
     GIT_ASKPASS=/opt/git-askpass.sh GIT_TERMINAL_PROMPT=0 \
     /opt/build/bin/python /opt/fetch_library.py \
@@ -50,11 +42,9 @@ RUN --mount=type=secret,id=github_token \
 RUN /opt/build/bin/python /opt/build-library.py --source /library-source
 
 FROM runtime-base AS runtime
-COPY runtime-check.py conda-overlay-check.py /opt/image/
-COPY stages/extraction/overlay-policy.json /opt/image/overlay-policy.json
+COPY runtime-check.py /opt/image/runtime-check.py
 RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
-    python /opt/image/conda-overlay-check.py install --policy /opt/image/overlay-policy.json \
-    && python /opt/image/conda-overlay-check.py verify --policy /opt/image/overlay-policy.json
+    python -m pip install --no-cache-dir --no-index --no-deps /wheels/*.whl
 COPY --from=library /opt/image/source.json /opt/image/source.json
 COPY --from=library /opt/image/library-wheel.json /opt/image/library-wheel.json
 RUN --mount=type=bind,from=library,source=/library,target=/library \
@@ -64,5 +54,4 @@ RUN --mount=type=bind,from=library,source=/library,target=/library \
     && python /opt/image/runtime-check.py \
     && python -m pip list --format=json > /opt/image/packages.json \
     && rm -rf /data /results /scratch
-ENTRYPOINT []
 CMD ["bash"]

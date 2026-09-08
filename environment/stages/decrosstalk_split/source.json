@@ -1,0 +1,13 @@
+{
+  "build_requires": [],
+  "capsule_ref": "v1.0",
+  "capsule_source_mode": "published",
+  "declared_dependencies": [],
+  "distribution": null,
+  "library_commit": null,
+  "library_repo": null,
+  "pyproject_sha256": null,
+  "python": "3.12",
+  "requires_python": null,
+  "stage": "DECROSSTALK_SPLIT"
+}

@@ -1,0 +1,100 @@
+name: Build one image candidate
+
+on:
+  workflow_call:
+    inputs:
+      stage:
+        required: true
+        type: string
+      publish:
+        required: true
+        type: boolean
+    secrets:
+      library-token:
+        required: false
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - id: candidate
+        env:
+          STAGE: ${{ inputs.stage }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess
+          stage = os.environ["STAGE"]
+          row = json.loads(subprocess.check_output([
+              "python", "environment/candidates.py", "matrix", stage
+          ]))["include"][0]
+          tag = f"candidate-{os.environ['GITHUB_SHA'][:12]}-{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              for key, value in {**row, "stage_dir": stage.lower(), "tag": tag}.items():
+                  print(f"{key}={value}", file=output)
+          PY
+          mkdir -p .image-work
+      - name: Require a reviewed dependency lock
+        env:
+          STAGE: ${{ inputs.stage }}
+        run: python environment/candidates.py preflight "$STAGE"
+      - name: Require a pre-created private GHCR package
+        if: ${{ inputs.publish }}
+        env:
+          IMAGE: ${{ steps.candidate.outputs.image }}
+          GH_TOKEN: ${{ github.token }}
+        run: python environment/candidates.py private-check "$IMAGE"
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - if: ${{ inputs.publish }}
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: environment
+          file: environment/${{ steps.candidate.outputs.recipe }}
+          platforms: linux/amd64
+          push: ${{ inputs.publish }}
+          outputs: ${{ !inputs.publish && 'type=oci,dest=.image-work/image.tar' || '' }}
+          provenance: false
+          tags: ${{ steps.candidate.outputs.image }}:${{ steps.candidate.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            STAGE_DIR=${{ steps.candidate.outputs.stage_dir }}
+            PYTHON_VERSION=${{ steps.candidate.outputs.python }}
+          secrets: |
+            github_token=${{ secrets.library-token }}
+      - name: Record digest and size
+        env:
+          IMAGE: ${{ steps.candidate.outputs.image }}:${{ steps.candidate.outputs.tag }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          STAGE: ${{ inputs.stage }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          if [ "$PUBLISH" = true ]; then
+            mode=(--published)
+          else
+            mode=(--archive .image-work/image.tar)
+          fi
+          python environment/image-report.py --image "$IMAGE" --digest "$DIGEST" \
+            --stage "$STAGE" --output .image-work/report.json "${mode[@]}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: candidate-${{ inputs.stage }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .image-work/report.json
+            environment/stages/${{ steps.candidate.outputs.stage_dir }}/source.json
+            environment/stages/${{ steps.candidate.outputs.stage_dir }}/lock-status.json
+          if-no-files-found: warn

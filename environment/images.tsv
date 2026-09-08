@@ -1,19 +1,12 @@
-# Off-CO GHCR image build map. One row per pipeline stage.
-# Columns (tab-separated):
-#   stage          manifest key prefix in capsule_versions.env
-#   dockerfile     file in this dir
-#   ghcr_repo      ghcr.io/<org>/<name> (no tag)
-#   tag            capsule short SHA label (a tag is not a content digest)
-#   base_public    yes = CO base is anon-public on registry.codeocean.com; no = needs a public re-base first
-#
-# stage	dockerfile	ghcr_repo	tag	base_public
-EXTRACTION	Dockerfile.extraction	ghcr.io/allenneuraldynamics/aind-ophys-extraction	621b50b	yes
-# --- remaining public-base stages (author Dockerfile.<name> from each pinned commit, same transform) ---
-# CONVERTER	Dockerfile.converter	ghcr.io/allenneuraldynamics/aind-pophys-converter-capsule	16f5f9a	yes  (mambaforge3 3.12)
-# DFF	Dockerfile.dff	ghcr.io/allenneuraldynamics/aind-ophys-dff	389a1d3	yes  (mambaforge3 3.12)
-# NWB	Dockerfile.nwb	ghcr.io/allenneuraldynamics/aind-ophys-nwb	8fc11b9	yes  (mambaforge3 3.12)
-# CLASSIFIER	Dockerfile.classifier	ghcr.io/allenneuraldynamics/aind-ophys-classifier	cbd0848	yes  (pytorch cuda12.4, GPU)
-# MOTION_CORRECTION	Dockerfile.motion_correction	ghcr.io/allenneuraldynamics/aind-ophys-motion-correction	85ba3f2	yes  (mambaforge3 3.10)
-# MOVIE_QC	Dockerfile.movie_qc	ghcr.io/allenneuraldynamics/aind-ophys-movie-qc	1cfab45	yes  (mambaforge3 3.12)
-# OASIS	Dockerfile.oasis	ghcr.io/allenneuraldynamics/aind-ophys-oasis-event-detection	c33d680	yes  (mambaforge3 3.12)
-# DECROSSTALK_ROI_IMAGES	Dockerfile.decrosstalk_roi_images	ghcr.io/allenneuraldynamics/aind-ophys-decrosstalk-roi-images	e7e0cdb	yes  (mambaforge3 3.10)
+# stage	dockerfile	ghcr_repo (candidate namespace; never a production pin)	visibility
+CONVERTER	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-converter	private
+MOTION_CORRECTION	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-motion-correction	private
+MOVIE_QC	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-movie-qc	private
+DECROSSTALK_SPLIT	Dockerfile.splitter	ghcr.io/allenneuraldynamics/pophys-decrosstalk-split	private
+DECROSSTALK_ROI_IMAGES	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-decrosstalk-roi-images	private
+EXTRACTION	Dockerfile.extraction	ghcr.io/allenneuraldynamics/pophys-extraction	private
+DFF	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-dff	private
+OASIS	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-oasis	private
+CLASSIFIER	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-classifier	private
+NWB	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-nwb	private
+AGGREGATOR	Dockerfile.python	ghcr.io/allenneuraldynamics/pophys-aggregator	private

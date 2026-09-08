@@ -187,13 +187,31 @@ class PipelineContractTests(unittest.TestCase):
             row.split("\t") for row in (environment / "images.tsv").read_text().splitlines()
             if row and not row.startswith("#")
         ]
-        self.assertTrue(active)
-        for stage, dockerfile, _, tag, _ in active:
-            self.assertTrue(self.manifest[f"{stage}_CAPSULE_COMMIT"].startswith(tag))
-            source = (environment / dockerfile).read_text()
-            self.assertIn(
-                f".git@{self.manifest[f'{stage}_LIBRARY_COMMIT'][:7]}#egg=", source
+        self.assertEqual(len(active), len(STAGES))
+        self.assertEqual({row[0] for row in active}, set(STAGES))
+        self.assertEqual(len({row[2] for row in active}), len(STAGES))
+        for stage, dockerfile, image, visibility in active:
+            self.assertTrue((environment / dockerfile).is_file())
+            self.assertTrue(image.startswith("ghcr.io/allenneuraldynamics/pophys-"))
+            self.assertEqual(visibility, "private")
+            source = json.loads(
+                (environment / "stages" / stage.lower() / "source.json").read_text()
             )
+            self.assertEqual(source["stage"], stage)
+            self.assertEqual(source["capsule_source_mode"],
+                             self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"])
+            expected = self.manifest.get(
+                f"{stage}_CAPSULE_COMMIT", self.manifest.get(f"{stage}_REF")
+            )
+            self.assertEqual(source["capsule_ref"], expected)
+            if stage == "DECROSSTALK_SPLIT":
+                self.assertIsNone(source["library_repo"])
+                self.assertIsNone(source["library_commit"])
+            else:
+                self.assertEqual(source["library_commit"],
+                                 self.manifest[f"{stage}_LIBRARY_COMMIT"])
+                self.assertRegex(source["library_commit"], SHA_RE)
+                self.assertEqual(len(source["pyproject_sha256"]), 64)
 
     def test_v2_fan_in_contract_remains_present(self):
         self.assertIn("stageAs: 'processing_??/*'", self.main)
@@ -212,7 +230,9 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("params.backend = 'slurm'", slurm)
         self.assertIn("executor = 'slurm'", slurm)
         self.assertIn("clusterOptions = '--gres=gpu:1'", slurm)
-        self.assertIn('containerOptions = "--nv ${data_bind}"', slurm)
+        self.assertIn("def writable_tmpfs = '--writable-tmpfs'", slurm)
+        self.assertIn('containerOptions = "${writable_tmpfs} ${data_bind}"', slurm)
+        self.assertIn('containerOptions = "${writable_tmpfs} --nv ${data_bind}"', slurm)
         self.assertNotIn('--shm-size', slurm)
         self.assertIn('--volume ${data_path}:/tmp/data', local)
         self.assertIn('--bind ${data_path}:/tmp/data', slurm)

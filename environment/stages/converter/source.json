@@ -1,0 +1,32 @@
+{
+  "build_requires": [
+    "setuptools",
+    "setuptools-scm"
+  ],
+  "capsule_ref": "16f5f9afb66ba87098a453108dacd3a3df89dd36",
+  "capsule_source_mode": "git",
+  "declared_dependencies": [
+    "aind-data-schema==2.9.0",
+    "aind-data-schema-models==6.2.0",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
+    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
+    "aind-ophys-utils==0.0.8",
+    "h5py==3.16.0",
+    "numpy>=1.26",
+    "Pillow==12.1.1",
+    "pydantic==2.11.10",
+    "pydantic-settings==2.8.1",
+    "python-dateutil==2.9.0.post0",
+    "pytz==2025.2",
+    "scikit-image>=0.25.0",
+    "tifffile==2024.2.12",
+    "scanimage-tiff-reader==1.4.1.4"
+  ],
+  "distribution": "aind-pophys-converter",
+  "library_commit": "e1de8a67f6ffc57337ae8e611d0ecce6472769f1",
+  "library_repo": "aind-pophys-converter",
+  "pyproject_sha256": "0341060209c21af94da2ddfa51aa55d77bf465143ff9209c4502180ba915c992",
+  "python": "3.12",
+  "requires_python": ">=3.10",
+  "stage": "CONVERTER"
+}

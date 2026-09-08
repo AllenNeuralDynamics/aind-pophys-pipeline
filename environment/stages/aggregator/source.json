@@ -1,0 +1,21 @@
+{
+  "build_requires": [
+    "setuptools"
+  ],
+  "capsule_ref": "b2ecb5d",
+  "capsule_source_mode": "co_git",
+  "declared_dependencies": [
+    "aind-data-schema>=2.0",
+    "aind-metadata-upgrader",
+    "pydantic>=2.7,<2.12",
+    "pydantic-settings",
+    "tzlocal"
+  ],
+  "distribution": "aind-metadata-manager",
+  "library_commit": "06ae8790b1ecf106ea376ddc52785a027877a3d3",
+  "library_repo": "aind-metadata-manager",
+  "pyproject_sha256": "02ad6ba20090adcc964943f2694c7f6e1f5bbd7be341b810a2a7cc67a972204d",
+  "python": "3.12",
+  "requires_python": ">=3.10",
+  "stage": "AGGREGATOR"
+}

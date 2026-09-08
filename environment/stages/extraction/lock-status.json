@@ -1,0 +1,9 @@
+{
+  "dependency_inputs_sha256": "a23d6afd90dc7bae972b3915fee70b72351c8214e7e301c31ee273dc0d746978",
+  "image_built": false,
+  "lock_sha256": "511017bcd6795500b98452c72652c800a38fd30f2cdfe07cedaac34706747466",
+  "pip_overlay_requirements": 47,
+  "resolver": "uv 0.10.2 (a788db7e5 2026-02-10)",
+  "same_version_conda_requirements": 38,
+  "status": "resolved"
+}

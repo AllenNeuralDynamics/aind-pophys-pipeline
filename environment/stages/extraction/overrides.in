@@ -1,0 +1,4 @@
+# Observed Suite2p version: 0.1.dev2328+gae0e9313b.
+# The selected successful CO build log resolved save_cellpose_output to this SHA.
+# This is not a pin to a future branch tip.
+suite2p @ git+https://github.com/j-friedrich/suite2p.git@ae0e9313b881f1d4bb51d7461f4796532a76e8aa

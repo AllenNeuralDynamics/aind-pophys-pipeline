@@ -1,0 +1,13 @@
+aind-data-schema==2.9.0
+aind-data-schema-models==6.2.0
+aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10
+log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e8b6f4228d0dd37e867b52de0286fffccb#subdirectory=python
+aind-ophys-utils>=0.2.0
+cellpose==2.2.3
+suite2p==0.14.3
+numpy<2
+pandas
+h5py
+matplotlib
+pydantic>=2.7
+pydantic-settings>=2.8.1

@@ -1,0 +1,21 @@
+aind-data-schema==2.9.0
+aind-data-schema-models==6.2.0
+aind-qcportal-schema==0.6.4
+aind-ophys-utils==0.2.0
+log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e8b6f4228d0dd37e867b52de0286fffccb#subdirectory=python
+aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10
+pydantic==2.8.2
+pydantic-settings==2.14.2
+pytz
+cellpose==3.0.10
+h5py==3.11.0
+scikit-image==0.24.0
+sparse==0.15.4
+sbxreader==0.2.3
+torch==2.4.0
+suite2p @ git+https://github.com/j-friedrich/suite2p.git@save_cellpose_output
+numpy==1.26.4
+scipy==1.14.1
+matplotlib==3.10.9
+imageio-ffmpeg==0.6.0
+opencv-python>=4.7,<4.8

@@ -1,0 +1,34 @@
+{
+  "build_requires": [
+    "setuptools"
+  ],
+  "capsule_ref": "85ba3f2b1bcfcda103de0d24c7eec648880a343b",
+  "capsule_source_mode": "git",
+  "declared_dependencies": [
+    "aind-data-schema==2.9.0",
+    "aind-data-schema-models==6.2.0",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
+    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
+    "aind-ophys-utils",
+    "torch",
+    "suite2p==0.14.6",
+    "sbxreader",
+    "numpy",
+    "pandas",
+    "h5py",
+    "opencv-python-headless",
+    "matplotlib",
+    "Pillow",
+    "scipy",
+    "pytz",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.8.1"
+  ],
+  "distribution": "aind-ophys-motion-correction-library",
+  "library_commit": "3d3d09191b9ee1cc95d09ac0462c5e0e9f10a5b9",
+  "library_repo": "aind-ophys-motion-correction-library",
+  "pyproject_sha256": "cfa0cda31c16066d68bb661ab1ec7ea0a35638e1b31ae932efba8e657a265540",
+  "python": "3.10",
+  "requires_python": ">=3.10,<3.13",
+  "stage": "MOTION_CORRECTION"
+}

@@ -1,0 +1,7 @@
+{
+  "dependency_inputs_sha256": "39a3c0a2883f6ca7714b0e6595a768a45d3ab1f7773ef29ffd334448be919d10",
+  "image_built": false,
+  "lock_sha256": "ca944c5860ca549c80f5993d78d5949bd71f8543d081b706f9ee239a2300d01c",
+  "resolver": "uv 0.10.2 (a788db7e5 2026-02-10)",
+  "status": "resolved"
+}

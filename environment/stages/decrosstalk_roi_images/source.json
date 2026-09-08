@@ -1,0 +1,29 @@
+{
+  "build_requires": [
+    "setuptools"
+  ],
+  "capsule_ref": "e7e0cdbf19128984ba02f1d8283b4d7ac5781d0f",
+  "capsule_source_mode": "git",
+  "declared_dependencies": [
+    "aind-data-schema==2.9.0",
+    "aind-data-schema-models==6.2.0",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
+    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
+    "aind-ophys-utils>=0.2.0",
+    "cellpose==2.2.3",
+    "suite2p==0.14.3",
+    "numpy<2",
+    "pandas",
+    "h5py",
+    "matplotlib",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.8.1"
+  ],
+  "distribution": "aind-ophys-decrosstalk-roi-images-library",
+  "library_commit": "22075812fdc25fe2de2d3af8485454c7312b7b2b",
+  "library_repo": "aind-ophys-decrosstalk-roi-images-library",
+  "pyproject_sha256": "d688446678103fc14e01d1f6b57c78255bf83050928a82cb1c6e07c16fe860f7",
+  "python": "3.10",
+  "requires_python": ">=3.10,<3.11",
+  "stage": "DECROSSTALK_ROI_IMAGES"
+}
