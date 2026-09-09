@@ -3,6 +3,7 @@
 nextflow.enable.dsl = 2
 
 params.ghcr_smoke_only = false
+params.gpu_smoke_only = false
 params.image_set = 'default'
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 
@@ -210,11 +211,22 @@ publishRelativeSkipRunLevel = { String filename ->
 
 workflow {
     def smoke_mode = params.ghcr_smoke_only.toString().toLowerCase()
+    def gpu_smoke_mode = params.gpu_smoke_only.toString().toLowerCase()
     if (!(smoke_mode in ['true', 'false', '1', '0'])) {
         throw new IllegalArgumentException('ghcr_smoke_only must be true, false, 1, or 0')
     }
+    if (!(gpu_smoke_mode in ['true', 'false', '1', '0'])) {
+        throw new IllegalArgumentException('gpu_smoke_only must be true, false, 1, or 0')
+    }
+    if (smoke_mode in ['true', '1'] && gpu_smoke_mode in ['true', '1']) {
+        throw new IllegalArgumentException('ghcr_smoke_only and gpu_smoke_only are mutually exclusive')
+    }
     if (smoke_mode in ['true', '1']) {
         ghcr_pull_smoke()
+        return
+    }
+    if (gpu_smoke_mode in ['true', '1']) {
+        gpu_smoke()
         return
     }
 
@@ -544,6 +556,57 @@ process ghcr_pull_smoke {
         "scientific_processing": False,
     }
     Path("ghcr-smoke.json").write_text(json.dumps(result, indent=2) + "\\n")
+    print(json.dumps(result))
+    PY
+    '''
+}
+
+process gpu_smoke {
+    def container_name = params.stage_images['CLASSIFIER']
+    container container_name
+    cache false
+    publishDir "$RESULTS_PATH", mode: 'copy'
+
+    output:
+    path 'gpu-smoke.json'
+
+    script:
+    '''
+    python - <<'PY'
+    import json
+    import platform
+    import subprocess
+    from pathlib import Path
+
+    import torch
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("torch.cuda.is_available() returned false")
+
+    nvidia_smi = subprocess.run(
+        [
+            "nvidia-smi",
+            "--query-gpu=name,memory.total,driver_version",
+            "--format=csv,noheader,nounits",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip().splitlines()
+    result = {
+        "probe": "pophys-gpu-placement-v1",
+        "image": "classifier",
+        "python": platform.python_version(),
+        "machine": platform.machine(),
+        "torch": torch.__version__,
+        "cuda_runtime": torch.version.cuda,
+        "cuda_available": True,
+        "cuda_device_count": torch.cuda.device_count(),
+        "cuda_device_name": torch.cuda.get_device_name(0),
+        "nvidia_smi": nvidia_smi,
+        "scientific_processing": False,
+    }
+    Path("gpu-smoke.json").write_text(json.dumps(result, indent=2) + "\\n")
     print(json.dumps(result))
     PY
     '''

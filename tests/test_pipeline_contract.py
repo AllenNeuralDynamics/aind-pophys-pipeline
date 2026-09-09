@@ -299,6 +299,46 @@ class PipelineContractTests(unittest.TestCase):
                               "errorStrategy = 'terminate'", "maxRetries = 0"):
                 self.assertIn(directive, block)
 
+    def test_gpu_probe_matches_production_resources_and_returns_before_science(self):
+        workflow = self.main.split("workflow {", 1)[1]
+        self.assertIn("params.gpu_smoke_only = false", self.main)
+        self.assertIn("gpu_smoke()\n        return", workflow)
+        self.assertLess(workflow.index("gpu_smoke()"), workflow.index("Channel.fromPath"))
+        self.assertIn(
+            "ghcr_smoke_only and gpu_smoke_only are mutually exclusive",
+            self.main,
+        )
+        block = re.search(
+            r"^process gpu_smoke \{(.*?)^\}", self.main, re.MULTILINE | re.DOTALL
+        ).group(1)
+        self.assertIn("params.stage_images['CLASSIFIER']", block)
+        self.assertIn('"probe": "pophys-gpu-placement-v1"', block)
+        self.assertIn("torch.cuda.is_available()", block)
+        self.assertIn("nvidia-smi", block)
+
+        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
+        smoke = [p for p in panel["parameters"] if p["param_name"] == "gpu_smoke_only"]
+        self.assertEqual(len(smoke), 1)
+        self.assertEqual(smoke[0]["default_value"], "false")
+        self.assertEqual(smoke[0]["extra_data"], ["false", "true"])
+
+        code_ocean = (PIPELINE / "nextflow.config").read_text()
+        config_block = re.search(
+            r"withName: gpu_smoke \{(.*?)\}", code_ocean, re.DOTALL
+        ).group(1)
+        for directive in (
+            "cpus = 16",
+            "memory = '60 GB'",
+            "accelerator = 1",
+            "label = 'gpu'",
+            "containerOptions = '--shm-size 4g'",
+            "time = '15m'",
+            "errorStrategy = 'terminate'",
+            "maxRetries = 0",
+        ):
+            self.assertIn(directive, config_block)
+        self.assertIn("maxRetries = 1", code_ocean)
+
 
 if __name__ == "__main__":
     unittest.main()
