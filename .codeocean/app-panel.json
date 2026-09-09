@@ -432,6 +432,19 @@
 			"default_value": "False"
 		},
 		{
+			"id": "GhcrSmokeOnly001",
+			"name": "ghcr_smoke_only",
+			"param_name": "ghcr_smoke_only",
+			"description": "Run only the GHCR image pull probe; skip all scientific processing.",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "false",
+			"extra_data": [
+				"false",
+				"true"
+			]
+		},
+		{
 			"id": "qJPrXDS0DDvEvzoC",
 			"name": "input_dir",
 			"param_name": "input_dir",
