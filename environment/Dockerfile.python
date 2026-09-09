@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 ARG PYTHON_VERSION=3.12
 FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime-base
+ARG STAGE_DIR
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -9,6 +10,7 @@ RUN --mount=type=cache,target=/var/lib/apt/lists \
     --mount=type=cache,target=/var/cache/apt \
     apt-get update && apt-get install -y --no-install-recommends \
     bash ca-certificates git time libgomp1 libglib2.0-0 \
+    $(if [ "$STAGE_DIR" = "classifier" ]; then printf 'libtk8.6 '; fi) \
     && mkdir -p /opt/image
 
 FROM runtime-base AS dependencies
@@ -43,6 +45,7 @@ RUN /opt/build/bin/python /opt/build-library.py --source /library-source
 
 FROM runtime-base AS runtime
 COPY runtime-check.py /opt/image/runtime-check.py
+RUN python -m pip uninstall --yes wheel
 RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
     python -m pip install --no-cache-dir --no-index --no-deps /wheels/*.whl
 COPY --from=library /opt/image/source.json /opt/image/source.json

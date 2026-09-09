@@ -396,6 +396,11 @@ class ExtractionOverlayTests(unittest.TestCase):
             self.assertIn(module, source)
         self.assertIn("Missing callable", source)
 
+    def test_classifier_runtime_declares_tk_dependency(self):
+        source = (ENVIRONMENT / "Dockerfile.python").read_text()
+        self.assertIn('$STAGE_DIR" = "classifier"', source)
+        self.assertIn("libtk8.6", source)
+
     def test_authenticated_fetch_is_separate_from_package_builds(self):
         requirement = (
             "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/"
