@@ -356,7 +356,7 @@ class PipelineContractTests(unittest.TestCase):
         classifier_config = re.search(
             r"withName: classifier \{(.*?)\}", code_ocean, re.DOTALL
         ).group(1)
-        self.assertIn("maxForks = 1", classifier_config)
+        self.assertIn("maxForks = 2", classifier_config)
 
 
 if __name__ == "__main__":
