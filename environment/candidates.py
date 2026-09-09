@@ -209,8 +209,8 @@ def validate():
     for stage, recipe, image, visibility in rows:
         if not re.fullmatch(r"ghcr.io/allenneuraldynamics/[a-z0-9-]+", image):
             raise ValueError(f"{stage}: invalid GHCR image")
-        if visibility != "private":
-            raise ValueError(f"{stage}: candidate image visibility must be private")
+        if visibility not in ("private", "internal"):
+            raise ValueError(f"{stage}: candidate image visibility must be private or internal")
         if not (ENVIRONMENT / recipe).is_file():
             raise ValueError(f"{stage}: missing recipe")
         source = json.loads((ENVIRONMENT / "stages" / stage.lower() / "source.json").read_text())
@@ -232,7 +232,7 @@ def validate():
 
 
 def require_private_package(image, allow_missing=False):
-    """Check GHCR visibility before or after publishing a candidate."""
+    """Require private or enterprise-internal visibility; never public."""
     match = re.fullmatch(r"ghcr\.io/([^/]+)/([a-z0-9-]+)", image)
     if not match or match[1].lower() != IMAGE_ORG.lower():
         raise ValueError(f"Invalid GHCR candidate image: {image}")
@@ -255,12 +255,12 @@ def require_private_package(image, allow_missing=False):
         return "absent; first GHCR publish defaults to private"
     if result.returncode != 0 or status_code != 200:
         raise ValueError(
-            f"{image}: unable to verify private GHCR package (HTTP {status_code})"
+            f"{image}: unable to verify GHCR package visibility (HTTP {status_code})"
         )
     visibility = result.stdout.strip().splitlines()[-1]
-    if visibility != "private":
-        raise ValueError(f"{image}: refusing to publish to a non-private package")
-    return "private"
+    if visibility not in ("private", "internal"):
+        raise ValueError(f"{image}: refusing publication with visibility {visibility!r}")
+    return visibility
 
 
 def dependency_hash(folder):
@@ -427,8 +427,8 @@ def build(args, rows):
         raise ValueError("Use a unique candidate-* tag, never a production tag")
     if args.publish:
         for stage in stages:
-            if rows[stage]["visibility"] != "private":
-                raise ValueError(f"{stage}: publishing requires private visibility")
+            if rows[stage]["visibility"] not in ("private", "internal"):
+                raise ValueError(f"{stage}: publishing requires private or internal visibility")
             require_private_package(rows[stage]["image"], allow_missing=True)
     for stage in stages:
         preflight(stage)
@@ -457,7 +457,7 @@ def build(args, rows):
         ]
         subprocess.run(command, check=True)
         if args.publish:
-            require_private_package(image)
+            require_private_package(row["image"])
         metadata = json.loads((output / "metadata.json").read_text())
         report = [sys.executable, str(ENVIRONMENT / "image-report.py"), "--image", image,
                   "--digest", metadata["containerimage.digest"], "--stage", stage,

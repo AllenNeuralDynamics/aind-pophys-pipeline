@@ -89,7 +89,7 @@ jobs:
           fi
           python environment/image-report.py --image "$IMAGE" --digest "$DIGEST" \
             --stage "$STAGE" --output .image-work/report.json "${mode[@]}"
-      - name: Verify published GHCR package is private
+      - name: Verify published GHCR package is private or internal
         if: ${{ inputs.publish }}
         env:
           IMAGE: ${{ steps.candidate.outputs.image }}

@@ -4,10 +4,15 @@
 `candidate-inventory.json` records the exact selected archive paths, tags, digests,
 and sizes. Every referenced manifest, config and compressed layer was verified
 against its SHA-256. The builds passed their embedded import checks; scientific
-parity and actual GPU execution remain unverified. Nothing is published or promoted.
+parity and actual GPU execution remain unverified. The splitter has been published
+with an identical remote digest and user-confirmed Internal visibility; the other
+ten remain local. No production pins have been promoted.
 Candidates were built across successive recipe revisions, not one identical checkout.
 
-Candidate packages are **private by policy**. The pipeline repository is public, while
+Candidate packages may be **Private or Internal, never Public** (approved 2026-09-08).
+Internal allows authenticated enterprise members; Sean explicitly accepted that
+audience. Existing `private` entries in the image map remain the preferred setting,
+not a prohibition on Internal packages. The pipeline repository is public, while
 several installed AIND libraries are internal. GHCR creates packages on the first
 push, with private visibility by default; there is no separate empty-package creation
 step. Existing package visibility and access must be checked before uploading
@@ -26,7 +31,7 @@ skopeo copy --preserve-digests \
 ```
 
 Replace both references with the corresponding inventory entry, check package privacy
-before copying, and verify remote digest and private visibility afterward. Do not
+before copying, and verify remote digest and Private/Internal visibility afterward. Do not
 enable format conversion or recompression. Failed or mismatching copies must not
 update production pins. Publication has not been performed.
 
@@ -214,8 +219,9 @@ the desired committed feature ref when dispatching.
   Unknown/duplicate selections fail. Maximum two concurrent jobs; `all` includes
   every stage and applies each stage's lock gate rather than silently omitting failures.
 - `publish`: **false by default**. Build-only jobs have no `packages:write`; the
-  separate explicit publication job grants it, verifies pre-created private GHCR
-  package visibility, and then logs into GHCR. It never edits the production manifest.
+  separate explicit publication job grants it, rejects existing packages unless
+  Private or Internal, and verifies visibility after publishing. A missing package
+  may be created by the first push. It never edits the production manifest.
 - If source repositories require authentication, the workflow passes the inherited
   `SERVICE_TOKEN` as a BuildKit secret. Source credentials are read by Git askpass,
   never build arguments, Docker ENV values, global Git configuration, or persisted files.
@@ -273,7 +279,7 @@ On a future Docker/BuildKit host, use a unique candidate label. These commands h
 ```bash
 uv run --python 3.12 --no-project environment/candidates.py build \
   DECROSSTALK_SPLIT --tag candidate-my-first-build
-# Explicit publication requires pre-created private GHCR packages and package write access:
+# Explicit publication requires package write access and Private/Internal visibility:
 uv run --python 3.12 --no-project environment/candidates.py build \
   "DFF,OASIS" --tag candidate-my-reviewed-build --publish
 ```

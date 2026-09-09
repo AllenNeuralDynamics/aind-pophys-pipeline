@@ -49,7 +49,7 @@ class ImageCandidateTests(unittest.TestCase):
             returncode=0, stdout="HTTP/2.0 200 OK\n\npublic\n", stderr=""
         )
         with patch.object(candidates.subprocess, "run", return_value=public):
-            with self.assertRaisesRegex(ValueError, "non-private"):
+            with self.assertRaisesRegex(ValueError, "refusing publication"):
                 candidates.require_private_package(
                     "ghcr.io/allenneuraldynamics/pophys-dff"
                 )
@@ -63,6 +63,22 @@ class ImageCandidateTests(unittest.TestCase):
                 ),
                 "private",
             )
+
+    def test_visibility_guard_allows_internal_but_not_unknown_or_auth_errors(self):
+        image = "ghcr.io/allenneuraldynamics/pophys-dff"
+        response = SimpleNamespace(returncode=0, stdout="HTTP/2.0 200 OK\n\ninternal\n")
+        with patch.object(candidates.subprocess, "run", return_value=response):
+            self.assertEqual(candidates.require_private_package(image), "internal")
+        for visibility in ("public", "unknown", "null"):
+            response = SimpleNamespace(returncode=0, stdout=f"HTTP/2.0 200 OK\n\n{visibility}\n")
+            with self.subTest(visibility=visibility):
+                with patch.object(candidates.subprocess, "run", return_value=response):
+                    with self.assertRaisesRegex(ValueError, "refusing publication"):
+                        candidates.require_private_package(image, allow_missing=True)
+        response = SimpleNamespace(returncode=1, stdout="HTTP/2.0 403 Forbidden\n\n{}\n")
+        with patch.object(candidates.subprocess, "run", return_value=response):
+            with self.assertRaisesRegex(ValueError, "HTTP 403"):
+                candidates.require_private_package(image, allow_missing=True)
 
     def test_selection_rejects_empty_unknown_and_duplicates(self):
         for value in ("", "UNKNOWN", "DFF,DFF", "all,DFF", "dff", "DFF;echo oops"):

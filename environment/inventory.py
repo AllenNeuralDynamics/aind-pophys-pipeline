@@ -89,7 +89,7 @@ def collect(reports, rows):
             invariants = check_archive(archive, report)
             entries.append({
                 **report,
-                "required_visibility": "private",
+                "allowed_visibilities": ["private", "internal"],
                 "archive": str(archive.relative_to(ROOT)),
                 "build_report": str(path.relative_to(ROOT)),
                 "invariants": invariants,
@@ -101,7 +101,7 @@ def collect(reports, rows):
         failures.append({"missing_stages": missing})
     return {
         "schema_version": 1,
-        "purpose": "Exact existing artifacts for a future private registry copy; no rebuild.",
+        "purpose": "Exact existing artifacts for a private or internal registry copy; no rebuild.",
         "counts": {
             "candidate": len(reports), "processed": len(entries), "skipped": 0,
             "failed": len(failures), "missing": len(missing),
@@ -109,7 +109,7 @@ def collect(reports, rows):
         "limitations": [
             "Images were built across successive recipe revisions, not one uniform checkout.",
             "Successful image builds do not establish scientific parity or GPU execution.",
-            "Required private visibility is policy, not evidence of an existing registry package.",
+            "Allowed private/internal visibility is policy, not evidence of a registry package.",
         ],
         "images": sorted(entries, key=lambda entry: entry["stage"]),
         "failures": failures,
