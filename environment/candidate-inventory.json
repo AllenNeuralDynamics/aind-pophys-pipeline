@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "purpose": "Exact existing artifacts for a future private registry copy; no rebuild.",
+  "counts": {
+    "candidate": 11,
+    "processed": 11,
+    "skipped": 0,
+    "failed": 0,
+    "missing": 0
+  },
+  "limitations": [
+    "Images were built across successive recipe revisions, not one uniform checkout.",
+    "Successful image builds do not establish scientific parity or GPU execution.",
+    "Required private visibility is policy, not evidence of an existing registry package."
+  ],
+  "images": [
+    {
+      "compressed_layer_bytes": 110108725,
+      "digest": "sha256:897c98c1886f1baf28697e92799f861348360fac3e3bd1f04718e02f2327497b",
+      "image": "ghcr.io/allenneuraldynamics/pophys-aggregator:candidate-final-local",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 110134272,
+      "platform_manifest_digest": "sha256:897c98c1886f1baf28697e92799f861348360fac3e3bd1f04718e02f2327497b",
+      "promoted": false,
+      "published": false,
+      "stage": "AGGREGATOR",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-final-local/AGGREGATOR/image.tar",
+      "build_report": ".image-work/candidate-final-local/AGGREGATOR/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 3438785153,
+      "digest": "sha256:0a36a8e414795f0e8bcaed39481f267a01760264e2be9358535c0705f7a35d38",
+      "image": "ghcr.io/allenneuraldynamics/pophys-classifier:candidate-final-local",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 3438811136,
+      "platform_manifest_digest": "sha256:0a36a8e414795f0e8bcaed39481f267a01760264e2be9358535c0705f7a35d38",
+      "promoted": false,
+      "published": false,
+      "stage": "CLASSIFIER",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-final-local/CLASSIFIER/image.tar",
+      "build_report": ".image-work/candidate-final-local/CLASSIFIER/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 483655240,
+      "digest": "sha256:0560343b8b80818824cba2951cd7abf89f002a7ca33858f967b73a7dffd293bc",
+      "image": "ghcr.io/allenneuraldynamics/pophys-converter:candidate-rest-local",
+      "image_built": true,
+      "layers": 10,
+      "oci_archive_bytes": 483679232,
+      "platform_manifest_digest": "sha256:0560343b8b80818824cba2951cd7abf89f002a7ca33858f967b73a7dffd293bc",
+      "promoted": false,
+      "published": false,
+      "stage": "CONVERTER",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-rest-local/CONVERTER/image.tar",
+      "build_report": ".image-work/candidate-rest-local/CONVERTER/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 792455400,
+      "digest": "sha256:9475b26855dd8d608c2982b9bc8e152a045fd1bd8e13c7fbc687968eb5f7ef4a",
+      "image": "ghcr.io/allenneuraldynamics/pophys-decrosstalk-roi-images:candidate-rest-local-2",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 792480256,
+      "platform_manifest_digest": "sha256:9475b26855dd8d608c2982b9bc8e152a045fd1bd8e13c7fbc687968eb5f7ef4a",
+      "promoted": false,
+      "published": false,
+      "stage": "DECROSSTALK_ROI_IMAGES",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-rest-local-2/DECROSSTALK_ROI_IMAGES/image.tar",
+      "build_report": ".image-work/candidate-rest-local-2/DECROSSTALK_ROI_IMAGES/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 77124842,
+      "digest": "sha256:b2662185ab1a4f8374f1fc756f6c546429ee5d22783fafe124fd5c85311d4249",
+      "image": "ghcr.io/allenneuraldynamics/pophys-decrosstalk-split:candidate-splitter-local",
+      "image_built": true,
+      "layers": 7,
+      "oci_archive_bytes": 77145088,
+      "platform_manifest_digest": "sha256:b2662185ab1a4f8374f1fc756f6c546429ee5d22783fafe124fd5c85311d4249",
+      "promoted": false,
+      "published": false,
+      "stage": "DECROSSTALK_SPLIT",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-splitter-local/DECROSSTALK_SPLIT/image.tar",
+      "build_report": ".image-work/candidate-splitter-local/DECROSSTALK_SPLIT/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 623551331,
+      "digest": "sha256:78fb2d23bc59d53df79eaad13be393a0f780388d8e2d4706fd67fbb74a541865",
+      "image": "ghcr.io/allenneuraldynamics/pophys-dff:candidate-dff-diagnostic-2",
+      "image_built": true,
+      "layers": 10,
+      "oci_archive_bytes": 623575552,
+      "platform_manifest_digest": "sha256:78fb2d23bc59d53df79eaad13be393a0f780388d8e2d4706fd67fbb74a541865",
+      "promoted": false,
+      "published": false,
+      "stage": "DFF",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-dff-diagnostic-2/DFF/image.tar",
+      "build_report": ".image-work/candidate-dff-diagnostic-2/DFF/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 1703980846,
+      "digest": "sha256:45f0417e639a44f5ed2caa6dac9c89e5ae041effff57bf0abf6fe6da7548e588",
+      "image": "ghcr.io/allenneuraldynamics/pophys-extraction:candidate-extraction-local",
+      "image_built": true,
+      "layers": 19,
+      "oci_archive_bytes": 1704015360,
+      "platform_manifest_digest": "sha256:45f0417e639a44f5ed2caa6dac9c89e5ae041effff57bf0abf6fe6da7548e588",
+      "promoted": false,
+      "published": false,
+      "stage": "EXTRACTION",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-extraction-local/EXTRACTION/image.tar",
+      "build_report": ".image-work/candidate-extraction-local/EXTRACTION/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 801969074,
+      "digest": "sha256:9773cd6932a84ac8d0cf0248ca9e56c02d821b31897bc19ba4721a9f801041e1",
+      "image": "ghcr.io/allenneuraldynamics/pophys-motion-correction:candidate-rest-local-2",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 801994240,
+      "platform_manifest_digest": "sha256:9773cd6932a84ac8d0cf0248ca9e56c02d821b31897bc19ba4721a9f801041e1",
+      "promoted": false,
+      "published": false,
+      "stage": "MOTION_CORRECTION",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-rest-local-2/MOTION_CORRECTION/image.tar",
+      "build_report": ".image-work/candidate-rest-local-2/MOTION_CORRECTION/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 230753662,
+      "digest": "sha256:6061959ecfe7e820654b16624320205b80b19a5df24dcb86704c955f20c157f2",
+      "image": "ghcr.io/allenneuraldynamics/pophys-movie-qc:candidate-rest-local-2",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 230779904,
+      "platform_manifest_digest": "sha256:6061959ecfe7e820654b16624320205b80b19a5df24dcb86704c955f20c157f2",
+      "promoted": false,
+      "published": false,
+      "stage": "MOVIE_QC",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-rest-local-2/MOVIE_QC/image.tar",
+      "build_report": ".image-work/candidate-rest-local-2/MOVIE_QC/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 272651185,
+      "digest": "sha256:cb23b2d0617cb09485bac857d9cf0b7250deef0cc0c2a73b43f242e25b540545",
+      "image": "ghcr.io/allenneuraldynamics/pophys-nwb:candidate-final-local",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 272677376,
+      "platform_manifest_digest": "sha256:cb23b2d0617cb09485bac857d9cf0b7250deef0cc0c2a73b43f242e25b540545",
+      "promoted": false,
+      "published": false,
+      "stage": "NWB",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-final-local/NWB/image.tar",
+      "build_report": ".image-work/candidate-final-local/NWB/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 229272425,
+      "digest": "sha256:af500ddbcbd161f53eaa9046a92b3713d26feae04762cba7f05ac3d9611a8d66",
+      "image": "ghcr.io/allenneuraldynamics/pophys-oasis:candidate-rest-local-2",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 229298688,
+      "platform_manifest_digest": "sha256:af500ddbcbd161f53eaa9046a92b3713d26feae04762cba7f05ac3d9611a8d66",
+      "promoted": false,
+      "published": false,
+      "stage": "OASIS",
+      "required_visibility": "private",
+      "archive": ".image-work/candidate-rest-local-2/OASIS/image.tar",
+      "build_report": ".image-work/candidate-rest-local-2/OASIS/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    }
+  ],
+  "failures": []
+}

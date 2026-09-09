@@ -1,16 +1,49 @@
 # Off-Code-Ocean image candidates
 
-**Status: no images have been built, published, or runtime-tested.** There is no local
-Docker engine. All eleven dependency contracts resolve (including the standard-library
-splitter and extraction's separately locked conda/pip layers). A successful resolver is not
-an image build or a scientific parity result.
+**Status (2026-09-08): all eleven candidates built locally for Linux amd64.**
+`candidate-inventory.json` records the exact selected archive paths, tags, digests,
+and sizes. Every referenced manifest, config and compressed layer was verified
+against its SHA-256. The builds passed their embedded import checks; scientific
+parity and actual GPU execution remain unverified. Nothing is published or promoted.
+Candidates were built across successive recipe revisions, not one identical checkout.
 
 Candidate packages are **private by policy**. The pipeline repository is public, while
-several installed AIND libraries are internal. The publication path refuses to push
-unless each target GHCR package already exists and the GitHub API reports
-`visibility=private`. Build-only runs do not publish packages.
-Before the first publish, an organization administrator must create the eleven
-`pophys-*` packages as private and grant this repository's Actions token access.
+several installed AIND libraries are internal. GHCR creates packages on the first
+push, with private visibility by default; there is no separate empty-package creation
+step. Existing package visibility and access must be checked before uploading
+internal code. Build-only runs do not publish packages.
+
+## Exact-artifact publication preparation
+
+Use the recorded OCI archives, not `candidates.py build --publish`, to publish this
+specific candidate set. The latter rebuilds and can produce different bytes.
+An OCI-aware copier such as Skopeo can retain the manifest and layer digests:
+
+```bash
+skopeo copy --preserve-digests \
+  oci-archive:/absolute/path/to/image.tar \
+  docker://ghcr.io/allenneuraldynamics/pophys-STAGE:candidate-TAG
+```
+
+Replace both references with the corresponding inventory entry, check package privacy
+before copying, and verify remote digest and private visibility afterward. Do not
+enable format conversion or recompression. Failed or mismatching copies must not
+update production pins. Publication has not been performed.
+
+The currently active local GitHub CLI token lacks `write:packages`. Publication
+requires a separate GHCR login with suitable package scopes and organization SSO
+authorization; source-code read access alone is insufficient.
+
+Regenerate the inventory with explicit build reports (one per stage):
+
+```bash
+uv run --python 3.12 --no-project environment/inventory.py \
+  --output environment/candidate-inventory.json \
+  --reports .image-work/<candidate>/<stage>/report.json ...
+```
+
+This reads and hashes archives without extracting or publishing them. It rejects
+missing/duplicate stages, incorrect platforms, digest mismatches and incomplete reports.
 
 `images.tsv` assigns **each of all eleven stages its own GHCR image**. Shared recipes do
 not mean shared stage images. These are newly authored, pipeline-owned off-CO environments,
