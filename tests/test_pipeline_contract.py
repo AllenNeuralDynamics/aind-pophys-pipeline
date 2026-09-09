@@ -270,7 +270,17 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn('--bind ${data_path}:/tmp/data', slurm)
 
     def test_process_resources_are_configured_outside_main(self):
-        directives = re.findall(r"^\s*(?:cpus|memory|accelerator|label)\b", self.main, re.MULTILINE)
+        main_without_gpu_probe = re.sub(
+            r"^process gpu_smoke \{.*?^\}",
+            "",
+            self.main,
+            flags=re.MULTILINE | re.DOTALL,
+        )
+        directives = re.findall(
+            r"^\s*(?:cpus|memory|accelerator|label)\b",
+            main_without_gpu_probe,
+            re.MULTILINE,
+        )
         self.assertEqual(directives, [])
 
     def test_registry_probe_returns_before_scientific_inputs(self):
@@ -312,6 +322,8 @@ class PipelineContractTests(unittest.TestCase):
             r"^process gpu_smoke \{(.*?)^\}", self.main, re.MULTILINE | re.DOTALL
         ).group(1)
         self.assertIn("params.stage_images['CLASSIFIER']", block)
+        for directive in ("cpus 16", "memory '60 GB'", "accelerator 1", "label 'gpu'"):
+            self.assertIn(directive, block)
         self.assertIn('"probe": "pophys-gpu-placement-v1"', block)
         self.assertIn("torch.cuda.is_available()", block)
         self.assertIn("nvidia-smi", block)
@@ -327,10 +339,6 @@ class PipelineContractTests(unittest.TestCase):
             r"withName: gpu_smoke \{(.*?)\}", code_ocean, re.DOTALL
         ).group(1)
         for directive in (
-            "cpus = 16",
-            "memory = '60 GB'",
-            "accelerator = 1",
-            "label = 'gpu'",
             "containerOptions = '--shm-size 4g'",
             "time = '15m'",
             "errorStrategy = 'terminate'",

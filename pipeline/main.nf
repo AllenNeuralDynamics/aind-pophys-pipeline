@@ -564,6 +564,10 @@ process ghcr_pull_smoke {
 process gpu_smoke {
     def container_name = params.stage_images['CLASSIFIER']
     container container_name
+    cpus 16
+    memory '60 GB'
+    accelerator 1
+    label 'gpu'
     cache false
     publishDir "$RESULTS_PATH", mode: 'copy'
 
