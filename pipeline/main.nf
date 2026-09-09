@@ -495,7 +495,7 @@ workflow {
 
 
 process ghcr_pull_smoke {
-    container 'ghcr.io/allenneuraldynamics/pophys-decrosstalk-split@sha256:b2662185ab1a4f8374f1fc756f6c546429ee5d22783fafe124fd5c85311d4249'
+    container 'ghcr.io/allenneuraldynamics/pophys-decrosstalk-split@sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6'
     cache false
     publishDir "$RESULTS_PATH", mode: 'copy'
 
@@ -511,7 +511,7 @@ process ghcr_pull_smoke {
 
     result = {
         "probe": "pophys-ghcr-pull-v1",
-        "image_digest": "sha256:b2662185ab1a4f8374f1fc756f6c546429ee5d22783fafe124fd5c85311d4249",
+        "image_digest": "sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6",
         "python": platform.python_version(),
         "machine": platform.machine(),
         "scientific_processing": False,

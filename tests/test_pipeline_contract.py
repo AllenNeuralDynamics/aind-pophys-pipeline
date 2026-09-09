@@ -246,9 +246,20 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("params.ghcr_smoke_only = false", self.main)
         self.assertIn("ghcr_pull_smoke()\n        return", workflow)
         self.assertLess(workflow.index("ghcr_pull_smoke()"), workflow.index("Channel.fromPath"))
-        inventory = json.loads((ROOT / "environment/candidate-inventory.json").read_text())
-        splitter = next(row for row in inventory["images"] if row["stage"] == "DECROSSTALK_SPLIT")
-        self.assertIn(splitter["image"].split(":")[0] + "@" + splitter["digest"], self.main)
+        digest = "sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6"
+        block = re.search(
+            r"^process ghcr_pull_smoke \{(.*?)^\}", self.main, re.MULTILINE | re.DOTALL
+        ).group(1)
+        self.assertIn(f"pophys-decrosstalk-split@{digest}'", block)
+        self.assertIn(f'"image_digest": "{digest}"', block)
+        recipe = (ROOT / "environment/Dockerfile.splitter").read_text()
+        self.assertIn("procps", recipe)
+        self.assertIn("ps --version", recipe)
+        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
+        smoke = [p for p in panel["parameters"] if p["param_name"] == "ghcr_smoke_only"]
+        self.assertEqual(len(smoke), 1)
+        self.assertEqual(smoke[0]["default_value"], "false")
+        self.assertEqual(smoke[0]["extra_data"], ["false", "true"])
         for filename in ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config"):
             config = (PIPELINE / filename).read_text()
             block = re.search(r"withName: ghcr_pull_smoke \{(.*?)\}", config, re.DOTALL).group(1)

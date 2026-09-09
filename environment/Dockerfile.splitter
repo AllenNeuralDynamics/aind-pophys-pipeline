@@ -2,9 +2,9 @@
 FROM python:3.12-slim-bookworm
 RUN --mount=type=cache,target=/var/lib/apt/lists \
     --mount=type=cache,target=/var/cache/apt \
-    apt-get update && apt-get install -y --no-install-recommends bash ca-certificates git time \
+    apt-get update && apt-get install -y --no-install-recommends bash ca-certificates git time procps \
     && mkdir -p /opt/image
 COPY stages/decrosstalk_split/source.json /opt/image/source.json
-RUN python -c 'import json; from pathlib import Path' && git --version && /usr/bin/time --version \
+RUN python -c 'import json; from pathlib import Path' && git --version && /usr/bin/time --version && ps --version \
     && python -m pip list --format=json > /opt/image/packages.json
 CMD ["bash"]
