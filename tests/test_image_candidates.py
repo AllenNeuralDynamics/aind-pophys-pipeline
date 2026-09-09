@@ -202,6 +202,8 @@ class ImageCandidateTests(unittest.TestCase):
             self.assertNotIn(" install -e ", source)
             self.assertNotIn("WORKDIR /data", source)
             self.assertIn("ca-certificates git time", source)
+            self.assertIn("git time procps", source)
+            self.assertIn("ps --version", source)
             if " AS runtime\n" in source:
                 base = source.split(" AS runtime\n", 1)[0]
                 self.assertNotIn("mkdir -p /data /results /scratch", base)

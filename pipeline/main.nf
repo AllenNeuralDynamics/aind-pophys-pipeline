@@ -3,6 +3,7 @@
 nextflow.enable.dsl = 2
 
 params.ghcr_smoke_only = false
+params.image_set = 'default'
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 
 def parse_key_value_file(path) {
@@ -129,14 +130,35 @@ def image_stages = [
     'AGGREGATOR'
 ]
 params.stage_images = [:]
+def image_set = params.image_set.toString()
+if (!(image_set in ['default', 'development-ghcr'])) {
+    throw new IllegalArgumentException(
+        "Unsupported image_set: ${image_set}; expected default or development-ghcr"
+    )
+}
+def development_images = [:]
+if (image_set == 'development-ghcr') {
+    development_images = parse_key_value_file("${baseDir}/development_images.env")
+    if (development_images.keySet() != image_stages.toSet()) {
+        throw new IllegalArgumentException('Development image manifest must contain exactly all 11 stages')
+    }
+    development_images.each { stage, image ->
+        if (!(image ==~ /^ghcr\.io\/allenneuraldynamics\/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$/)) {
+            throw new IllegalArgumentException("Development image for ${stage} must be GHCR digest-pinned")
+        }
+    }
+    println 'Using development GHCR images; scientific parity is not yet established'
+}
 image_stages.each { stage ->
-    def image_ref = params.versions["${stage}${image_suffix}"]
+    def image_ref = image_set == 'development-ghcr'
+        ? development_images[stage]
+        : params.versions["${stage}${image_suffix}"]
     if (!image_ref) {
         throw new IllegalArgumentException(
             "No ${backend} image configured for ${stage}; add ${stage}${image_suffix}"
         )
     }
-    params.stage_images[stage] = backend == 'codeocean' && registry_host
+    params.stage_images[stage] = image_set == 'default' && backend == 'codeocean' && registry_host
         ? "${registry_host}/${image_ref}"
         : image_ref
 }
@@ -194,6 +216,11 @@ workflow {
     if (smoke_mode in ['true', '1']) {
         ghcr_pull_smoke()
         return
+    }
+
+    if (!params.ophys_mount_url ||
+            !(params.ophys_mount_url.toString() ==~ /^(s3:\/\/[^\/\s]+\/\S+|\/\S+)$/)) {
+        throw new IllegalArgumentException('ophys_mount_url must be a nonempty S3 URL or absolute directory')
     }
 
     // Parameterized data source selection

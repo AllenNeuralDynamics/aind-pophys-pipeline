@@ -9,7 +9,11 @@ published with identical remote digests and API-confirmed Internal visibility.
 No production pins have been promoted.
 Candidates were built across successive recipe revisions, not one identical checkout.
 
-Candidate packages may be **Private or Internal, never Public** (approved 2026-09-08).
+Candidate packages default to **Private or Internal**. Public requires an explicit
+`--allow-public-package ghcr.io/allenneuraldynamics/pophys-NAME` for each approved
+repository. This only permits an existing visibility; it never changes package
+visibility. Unknown visibility is always rejected. The procps fleet preflight on
+2026-09-08 confirmed all ten selected packages are Internal; no Public opt-in was needed.
 Internal allows authenticated enterprise members; Sean explicitly accepted that
 audience. Existing `private` entries in the image map remain the preferred setting,
 not a prohibition on Internal packages. The pipeline repository is public, while
@@ -22,7 +26,7 @@ internal code. Build-only runs do not publish packages.
 
 `publish_inventory.py` uses the Skopeo auth file for both GHCR copying and GitHub
 visibility checks; it never prints or persists the token separately. Default mode
-is read-only. It validates all eleven local archives and remote destinations before
+is read-only. It validates all selected local archives and remote destinations before
 the first write, skips matching remote tags, refuses conflicting digests, and
 records progress in `.image-work/publication-status.json`. On failure it stops;
 rerunning rechecks remote state rather than trusting a previous progress file.
@@ -50,7 +54,41 @@ skopeo copy --preserve-digests \
 Replace both references with the corresponding inventory entry, check package privacy
 before copying, and verify remote digest and Private/Internal visibility afterward. Do not
 enable format conversion or recompression. Failed or mismatching copies must not
-update production pins. Publication has not been performed.
+update production pins. The procps replacement fleet has not been published.
+
+### Ten-stage procps replacement fleet
+
+Keep `candidate-inventory.json` as historical evidence. The separate
+`procps-fleet-inventory.json` records the exact replacement archives; the already
+smoke-tested splitter is deliberately excluded. A subset must be supplied explicitly
+to both tools; omitting `--stages` still requires all eleven stages.
+
+Run from the repository root:
+
+```bash
+stages=(AGGREGATOR CLASSIFIER CONVERTER DECROSSTALK_ROI_IMAGES DFF EXTRACTION \
+        MOTION_CORRECTION MOVIE_QC NWB OASIS)
+uv run --python 3.12 --no-project environment/inventory.py \
+  --stages "${stages[@]}" --output environment/procps-fleet-inventory.json \
+  --reports .image-work/candidate-procps-fleet-20260908/*/report.json
+
+# Read-only destination preflight (also rehashes the local archives):
+uv run --python 3.12 --no-project environment/publish_inventory.py \
+  --inventory environment/procps-fleet-inventory.json --stages "${stages[@]}" \
+  --authfile "$HOME/.config/containers/auth.json" \
+  --output .image-work/procps-fleet-publication-status.json
+
+# User-executed upload, only after reviewing the preflight:
+uv run --python 3.12 --no-project environment/publish_inventory.py \
+  --inventory environment/procps-fleet-inventory.json --stages "${stages[@]}" \
+  --authfile "$HOME/.config/containers/auth.json" \
+  --output .image-work/procps-fleet-publication-status.json --execute
+```
+
+If a destination is Public, review that package's audience before adding its exact
+`--allow-public-package` option to both publication commands. The splitter's Public
+approval does not authorize any other package. Do not rebuild, retag, or recompress
+these archives for upload. Local verification does not establish runtime parity.
 
 The currently active local GitHub CLI token lacks `write:packages`. Publication
 requires a separate GHCR login with suitable package scopes and organization SSO
@@ -88,7 +126,11 @@ references, model mounts, and production `*_IMAGE_OFFCO` slots are unchanged.
 | NWB | Python 3.12 slim | PyNWB 4.1, HDMF 6.1, HDMF-Zarr 0.13, aind-nwb-utils 0.2.8 |
 | AGGREGATOR | Python 3.12 slim | manager 06ae879, schema **2.9.0**, models **6.2.0**, upgrader 0.17.12 |
 
-All images retain bash, Git, certificates, and timing. The pipeline creates
+All image recipes retain bash, Git, certificates, timing, and `procps` (`ps`),
+required by Nextflow's task-metrics wrapper. The splitter replacement passed the
+Code Ocean smoke run `18231fbb-991c-451e-8a39-f7a8a4cdb86d`; the other ten images
+must be rebuilt with this prerequisite before their GHCR runtime trials.
+The pipeline creates
 `/data`, `/results`, and `/scratch` symlinks per task; the images deliberately
 do not pre-create those paths.
 All model weights remain external mounts. No Dockerfile starts a notebook server.

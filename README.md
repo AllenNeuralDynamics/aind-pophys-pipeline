@@ -22,6 +22,10 @@ The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the 
 
 # Parameters
 
+Development-only digest-pinned GHCR images are available through the explicit
+`image_set=development-ghcr` opt-in; defaults are unchanged. See the
+[development trial contract](docs/development-ghcr.md) before selecting inputs or running.
+
 If using in Code Ocean, use the `App Builder` panel to tune parameters. You have the option of using the `pipeline_parameters.json` in the root directory to tune parameters as well. To use this file, copy it into the `/data` directory and do not rename the file.
 
 # Input

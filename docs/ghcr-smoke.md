@@ -40,7 +40,12 @@ The replacement tag is `candidate-procps-20260908`. Its OCI index digest is
 the smoke process pins its Linux amd64 manifest directly:
 `sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6`.
 The original candidate archive inventory and normal processing image pins remain
-unchanged. This replacement still requires a successful Code Ocean smoke run.
+unchanged. This replacement passed Code Ocean smoke computation
+`18231fbb-991c-451e-8a39-f7a8a4cdb86d`.
+
+For the separate, explicitly opted-in scientific trial, see
+[Development GHCR scientific trial](development-ghcr.md). The smoke control does not
+select development images for normal processing.
 
 On an Apple Silicon host, inspect the index with explicit target-platform flags:
 

@@ -10,7 +10,8 @@ ENV CAIMAN_TEMP=/scratch \
 RUN --mount=type=cache,target=/var/lib/apt/lists \
     --mount=type=cache,target=/var/cache/apt \
     apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates git time libgomp1 libglib2.0-0t64 libgl1 \
+    bash ca-certificates git time procps libgomp1 libglib2.0-0t64 libgl1 \
+    && ps --version \
     && mkdir -p /opt/image
 COPY stages/extraction/conda-linux-64.lock /opt/conda-linux-64.lock
 RUN --mount=type=cache,target=/opt/conda/pkgs \

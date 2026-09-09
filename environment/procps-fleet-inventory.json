@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "stages": [
+    "AGGREGATOR",
+    "CLASSIFIER",
+    "CONVERTER",
+    "DECROSSTALK_ROI_IMAGES",
+    "DFF",
+    "EXTRACTION",
+    "MOTION_CORRECTION",
+    "MOVIE_QC",
+    "NWB",
+    "OASIS"
+  ],
+  "purpose": "Exact existing artifacts for a private or internal registry copy; no rebuild.",
+  "counts": {
+    "candidate": 10,
+    "processed": 10,
+    "skipped": 0,
+    "failed": 0,
+    "missing": 0,
+    "parse_failures": 0
+  },
+  "limitations": [
+    "Images were built across successive recipe revisions, not one uniform checkout.",
+    "Successful image builds do not establish scientific parity or GPU execution.",
+    "Allowed private/internal visibility is policy, not evidence of a registry package."
+  ],
+  "images": [
+    {
+      "compressed_layer_bytes": 110428191,
+      "digest": "sha256:c637c82251c0287a980b9d8527fa216b87afcef87a817213ecfe4245e3a157b9",
+      "image": "ghcr.io/allenneuraldynamics/pophys-aggregator:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 110453248,
+      "platform_manifest_digest": "sha256:c637c82251c0287a980b9d8527fa216b87afcef87a817213ecfe4245e3a157b9",
+      "promoted": false,
+      "published": false,
+      "stage": "AGGREGATOR",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/AGGREGATOR/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/AGGREGATOR/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 3439098240,
+      "digest": "sha256:6cdee201da4e2df031eb3cd14bbad4619d2c6fce65aacef07aace9be35132deb",
+      "image": "ghcr.io/allenneuraldynamics/pophys-classifier:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 3439123968,
+      "platform_manifest_digest": "sha256:6cdee201da4e2df031eb3cd14bbad4619d2c6fce65aacef07aace9be35132deb",
+      "promoted": false,
+      "published": false,
+      "stage": "CLASSIFIER",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/CLASSIFIER/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/CLASSIFIER/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 483972810,
+      "digest": "sha256:532777a9c734bbc40d3c123a02288668c9a688d8346734b349b3c176b063c934",
+      "image": "ghcr.io/allenneuraldynamics/pophys-converter:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 483998720,
+      "platform_manifest_digest": "sha256:532777a9c734bbc40d3c123a02288668c9a688d8346734b349b3c176b063c934",
+      "promoted": false,
+      "published": false,
+      "stage": "CONVERTER",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/CONVERTER/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/CONVERTER/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 792770131,
+      "digest": "sha256:85f605a1a5ee0173794b2272be7ce92b80084ac1b120663172dfc815b559616c",
+      "image": "ghcr.io/allenneuraldynamics/pophys-decrosstalk-roi-images:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 792795648,
+      "platform_manifest_digest": "sha256:85f605a1a5ee0173794b2272be7ce92b80084ac1b120663172dfc815b559616c",
+      "promoted": false,
+      "published": false,
+      "stage": "DECROSSTALK_ROI_IMAGES",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/DECROSSTALK_ROI_IMAGES/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/DECROSSTALK_ROI_IMAGES/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 623873731,
+      "digest": "sha256:7743864a784c63306b7660a9f2b9b806fae5a482eb1e813576879116f364657f",
+      "image": "ghcr.io/allenneuraldynamics/pophys-dff:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 623899648,
+      "platform_manifest_digest": "sha256:7743864a784c63306b7660a9f2b9b806fae5a482eb1e813576879116f364657f",
+      "promoted": false,
+      "published": false,
+      "stage": "DFF",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/DFF/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/DFF/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 1704488708,
+      "digest": "sha256:d5a8e35cb223d1baf98a762d833a4a6a834f2b3fa0100206643e97abff7a92da",
+      "image": "ghcr.io/allenneuraldynamics/pophys-extraction:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 19,
+      "oci_archive_bytes": 1704523264,
+      "platform_manifest_digest": "sha256:d5a8e35cb223d1baf98a762d833a4a6a834f2b3fa0100206643e97abff7a92da",
+      "promoted": false,
+      "published": false,
+      "stage": "EXTRACTION",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/EXTRACTION/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/EXTRACTION/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 802261653,
+      "digest": "sha256:e85274e4543565770c4f2ce41d18ed9ba1be47f4ce0112679abb8ef37f52e649",
+      "image": "ghcr.io/allenneuraldynamics/pophys-motion-correction:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 802287616,
+      "platform_manifest_digest": "sha256:e85274e4543565770c4f2ce41d18ed9ba1be47f4ce0112679abb8ef37f52e649",
+      "promoted": false,
+      "published": false,
+      "stage": "MOTION_CORRECTION",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/MOTION_CORRECTION/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/MOTION_CORRECTION/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 231072464,
+      "digest": "sha256:2b97258dec38a1c2362498834262b480b549a9abb61790c42ec21ca2e2eeec21",
+      "image": "ghcr.io/allenneuraldynamics/pophys-movie-qc:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 231098368,
+      "platform_manifest_digest": "sha256:2b97258dec38a1c2362498834262b480b549a9abb61790c42ec21ca2e2eeec21",
+      "promoted": false,
+      "published": false,
+      "stage": "MOVIE_QC",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/MOVIE_QC/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/MOVIE_QC/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 272969275,
+      "digest": "sha256:82b8b76e60d7a90419ba7b63bd0ac207d734048bbcb8b7c944f13f1d6169e60b",
+      "image": "ghcr.io/allenneuraldynamics/pophys-nwb:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 272995328,
+      "platform_manifest_digest": "sha256:82b8b76e60d7a90419ba7b63bd0ac207d734048bbcb8b7c944f13f1d6169e60b",
+      "promoted": false,
+      "published": false,
+      "stage": "NWB",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/NWB/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/NWB/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    },
+    {
+      "compressed_layer_bytes": 229595943,
+      "digest": "sha256:9575e75de3ce961c1c9fae7895b5f0b954e28755c81e4b8be1b5040563b0f6f3",
+      "image": "ghcr.io/allenneuraldynamics/pophys-oasis:candidate-procps-fleet-20260908",
+      "image_built": true,
+      "layers": 11,
+      "oci_archive_bytes": 229622272,
+      "platform_manifest_digest": "sha256:9575e75de3ce961c1c9fae7895b5f0b954e28755c81e4b8be1b5040563b0f6f3",
+      "promoted": false,
+      "published": false,
+      "stage": "OASIS",
+      "allowed_visibilities": [
+        "private",
+        "internal"
+      ],
+      "archive": ".image-work/candidate-procps-fleet-20260908/OASIS/image.tar",
+      "build_report": ".image-work/candidate-procps-fleet-20260908/OASIS/report.json",
+      "invariants": {
+        "platform": "linux/amd64",
+        "all_referenced_blob_checksums": true
+      }
+    }
+  ],
+  "failures": []
+}

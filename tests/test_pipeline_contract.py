@@ -77,6 +77,38 @@ class PipelineContractTests(unittest.TestCase):
                 else:
                     self.assertIn(capsule_id, self.main)
 
+    def test_development_images_match_complete_published_inventory(self):
+        images = read_manifest(PIPELINE / "development_images.env")
+        inventory = json.loads((ROOT / "environment/procps-fleet-inventory.json").read_text())
+        expected = {
+            row["stage"]: row["image"].rsplit(":", 1)[0] + "@" + row["platform_manifest_digest"]
+            for row in inventory["images"]
+        }
+        self.assertEqual(len(expected), 10)
+        expected["DECROSSTALK_SPLIT"] = (
+            "ghcr.io/allenneuraldynamics/pophys-decrosstalk-split@"
+            "sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6"
+        )
+        self.assertEqual(set(images), set(STAGES))
+        self.assertEqual(images, expected)
+        for image in images.values():
+            self.assertRegex(image, r"^ghcr\.io/allenneuraldynamics/pophys-[a-z-]+@sha256:[0-9a-f]{64}$")
+
+    def test_development_selection_is_explicit_and_fail_closed(self):
+        self.assertIn("params.image_set = 'default'", self.main)
+        self.assertIn("image_set in ['default', 'development-ghcr']", self.main)
+        self.assertIn("development_images.keySet() != image_stages.toSet()", self.main)
+        self.assertIn("image_set == 'default' && backend == 'codeocean' && registry_host", self.main)
+        self.assertIn(': params.versions["${stage}${image_suffix}"]', self.main)
+        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
+        parameters = {p["param_name"]: p for p in panel["parameters"]}
+        self.assertEqual(len(parameters), len(panel["parameters"]))
+        self.assertEqual(parameters["image_set"]["default_value"], "default")
+        self.assertEqual(parameters["image_set"]["extra_data"], ["default", "development-ghcr"])
+        self.assertEqual(parameters["ophys_mount_url"]["default_value"],
+                         re.search(r"params.ophys_mount_url = '([^']+)'", self.main).group(1))
+        self.assertIn("ophys_mount_url must be a nonempty S3 URL or absolute directory", self.main)
+
     def test_git_source_stages_use_sha_checkout_helper(self):
         self.assertIn("def gitCloneFunction", self.main)
         self.assertIn("git -C capsule-repo -c core.fileMode=false checkout", self.main)

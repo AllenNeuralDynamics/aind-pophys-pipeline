@@ -15,6 +15,47 @@ with patch.object(sys, "path", [str(ENVIRONMENT), *sys.path]):
 
 
 class PublicationTests(unittest.TestCase):
+    def test_public_permission_is_exact_and_never_allows_unknown(self):
+        repository = "ghcr.io/allenneuraldynamics/pophys-dff"
+        for visibility, allowed, accepted in (
+            ("public", [repository], True),
+            ("public", ["ghcr.io/allenneuraldynamics/pophys-nwb"], False),
+            ("unknown", [repository], False),
+        ):
+            with self.subTest(visibility=visibility, allowed=allowed):
+                with patch.object(publication.urllib.request, "urlopen",
+                                  return_value=io.BytesIO(json.dumps({"visibility": visibility}).encode())):
+                    if accepted:
+                        self.assertEqual(publication.package_visibility(
+                            repository, "unused", allowed), "public")
+                    else:
+                        with self.assertRaisesRegex(ValueError, "Refusing"):
+                            publication.package_visibility(repository, "unused", allowed)
+
+    def test_subset_must_be_explicit_and_complete(self):
+        manifest = {"images": [{"stage": "DFF"}], "failures": [], "stages": ["DFF"]}
+        self.assertEqual(publication.publication_entries(manifest, {"DFF": {}}), manifest["images"])
+        with self.assertRaises(ValueError):
+            publication.publication_entries(manifest, {"DFF": {}, "DECROSSTALK_SPLIT": {}})
+        for images in ([], [{"stage": "DFF"}, {"stage": "DFF"}], [{"stage": "UNKNOWN"}]):
+            with self.subTest(images=images), self.assertRaises(ValueError):
+                publication.publication_entries({**manifest, "images": images}, {"DFF": {}})
+        with self.assertRaises(ValueError):
+            publication.publication_entries({**manifest, "failures": ["bad"]}, {"DFF": {}})
+
+    def test_public_permission_survives_pre_and_post_copy_checks(self):
+        repository = "ghcr.io/allenneuraldynamics/pophys-dff"
+        row = {"image": repository + ":candidate-test", "digest": "sha256:expected",
+               "archive": ".image-work/test/image.tar"}
+        with patch.object(publication, "package_visibility", return_value="public") as visibility:
+            with patch.object(publication, "remote_digest", side_effect=[None, "sha256:expected"]):
+                with patch.object(publication.subprocess, "run"):
+                    publication.publish_entry(row, Path("/unused"), "unused", [repository])
+        self.assertEqual(row["status"], "published")
+        self.assertEqual(visibility.call_count, 2)
+        for call in visibility.call_args_list:
+            self.assertEqual(call.args[2], [repository])
+
     def test_accepts_only_private_or_internal(self):
         for visibility in ("private", "internal", "public", "unknown"):
             with self.subTest(visibility=visibility):

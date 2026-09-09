@@ -67,3 +67,11 @@ class InventoryTests(unittest.TestCase):
         result = inventory.collect([], {"DFF": {}})
         self.assertEqual(result["counts"]["missing"], 1)
         self.assertTrue(result["failures"])
+
+    def test_explicit_stage_subset(self):
+        rows = {"DFF": {}, "DECROSSTALK_SPLIT": {}}
+        self.assertEqual(inventory.select_stages(rows, ["DFF"]), {"DFF": {}})
+        self.assertEqual(inventory.select_stages(rows), rows)
+        for stages in ([], ["UNKNOWN"], ["DFF", "DFF"]):
+            with self.subTest(stages=stages), self.assertRaises(ValueError):
+                inventory.select_stages(rows, stages)

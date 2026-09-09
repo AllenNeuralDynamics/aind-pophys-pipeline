@@ -9,8 +9,9 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
 RUN --mount=type=cache,target=/var/lib/apt/lists \
     --mount=type=cache,target=/var/cache/apt \
     apt-get update && apt-get install -y --no-install-recommends \
-    bash ca-certificates git time libgomp1 libglib2.0-0 \
+    bash ca-certificates git time procps libgomp1 libglib2.0-0 \
     $(if [ "$STAGE_DIR" = "classifier" ]; then printf 'libtk8.6 '; fi) \
+    && ps --version \
     && mkdir -p /opt/image
 
 FROM runtime-base AS dependencies

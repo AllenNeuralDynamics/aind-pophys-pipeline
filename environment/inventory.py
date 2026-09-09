@@ -10,6 +10,15 @@ from pathlib import Path
 from candidates import ROOT, validate
 
 
+def select_stages(rows, stages=None):
+    """Select a nonempty, explicit stage set; default to the complete map."""
+    if stages is None:
+        return rows
+    if not stages or len(stages) != len(set(stages)) or set(stages) - set(rows):
+        raise ValueError("Stages must be nonempty, unique, known stage names")
+    return {stage: rows[stage] for stage in sorted(stages)}
+
+
 def check_archive(path, report):
     """Verify manifest, config and layer bytes without extracting image files."""
     with tarfile.open(path, "r:") as archive:
@@ -74,6 +83,7 @@ def check_archive(path, report):
 def collect(reports, rows):
     """Require exactly one verified artifact per declared stage."""
     entries, failures, seen = [], [], set()
+    parse_failures = 0
     for path in reports:
         try:
             report = json.loads(path.read_text())
@@ -95,16 +105,18 @@ def collect(reports, rows):
                 "invariants": invariants,
             })
         except (OSError, ValueError, KeyError, TypeError, tarfile.TarError) as error:
+            parse_failures += isinstance(error, (json.JSONDecodeError, KeyError, TypeError))
             failures.append({"report": str(path), "error": str(error)})
     missing = sorted(set(rows) - seen)
     if missing:
         failures.append({"missing_stages": missing})
     return {
         "schema_version": 1,
+        "stages": sorted(rows),
         "purpose": "Exact existing artifacts for a private or internal registry copy; no rebuild.",
         "counts": {
             "candidate": len(reports), "processed": len(entries), "skipped": 0,
-            "failed": len(failures), "missing": len(missing),
+            "failed": len(failures), "missing": len(missing), "parse_failures": parse_failures,
         },
         "limitations": [
             "Images were built across successive recipe revisions, not one uniform checkout.",
@@ -120,8 +132,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reports", type=Path, nargs="+", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--stages", nargs="+", help="Explicit subset; default requires every stage")
     args = parser.parse_args()
-    result = collect([path.resolve() for path in args.reports], validate())
+    result = collect([path.resolve() for path in args.reports], select_stages(validate(), args.stages))
     # A failed audit must not leave a success-shaped publication inventory.
     args.output.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps({"counts": result["counts"], "failures": result["failures"]}))

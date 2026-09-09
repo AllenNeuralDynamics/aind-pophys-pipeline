@@ -445,6 +445,26 @@
 			]
 		},
 		{
+			"id": "DevImageSet00001",
+			"name": "image_set",
+			"param_name": "image_set",
+			"description": "Development pipeline only: opt into the 11 digest-pinned GHCR images. Default preserves existing backend image pins.",
+			"type": "list",
+			"value_type": "string",
+			"default_value": "default",
+			"extra_data": ["default", "development-ghcr"]
+		},
+		{
+			"id": "OphysSource00001",
+			"name": "ophys_mount_url",
+			"param_name": "ophys_mount_url",
+			"description": "Explicit raw input root (S3 URL or absolute mounted directory); takes precedence over attached ophys_mount. Must be nonempty.",
+			"type": "text",
+			"value_type": "string",
+			"default_value": "s3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01",
+			"required": true
+		},
+		{
 			"id": "qJPrXDS0DDvEvzoC",
 			"name": "input_dir",
 			"param_name": "input_dir",
