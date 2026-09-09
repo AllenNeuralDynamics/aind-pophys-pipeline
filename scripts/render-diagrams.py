@@ -4,13 +4,13 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 NEXTFLOW_VERSION = "24.10.4"
-RENDERER = "nf-metro==2.0.0"
 LABELS = {
     "converter_capsule": "Converter",
     "motion_correction": "Registration",
@@ -24,6 +24,69 @@ LABELS = {
     "ophys_nwb": "NWB packaging",
     "pipeline_processing_metadata_aggregator": "Metadata merge",
 }
+
+
+def process_graph(text):
+    """Collapse operator paths, stopping at each intervening process."""
+    nodes = dict(re.findall(r'^\s*(v\d+)\(\["?([^"\]]+)"?\]\)', text, re.MULTILINE))
+    if not nodes or set(nodes.values()) - set(LABELS):
+        raise ValueError("Unexpected process nodes in Nextflow DAG")
+    adjacency = {}
+    for source, target in re.findall(r"^\s*(v\d+)\s+-->\s+(v\d+)\s*$", text, re.MULTILINE):
+        adjacency.setdefault(source, set()).add(target)
+    edges = set()
+    for source in nodes:
+        pending = list(adjacency.get(source, ()))
+        visited = set()
+        while pending:
+            target = pending.pop()
+            if target in visited:
+                continue
+            visited.add(target)
+            if target in nodes:
+                if target != source:
+                    edges.add((nodes[source], nodes[target]))
+            else:
+                pending.extend(adjacency.get(target, ()))
+    return set(nodes.values()), edges
+
+
+def waterfall(text, mode):
+    """Render explicit process dependencies, without merging routes."""
+    nodes, edges = process_graph(text)
+    lines = [
+        "digraph pophys {",
+        'graph [rankdir=TB, bgcolor="white", pad=0.3, nodesep=0.55, ranksep=0.55, '
+        'splines=polyline, outputorder=edgesfirst, fontname="Helvetica", fontsize=20, '
+        f'label="Pophys: {mode}", labelloc=t];',
+        'node [shape=box, style="rounded,filled", fillcolor="#edf5fc", color="#3973a3", '
+        'fontname="Helvetica", fontsize=13, margin="0.18,0.13"];',
+        'edge [color="#527a99", arrowsize=0.7, penwidth=1.3, fontname="Helvetica", fontsize=10];',
+    ]
+    for node in LABELS:
+        if node in nodes:
+            label = LABELS[node]
+            if node == "decrosstalk_roi_images":
+                label += "\\nRequires pair definitions + movies"
+            lines.append(f'{node} [label="{label}"];')
+    lines.append("{rank=same; classifier; dff_capsule;}")
+    for source, target in sorted(edges):
+        style = ""
+        if target == "pipeline_processing_metadata_aggregator":
+            weight = 8 if source == "ophys_nwb" else 0
+            style = f' [color="#9aa5b1", style=dashed, penwidth=1, weight={weight}]'
+        elif (source, target) == ("decrosstalk_split_json", "decrosstalk_roi_images"):
+            style = ' [color="#185e37", penwidth=2.2, label="pair definitions"]'
+        lines.append(f"{source} -> {target}{style};")
+    lines.extend([
+        'legend [shape=plain, fillcolor="white", fontcolor="#53616d", fontsize=11, '
+        'label="Arrows are inputs, not alternative routes.\\n'
+        'Dashed arrows: metadata/QC aggregation.\\n'
+        'External inputs and channel operators omitted."];',
+        "pipeline_processing_metadata_aggregator -> legend [style=invis];",
+        "}",
+    ])
+    return "\n".join(lines) + "\n", nodes, edges
 
 
 def main():
@@ -46,6 +109,7 @@ def main():
     version = subprocess.check_output([str(runtime), "-version"], env=environment, text=True)
     if f"version {NEXTFLOW_VERSION} " not in version:
         raise ValueError(f"Use Nextflow {NEXTFLOW_VERSION}")
+    renderer_version = subprocess.check_output(["dot", "-V"], stderr=subprocess.STDOUT, text=True).strip()
     source = ROOT / "pipeline/main.nf"
     counts = {}
     for mode, expected in (("single", 9), ("multiplane", 11)):
@@ -89,19 +153,24 @@ def main():
             display = display.replace(f'(["{name}"])', f'(["{label}"])')
         labeled = output / f"{mode}.display.mmd"
         labeled.write_text(display)
-        subprocess.run([
-            "uvx", "--from", RENDERER, "nf-metro", "render", str(labeled),
-            "--from-nextflow", "--theme", "seqera", "--mode", "light",
-            "--title", f"Pophys: {mode} preview", "-o", str(output / f"{mode}.svg"),
-        ], check=True)
+        dot_source, nodes, edges = waterfall(text, mode)
+        if len(nodes) != expected:
+            raise ValueError(f"{mode}: collapsed process count differs")
+        if mode == "multiplane" and (
+            "decrosstalk_split_json", "decrosstalk_roi_images"
+        ) not in edges:
+            raise ValueError("Missing required splitter-to-decrosstalk edge")
+        dotfile = output / f"{mode}.dot"
+        dotfile.write_text(dot_source)
+        subprocess.run(["dot", "-Tsvg", str(dotfile), "-o", str(output / f"{mode}.svg")], check=True)
     (output / "provenance.json").write_text(json.dumps({
-        "nextflow": NEXTFLOW_VERSION, "renderer": RENDERER,
+        "nextflow": NEXTFLOW_VERSION, "renderer": renderer_version,
         "main_nf_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "source_commit": subprocess.check_output(
             ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
         "process_counts": counts, "processing_tasks_executed": False,
         "inputs": "Local placeholder paths, no scientific data or cloud mounts.",
-        "scope": "Parameter-selected process graphs; metro rendering simplifies channel operators.",
+        "scope": "Top-down process dependencies; operator paths collapsed without removing process edges.",
     }, indent=2) + "\n")
     if args.docs_output:
         args.docs_output.mkdir(parents=True, exist_ok=True)

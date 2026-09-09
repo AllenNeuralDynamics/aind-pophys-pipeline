@@ -1,0 +1,45 @@
+digraph pophys {
+graph [rankdir=TB, bgcolor="white", pad=0.3, nodesep=0.55, ranksep=0.55, splines=polyline, outputorder=edgesfirst, fontname="Helvetica", fontsize=20, label="Pophys: multiplane", labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#edf5fc", color="#3973a3", fontname="Helvetica", fontsize=13, margin="0.18,0.13"];
+edge [color="#527a99", arrowsize=0.7, penwidth=1.3, fontname="Helvetica", fontsize=10];
+converter_capsule [label="Converter"];
+motion_correction [label="Registration"];
+movie_qc [label="Movie QC"];
+decrosstalk_split_json [label="Pair splitting"];
+decrosstalk_roi_images [label="Decrosstalk\nRequires pair definitions + movies"];
+extraction [label="Extraction"];
+dff_capsule [label="dF/F"];
+oasis_event_detection [label="Events"];
+classifier [label="Classifier"];
+ophys_nwb [label="NWB packaging"];
+pipeline_processing_metadata_aggregator [label="Metadata merge"];
+{rank=same; classifier; dff_capsule;}
+classifier -> ophys_nwb;
+classifier -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+converter_capsule -> decrosstalk_roi_images;
+converter_capsule -> motion_correction;
+converter_capsule -> movie_qc;
+converter_capsule -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+decrosstalk_roi_images -> extraction;
+decrosstalk_roi_images -> ophys_nwb;
+decrosstalk_roi_images -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+decrosstalk_split_json -> decrosstalk_roi_images [color="#185e37", penwidth=2.2, label="pair definitions"];
+dff_capsule -> oasis_event_detection;
+dff_capsule -> ophys_nwb;
+dff_capsule -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+extraction -> classifier;
+extraction -> dff_capsule;
+extraction -> ophys_nwb;
+extraction -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+motion_correction -> decrosstalk_roi_images;
+motion_correction -> decrosstalk_split_json;
+motion_correction -> movie_qc;
+motion_correction -> ophys_nwb;
+motion_correction -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+movie_qc -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+oasis_event_detection -> ophys_nwb;
+oasis_event_detection -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=0];
+ophys_nwb -> pipeline_processing_metadata_aggregator [color="#9aa5b1", style=dashed, penwidth=1, weight=8];
+legend [shape=plain, fillcolor="white", fontcolor="#53616d", fontsize=11, label="Arrows are inputs, not alternative routes.\nDashed arrows: metadata/QC aggregation.\nExternal inputs and channel operators omitted."];
+pipeline_processing_metadata_aggregator -> legend [style=invis];
+}

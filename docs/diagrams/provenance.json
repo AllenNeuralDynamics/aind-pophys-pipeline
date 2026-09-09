@@ -1,13 +1,13 @@
 {
   "nextflow": "24.10.4",
-  "renderer": "nf-metro==2.0.0",
+  "renderer": "dot - graphviz version 16.0.0 (20260814.1018)",
   "main_nf_sha256": "ab70da434fe682f2bba01177db7613b071e88eca75b45ba47bc51a73ad3f0486",
-  "source_commit": "13be661fccb00b0c63288afe2048312836adf2d1",
+  "source_commit": "ab5845bcf12b33ad15f55f9d500fab6d05a2e111",
   "process_counts": {
     "single": 9,
     "multiplane": 11
   },
   "processing_tasks_executed": false,
   "inputs": "Local placeholder paths, no scientific data or cloud mounts.",
-  "scope": "Parameter-selected process graphs; metro rendering simplifies channel operators."
+  "scope": "Top-down process dependencies; operator paths collapsed without removing process edges."
 }
