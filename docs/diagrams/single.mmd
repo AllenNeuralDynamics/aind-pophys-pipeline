@@ -1,0 +1,166 @@
+flowchart TB
+    subgraph " "
+    v11["Channel.fromPath"]
+    v12["Channel.fromPath"]
+    v13["Channel.fromPath"]
+    v14["Channel.fromPath"]
+    v15["Channel.fromPath"]
+    v16["Channel.fromPath"]
+    v17["Channel.fromPath"]
+    v18["Channel.fromPath"]
+    v19["Channel.fromPath"]
+    end
+    subgraph " "
+    v20[" "]
+    v29[" "]
+    v30[" "]
+    v31[" "]
+    v35[" "]
+    v36[" "]
+    v44[" "]
+    v50[" "]
+    v51[" "]
+    v66[" "]
+    v67[" "]
+    v71[" "]
+    v72[" "]
+    v100[" "]
+    v125[" "]
+    end
+    v28([converter_capsule])
+    v43([motion_correction])
+    v49([movie_qc])
+    v56([extraction])
+    v59([dff_capsule])
+    v65([classifier])
+    v70([oasis_event_detection])
+    v99([ophys_nwb])
+    v124([pipeline_processing_metadata_aggregator])
+    v32(( ))
+    v38(( ))
+    v39(( ))
+    v40(( ))
+    v45(( ))
+    v46(( ))
+    v47(( ))
+    v52(( ))
+    v53(( ))
+    v54(( ))
+    v57(( ))
+    v58(( ))
+    v60(( ))
+    v61(( ))
+    v62(( ))
+    v63(( ))
+    v68(( ))
+    v69(( ))
+    v73(( ))
+    v81(( ))
+    v82(( ))
+    v83(( ))
+    v85(( ))
+    v86(( ))
+    v89(( ))
+    v93(( ))
+    v96(( ))
+    v97(( ))
+    v98(( ))
+    v101(( ))
+    v110(( ))
+    v119(( ))
+    v11 --> v28
+    v12 --> v38
+    v12 --> v46
+    v12 --> v53
+    v12 --> v58
+    v12 --> v60
+    v12 --> v69
+    v12 --> v82
+    v12 --> v119
+    v13 --> v39
+    v13 --> v85
+    v14 --> v81
+    v15 --> v61
+    v16 --> v54
+    v17 --> v63
+    v18 --> v83
+    v19 --> v20
+    v28 --> v31
+    v28 --> v30
+    v28 --> v29
+    v28 --> v32
+    v28 --> v40
+    v28 --> v101
+    v28 --> v110
+    v32 --> v35
+    v32 --> v36
+    v32 --> v43
+    v38 --> v43
+    v39 --> v43
+    v40 --> v43
+    v43 --> v44
+    v43 --> v45
+    v43 --> v52
+    v43 --> v73
+    v43 --> v86
+    v43 --> v101
+    v43 --> v110
+    v45 --> v49
+    v46 --> v49
+    v47 --> v49
+    v49 --> v51
+    v49 --> v50
+    v49 --> v101
+    v49 --> v110
+    v52 --> v56
+    v53 --> v56
+    v54 --> v56
+    v56 --> v57
+    v56 --> v62
+    v56 --> v73
+    v56 --> v93
+    v56 --> v101
+    v56 --> v110
+    v57 --> v59
+    v58 --> v59
+    v59 --> v68
+    v59 --> v73
+    v59 --> v97
+    v59 --> v101
+    v59 --> v110
+    v60 --> v65
+    v61 --> v65
+    v62 --> v65
+    v63 --> v65
+    v65 --> v67
+    v65 --> v66
+    v65 --> v73
+    v65 --> v96
+    v65 --> v101
+    v65 --> v110
+    v68 --> v70
+    v69 --> v70
+    v70 --> v72
+    v70 --> v71
+    v70 --> v73
+    v70 --> v98
+    v70 --> v101
+    v70 --> v110
+    v73 --> v99
+    v81 --> v99
+    v82 --> v99
+    v83 --> v99
+    v85 --> v99
+    v86 --> v99
+    v89 --> v99
+    v93 --> v99
+    v96 --> v99
+    v97 --> v99
+    v98 --> v99
+    v99 --> v100
+    v99 --> v101
+    v99 --> v110
+    v101 --> v124
+    v110 --> v124
+    v119 --> v124
+    v124 --> v125

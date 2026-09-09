@@ -8,6 +8,7 @@ pipeline/work/
 pipeline/results/
 __pycache__/
 .image-work/
+.nextflow/
 
 # PyCharm folder
 .idea/

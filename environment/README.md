@@ -4,9 +4,9 @@
 `candidate-inventory.json` records the exact selected archive paths, tags, digests,
 and sizes. Every referenced manifest, config and compressed layer was verified
 against its SHA-256. The builds passed their embedded import checks; scientific
-parity and actual GPU execution remain unverified. The splitter has been published
-with an identical remote digest and user-confirmed Internal visibility; the other
-ten remain local. No production pins have been promoted.
+parity and actual GPU execution remain unverified. All eleven images have been
+published with identical remote digests and API-confirmed Internal visibility.
+No production pins have been promoted.
 Candidates were built across successive recipe revisions, not one identical checkout.
 
 Candidate packages may be **Private or Internal, never Public** (approved 2026-09-08).
@@ -19,6 +19,23 @@ step. Existing package visibility and access must be checked before uploading
 internal code. Build-only runs do not publish packages.
 
 ## Exact-artifact publication preparation
+
+`publish_inventory.py` uses the Skopeo auth file for both GHCR copying and GitHub
+visibility checks; it never prints or persists the token separately. Default mode
+is read-only. It validates all eleven local archives and remote destinations before
+the first write, skips matching remote tags, refuses conflicting digests, and
+records progress in `.image-work/publication-status.json`. On failure it stops;
+rerunning rechecks remote state rather than trusting a previous progress file.
+
+```bash
+# Read-only preflight:
+uv run --python 3.12 --no-project environment/publish_inventory.py \
+  --authfile "$HOME/.config/containers/auth.json"
+
+# Explicitly upload the ready images:
+uv run --python 3.12 --no-project environment/publish_inventory.py \
+  --authfile "$HOME/.config/containers/auth.json" --execute
+```
 
 Use the recorded OCI archives, not `candidates.py build --publish`, to publish this
 specific candidate set. The latter rebuilds and can produce different bytes.

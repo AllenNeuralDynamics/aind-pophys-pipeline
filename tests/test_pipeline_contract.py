@@ -241,6 +241,21 @@ class PipelineContractTests(unittest.TestCase):
         directives = re.findall(r"^\s*(?:cpus|memory|accelerator|label)\b", self.main, re.MULTILINE)
         self.assertEqual(directives, [])
 
+    def test_registry_probe_returns_before_scientific_inputs(self):
+        workflow = self.main.split("workflow {", 1)[1]
+        self.assertIn("params.ghcr_smoke_only = false", self.main)
+        self.assertIn("ghcr_pull_smoke()\n        return", workflow)
+        self.assertLess(workflow.index("ghcr_pull_smoke()"), workflow.index("Channel.fromPath"))
+        inventory = json.loads((ROOT / "environment/candidate-inventory.json").read_text())
+        splitter = next(row for row in inventory["images"] if row["stage"] == "DECROSSTALK_SPLIT")
+        self.assertIn(splitter["image"].split(":")[0] + "@" + splitter["digest"], self.main)
+        for filename in ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config"):
+            config = (PIPELINE / filename).read_text()
+            block = re.search(r"withName: ghcr_pull_smoke \{(.*?)\}", config, re.DOTALL).group(1)
+            for directive in ("cpus = 1", "memory = '1 GB'", "time = '10m'",
+                              "errorStrategy = 'terminate'", "maxRetries = 0"):
+                self.assertIn(directive, block)
+
 
 if __name__ == "__main__":
     unittest.main()

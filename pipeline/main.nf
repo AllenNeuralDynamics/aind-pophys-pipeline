@@ -2,6 +2,7 @@
 
 nextflow.enable.dsl = 2
 
+params.ghcr_smoke_only = false
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 
 def parse_key_value_file(path) {
@@ -186,6 +187,15 @@ publishRelativeSkipRunLevel = { String filename ->
 }
 
 workflow {
+    def smoke_mode = params.ghcr_smoke_only.toString().toLowerCase()
+    if (!(smoke_mode in ['true', 'false', '1', '0'])) {
+        throw new IllegalArgumentException('ghcr_smoke_only must be true, false, 1, or 0')
+    }
+    if (smoke_mode in ['true', '1']) {
+        ghcr_pull_smoke()
+        return
+    }
+
     // Parameterized data source selection
     def use_s3_source = params.containsKey('ophys_mount_url')
     
@@ -483,6 +493,34 @@ workflow {
     )
 }
 
+
+process ghcr_pull_smoke {
+    container 'ghcr.io/allenneuraldynamics/pophys-decrosstalk-split@sha256:b2662185ab1a4f8374f1fc756f6c546429ee5d22783fafe124fd5c85311d4249'
+    cache false
+    publishDir "$RESULTS_PATH", mode: 'copy'
+
+    output:
+    path 'ghcr-smoke.json'
+
+    script:
+    '''
+    python - <<'PY'
+    import json
+    import platform
+    from pathlib import Path
+
+    result = {
+        "probe": "pophys-ghcr-pull-v1",
+        "image_digest": "sha256:b2662185ab1a4f8374f1fc756f6c546429ee5d22783fafe124fd5c85311d4249",
+        "python": platform.python_version(),
+        "machine": platform.machine(),
+        "scientific_processing": False,
+    }
+    Path("ghcr-smoke.json").write_text(json.dumps(result, indent=2) + "\\n")
+    print(json.dumps(result))
+    PY
+    '''
+}
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {

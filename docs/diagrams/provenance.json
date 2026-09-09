@@ -1,0 +1,13 @@
+{
+  "nextflow": "24.10.4",
+  "renderer": "nf-metro==2.0.0",
+  "main_nf_sha256": "ab70da434fe682f2bba01177db7613b071e88eca75b45ba47bc51a73ad3f0486",
+  "source_commit": "13be661fccb00b0c63288afe2048312836adf2d1",
+  "process_counts": {
+    "single": 9,
+    "multiplane": 11
+  },
+  "processing_tasks_executed": false,
+  "inputs": "Local placeholder paths, no scientific data or cloud mounts.",
+  "scope": "Parameter-selected process graphs; metro rendering simplifies channel operators."
+}
