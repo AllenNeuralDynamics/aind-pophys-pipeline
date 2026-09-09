@@ -353,6 +353,11 @@ class PipelineContractTests(unittest.TestCase):
             self.assertIn(directive, config_block)
         self.assertIn("maxRetries = 1", code_ocean)
 
+        classifier_config = re.search(
+            r"withName: classifier \{(.*?)\}", code_ocean, re.DOTALL
+        ).group(1)
+        self.assertIn("maxForks = 1", classifier_config)
+
 
 if __name__ == "__main__":
     unittest.main()
