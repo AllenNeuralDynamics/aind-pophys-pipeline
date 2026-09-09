@@ -1052,6 +1052,10 @@ process classifier {
 	tag 'capsule-2013356'
     def container_name = params.stage_images['CLASSIFIER']
     container container_name
+    cpus 16
+    memory '60 GB'
+    accelerator 1
+    label 'gpu'
 
 	publishDir "$RESULTS_PATH", saveAs: publishRelative
 

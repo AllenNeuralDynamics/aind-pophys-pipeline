@@ -256,7 +256,11 @@ class PipelineContractTests(unittest.TestCase):
         local = (PIPELINE / "nextflow_local.config").read_text()
         slurm = (PIPELINE / "nextflow_slurm.config").read_text()
         self.assertIn("params.backend = 'codeocean'", code_ocean)
-        self.assertIn("accelerator = 1", code_ocean)
+        classifier = re.search(
+            r"^process classifier \{(.*?)^\}", self.main, re.MULTILINE | re.DOTALL
+        ).group(1)
+        for directive in ("cpus 16", "memory '60 GB'", "accelerator 1", "label 'gpu'"):
+            self.assertIn(directive, classifier)
         self.assertIn("params.backend = 'local'", local)
         self.assertIn("executor = 'local'", local)
         self.assertIn("params.backend = 'slurm'", slurm)
@@ -270,15 +274,17 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn('--bind ${data_path}:/tmp/data', slurm)
 
     def test_process_resources_are_configured_outside_main(self):
-        main_without_gpu_probe = re.sub(
-            r"^process gpu_smoke \{.*?^\}",
-            "",
-            self.main,
-            flags=re.MULTILINE | re.DOTALL,
-        )
+        main_without_gpu_processes = self.main
+        for process in ("gpu_smoke", "classifier"):
+            main_without_gpu_processes = re.sub(
+                rf"^process {process} \{{.*?^\}}",
+                "",
+                main_without_gpu_processes,
+                flags=re.MULTILINE | re.DOTALL,
+            )
         directives = re.findall(
             r"^\s*(?:cpus|memory|accelerator|label)\b",
-            main_without_gpu_probe,
+            main_without_gpu_processes,
             re.MULTILINE,
         )
         self.assertEqual(directives, [])
