@@ -6,6 +6,10 @@ params.ghcr_smoke_only = false
 params.gpu_smoke_only = false
 params.image_set = 'default'
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
+params.input_dir = '/data'
+params.output_dir = '/results'
+params.temp_dir = '/scratch'
+params.params_file = params.params_file ?: System.getenv('PARAMS_FILE') ?: null
 
 def parse_key_value_file(path) {
     def values = [:]
@@ -31,6 +35,54 @@ def parse_key_value_file(path) {
     }
     values
 }
+
+def load_pipeline_parameters() {
+    def candidates = []
+    if (params.params_file) {
+        candidates << params.params_file.toString()
+    }
+    candidates << "${baseDir}/../data/pipeline_parameters.json"
+    candidates << "/data/pipeline_parameters.json"
+
+    def selected = candidates.find { candidate -> file(candidate).exists() }
+    if (!selected) {
+        if (params.params_file) {
+            throw new IllegalArgumentException(
+                "Parameter file not found: ${params.params_file}"
+            )
+        }
+        return
+    }
+
+    def parsed = new groovy.json.JsonSlurper().parse(file(selected).toFile())
+    if (!(parsed instanceof Map)) {
+        throw new IllegalArgumentException(
+            "Parameter file must contain a JSON object: ${selected}"
+        )
+    }
+    parsed.each { key, value -> params[key] = value }
+    params.params_file = selected
+    println "Using pipeline parameter file: ${selected}"
+}
+
+def validate_runtime_paths() {
+    [
+        input_dir: params.input_dir,
+        output_dir: params.output_dir,
+        temp_dir: params.temp_dir,
+    ].each { name, value ->
+        def path = value?.toString()?.trim()
+        if (!path || !path.startsWith('/') || path.contains('\u0000') ||
+                path ==~ /.*[\r\n\t ].*/) {
+            throw new IllegalArgumentException(
+                "params.${name} must be an absolute container path without whitespace"
+            )
+        }
+    }
+}
+
+load_pipeline_parameters()
+validate_runtime_paths()
 
 def validate_capsule_versions(versions) {
     def stages = [
@@ -235,8 +287,10 @@ workflow {
         throw new IllegalArgumentException('ophys_mount_url must be a nonempty S3 URL or absolute directory')
     }
 
-    // Parameterized data source selection
-    def use_s3_source = params.containsKey('ophys_mount_url')
+    // Parameterized data source selection. A local absolute directory uses the
+    // attached/staged files directly; only S3 inputs need the converter.
+    def source = params.ophys_mount_url.toString()
+    def use_s3_source = source.startsWith('s3://')
     
     // Declare all variables outside conditional blocks
     def ophys_data = Channel.empty()
@@ -246,7 +300,7 @@ workflow {
     def vasculature_dir = Channel.empty()
     def matched_tiff_vals_dir = Channel.empty()
     
-    // Print all parameters at startup
+    // Print the resolved parameter set after parameter-file loading.
     println "\n--- Pipeline Parameters ---"
     params.keySet().sort().each { key ->
         println "PARAM: ${key} = ${params[key]}"
@@ -254,28 +308,15 @@ workflow {
     println "--- End Parameters ---\n"
     
     def base_path = "${projectDir}/../data/"
-    def parameter_json = file("${base_path}pipeline_parameters.json")
-
-    if (parameter_json.exists()) {
-        def jsonSlurper = new groovy.json.JsonSlurper()
-        def configData = jsonSlurper.parse(parameter_json)
-        
-        // Add each key-value pair from JSON to params
-        configData.each { key, value ->
-            params[key] = value
-            println "Added params.${key} = ${value}"
-        }
-    }
     // Data source setup
     if (use_s3_source) {
-        ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
-        ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+        ophys_data = Channel.fromPath(source, type: 'any')
+        ophys_mount_jsons = Channel.fromPath("${source}/*.json", type: 'any')
+        ophys_mount_pophys_directory = Channel.fromPath("${source}/pophys", type: 'dir')
     } else {
-        
-        ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
-        ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
+        ophys_data = Channel.fromPath(source, type: 'dir', checkIfExists: true)
+        ophys_mount_jsons = Channel.fromPath("${source}/*.json", type: 'any', checkIfExists: true)
+        ophys_mount_pophys_directory = Channel.fromPath("${source}/pophys", type: 'dir', checkIfExists: true)
     }
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)

@@ -28,6 +28,13 @@ Development-only digest-pinned GHCR images are available through the explicit
 
 If using in Code Ocean, use the `App Builder` panel to tune parameters. You have the option of using the `pipeline_parameters.json` in the root directory to tune parameters as well. To use this file, copy it into the `/data` directory and do not rename the file.
 
+The pipeline loads an explicit `params_file` (or `PARAMS_FILE`) before selecting
+the backend, images, or raw-data source. If no explicit file is provided, it
+checks the project `data/pipeline_parameters.json` and then
+`/data/pipeline_parameters.json`. Values in the selected file are the resolved
+pipeline values. `input_dir`, `output_dir`, and `temp_dir` are absolute paths
+inside the Linux container and must not contain whitespace.
+
 # Input
 
 Currently, the pipeline supports the following input data types:
@@ -146,6 +153,9 @@ input_dir: /data  # Input data directory
 output_dir: /results  # Where to store results
 temp_dir: /scratch  #  Temporary directory
 ```
+
+For a local mounted asset, set `ophys_mount_url` to its absolute directory.
+S3 sources use the converter; local directories are consumed directly.
 
 **Motion Correction**
 ```

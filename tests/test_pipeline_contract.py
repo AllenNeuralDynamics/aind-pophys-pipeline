@@ -109,6 +109,37 @@ class PipelineContractTests(unittest.TestCase):
                          re.search(r"params.ophys_mount_url = '([^']+)'", self.main).group(1))
         self.assertIn("ophys_mount_url must be a nonempty S3 URL or absolute directory", self.main)
 
+    def test_runtime_parameters_load_before_source_and_image_resolution(self):
+        self.assertIn("params.params_file = params.params_file ?: System.getenv('PARAMS_FILE') ?: null",
+                      self.main)
+        self.assertIn("load_pipeline_parameters()\nvalidate_runtime_paths()", self.main)
+        self.assertLess(
+            self.main.index("load_pipeline_parameters()"),
+            self.main.index("params.versions = parse_capsule_versions()"),
+        )
+        self.assertLess(
+            self.main.index("load_pipeline_parameters()"),
+            self.main.index("def image_suffix"),
+        )
+        workflow = self.main.split("workflow {", 1)[1]
+        self.assertNotIn("JsonSlurper", workflow)
+
+    def test_runtime_path_contract_is_explicit_and_fail_closed(self):
+        for name, default in (
+            ("input_dir", "/data"),
+            ("output_dir", "/results"),
+            ("temp_dir", "/scratch"),
+        ):
+            self.assertIn(f"params.{name} = '{default}'", self.main)
+            self.assertIn(f"params.{name}", self.main)
+        self.assertIn("must be an absolute container path without whitespace", self.main)
+        self.assertIn("params.params_file", self.main)
+
+    def test_local_source_uses_explicit_mount_directory(self):
+        self.assertIn("def use_s3_source = source.startsWith('s3://')", self.main)
+        self.assertIn("Channel.fromPath(source, type: 'dir', checkIfExists: true)", self.main)
+        self.assertNotIn("Channel.fromPath(\"${base_path}harvard-single\", type: 'dir')", self.main)
+
     def test_git_source_stages_use_sha_checkout_helper(self):
         self.assertIn("def gitCloneFunction", self.main)
         self.assertIn("git -C capsule-repo -c core.fileMode=false checkout", self.main)
@@ -272,6 +303,16 @@ class PipelineContractTests(unittest.TestCase):
         self.assertNotIn('--shm-size', slurm)
         self.assertIn('--volume ${data_path}:/tmp/data', local)
         self.assertIn('--bind ${data_path}:/tmp/data', slurm)
+
+    def test_all_backend_configs_provide_pipeline_identity(self):
+        for filename in ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config"):
+            config = (PIPELINE / filename).read_text()
+            self.assertIn('PIPELINE_NAME = "aind-pophys-pipeline"', config)
+            self.assertIn('PIPELINE_VERSION = "2.0.0"', config)
+            self.assertIn(
+                'PIPELINE_URL = "https://github.com/AllenNeuralDynamics/aind-pophys-pipeline"',
+                config,
+            )
 
     def test_process_resources_are_configured_outside_main(self):
         main_without_gpu_processes = self.main
