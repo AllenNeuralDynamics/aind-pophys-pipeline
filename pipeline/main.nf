@@ -681,7 +681,7 @@ process converter_capsule {
     tag 'capsule-9191145'
     def container_name = params.stage_images['CONVERTER']
     container container_name
-    publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelativeSkipRunLevel
 
     input:
     path ophys_mount, name: 'capsule/data'
@@ -728,7 +728,7 @@ process motion_correction {
     tag 'capsule-2071646'
     def container_name = params.stage_images['MOTION_CORRECTION']
     container container_name
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
     path ophys_mount, stageAs: 'capsule/data/*'
@@ -777,7 +777,7 @@ process movie_qc {
 	tag 'capsule-5974042'
     def container_name = params.stage_images['MOVIE_QC']
     container container_name
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
 
 	input:
@@ -826,7 +826,7 @@ process decrosstalk_split_json {
     def container_name = params.stage_images['DECROSSTALK_SPLIT']
     container container_name
 
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
     path motion_results, stageAs: 'capsule/data/*'
@@ -869,7 +869,7 @@ process decrosstalk_roi_images {
     def container_name = params.stage_images['DECROSSTALK_ROI_IMAGES']
     container container_name
 
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
     path decrosstalk_split, stageAs: 'capsule/data/*'
@@ -921,7 +921,7 @@ process extraction {
     def container_name = params.stage_images['EXTRACTION']
     container container_name
 
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
     path extraction_input, stageAs: 'capsule/data/*'
@@ -974,7 +974,7 @@ process dff_capsule {
     def container_name = params.stage_images['DFF']
     container container_name
 
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
     path extraction_results, stageAs: 'capsule/data/*'
@@ -1021,7 +1021,7 @@ process oasis_event_detection {
     def container_name = params.stage_images['OASIS']
     container container_name
 
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
     path dff_results, stageAs: 'capsule/data/*'
@@ -1071,7 +1071,7 @@ process classifier {
     accelerator 1
     label 'gpu'
 
-	publishDir "$RESULTS_PATH", saveAs: publishRelative
+	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
 	input:
     path ophys_mount_jsons, stageAs: 'capsule/data/*'
@@ -1124,7 +1124,7 @@ process ophys_nwb {
     def container_name = params.stage_images['NWB']
     container container_name
 
-	publishDir "$RESULTS_PATH", saveAs: publishRelative
+	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
 	input:
     path schemas, stageAs: 'capsule/data/schemas/*'
@@ -1191,7 +1191,7 @@ process pipeline_processing_metadata_aggregator {
     // This task's processing.json / quality_control.json are the run-level
     // documents, and they sit directly under capsule/results/, so the shared
     // saveAs publishes them at the results root -- where they belong.
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
     path ophys_mount_jsons, stageAs: 'capsule/data/*'

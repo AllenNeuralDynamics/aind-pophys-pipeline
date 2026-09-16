@@ -327,6 +327,28 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn(".flatten().filter", self.main)
         self.assertIn("publishRelativeSkipRunLevel", self.main)
 
+    def test_scientific_publication_is_durable_and_relative(self):
+        for process in (
+            "converter_capsule",
+            "motion_correction",
+            "movie_qc",
+            "decrosstalk_split_json",
+            "decrosstalk_roi_images",
+            "extraction",
+            "dff_capsule",
+            "oasis_event_detection",
+            "classifier",
+            "ophys_nwb",
+            "pipeline_processing_metadata_aggregator",
+        ):
+            block = re.search(
+                rf"^process {process} \{{(.*?)^\}}",
+                self.main,
+                re.MULTILINE | re.DOTALL,
+            ).group(1)
+            self.assertIn("mode: 'copy'", block, process)
+            self.assertIn("saveAs: publishRelative", block, process)
+
     def test_backend_configs_declare_expected_executor_and_gpu(self):
         code_ocean = (PIPELINE / "nextflow.config").read_text()
         local = (PIPELINE / "nextflow_local.config").read_text()
