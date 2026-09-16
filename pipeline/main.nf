@@ -84,6 +84,18 @@ def validate_runtime_paths() {
 load_pipeline_parameters()
 validate_runtime_paths()
 
+def task_runtime_path(configured_path, task_relative_path) {
+    // Capsule defaults are exposed as task-relative paths after each process
+    // changes into capsule/code; non-default absolute paths pass through.
+    configured_path.toString() in ['/data', '/results', '/scratch']
+        ? task_relative_path
+        : configured_path.toString()
+}
+
+def task_input_dir = task_runtime_path(params.input_dir, '../data')
+def task_output_dir = task_runtime_path(params.output_dir, '../results')
+def task_temp_dir = task_runtime_path(params.temp_dir, '../scratch')
+
 def validate_capsule_versions(versions) {
     def stages = [
         'CONVERTER',
@@ -99,6 +111,7 @@ def validate_capsule_versions(versions) {
         'AGGREGATOR'
     ]
     def sha_pattern = ~/^[0-9a-f]{40}$/
+    def library_stages = stages - ['DECROSSTALK_SPLIT']
     def required = []
     stages.each { stage ->
         required << "${stage}_CAPSULE_SOURCE_MODE"
@@ -107,7 +120,9 @@ def validate_capsule_versions(versions) {
         if (mode == 'git') {
             required << "${stage}_CAPSULE_REPO"
             required << "${stage}_CAPSULE_COMMIT"
-            required << "${stage}_LIBRARY_COMMIT"
+            if (stage in library_stages) {
+                required << "${stage}_LIBRARY_COMMIT"
+            }
         } else if (mode == 'published') {
             required << "${stage}_CAPSULE_ID"
             required << "${stage}_REF"
@@ -126,7 +141,11 @@ def validate_capsule_versions(versions) {
     }
     stages.each { stage ->
         if (versions["${stage}_CAPSULE_SOURCE_MODE"] == 'git') {
-            ['CAPSULE_COMMIT', 'LIBRARY_COMMIT'].each { suffix ->
+            def sha_keys = ['CAPSULE_COMMIT']
+            if (stage in library_stages) {
+                sha_keys << 'LIBRARY_COMMIT'
+            }
+            sha_keys.each { suffix ->
                 def key = "${stage}_${suffix}"
                 if (!(versions[key] ==~ sha_pattern)) {
                     throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
@@ -697,8 +716,8 @@ process converter_capsule {
     echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
     chmod +x run
-    echo "converter_capsule parameters: --debug ${params.debug} --input_dir ${params.input_dir} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}"
-    ./run --debug ${params.debug} --input_dir ${params.input_dir} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}
+    echo "converter_capsule parameters: --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}"
+    ./run --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}
     echo "[${task.tag}] completed!"
     ls -a /results
     """
@@ -712,11 +731,11 @@ process motion_correction {
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
-    path ophys_mount
-    path ophys_jsons
-    path pophys_dir
+    path ophys_mount, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
+    path pophys_dir, stageAs: 'capsule/data/*'
 
-    path(upstream_processing_json, stageAs: 'processing_??/*')
+    path(upstream_processing_json, stageAs: 'capsule/data/processing_??/*')
 
     output:
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
@@ -739,21 +758,6 @@ process motion_correction {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
-
-    stage_nested() {
-        for f in "\$@"; do
-            [ -e "\$f" ] || continue
-            d="capsule/data/\$(dirname "\$f")"
-            mkdir -p "\$d"
-            cp -r "\$f" "\$d/"
-        done
-    }
-    stage_nested ${upstream_processing_json}
-
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
     clone_repo "${params.versions['MOTION_CORRECTION_CAPSULE_REPO']}" "${params.versions['MOTION_CORRECTION_CAPSULE_COMMIT']}"
@@ -762,7 +766,7 @@ process motion_correction {
     cd capsule/code
     chmod +x run
     echo "motion_correction parameters: --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}"
-    ./run --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
     
     echo "[${task.tag}] completed!"
     """
@@ -777,9 +781,9 @@ process movie_qc {
 
 
 	input:
-	path motion_results
-    path ophys_jsons
-    path zstacks
+	path motion_results, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/raw/*'
+    path zstacks, stageAs: 'capsule/data/zstacks/*'
 
 	output:
 	path 'capsule/results/*'
@@ -803,13 +807,6 @@ process movie_qc {
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_results} capsule/data
-    cp -r ${ophys_jsons} capsule/data/raw
-    if [ -n "${zstacks}" ] && [ "${zstacks}" != "[]" ]; then
-        cp -r ${zstacks} capsule/data/zstacks
-    fi
-
 	echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
     clone_repo "${params.versions['MOVIE_QC_CAPSULE_REPO']}" "${params.versions['MOVIE_QC_CAPSULE_COMMIT']}"
@@ -817,7 +814,7 @@ process movie_qc {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -825,15 +822,15 @@ process movie_qc {
 
 // capsule - aind-ophys-decrosstalk-split-session-json
 process decrosstalk_split_json {
-    tag 'capsule-4425001'
+    tag 'decrosstalk-split'
     def container_name = params.stage_images['DECROSSTALK_SPLIT']
     container container_name
 
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
-    path motion_results
-    path ophys_jsons
+    path motion_results, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -852,14 +849,9 @@ process decrosstalk_split_json {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_results} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch ${params.versions['DECROSSTALK_SPLIT_REF']} "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-${params.versions['DECROSSTALK_SPLIT_CAPSULE_ID']}.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['DECROSSTALK_SPLIT_CAPSULE_REPO']}" "${params.versions['DECROSSTALK_SPLIT_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -880,11 +872,11 @@ process decrosstalk_roi_images {
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
-    path decrosstalk_split
-    path ophys_jsons
-    path pophys_dir
-    path motion_results
-    path converter_files
+    path decrosstalk_split, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
+    path pophys_dir, stageAs: 'capsule/data/*'
+    path motion_results, stageAs: 'capsule/data/*'
+    path converter_files, stageAs: 'capsule/data/*'
     path cellpose_data
 
     output:
@@ -907,13 +899,6 @@ process decrosstalk_roi_images {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${decrosstalk_split} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
-    cp -r ${motion_results} capsule/data
-    cp -r ${converter_files} capsule/data
-
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
     echo "[${task.tag}] cloning git repo..."
@@ -923,7 +908,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug ${params.debug} --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --debug ${params.debug} --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -939,8 +924,8 @@ process extraction {
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
-    path extraction_input
-    path ophys_jsons
+    path extraction_input, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
     path cellpose_data
 
     output:
@@ -966,10 +951,6 @@ process extraction {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${extraction_input} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
     echo "[${task.tag}] cloning git repo..."
@@ -980,7 +961,7 @@ process extraction {
     cd capsule/code
     chmod +x run
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
-    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg} --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg} --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -996,8 +977,8 @@ process dff_capsule {
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
-    path extraction_results
-    path ophys_mount_json
+    path extraction_results, stageAs: 'capsule/data/*'
+    path ophys_mount_json, stageAs: 'capsule/data/*'
     // path motion_correction_results
 
     output:
@@ -1020,10 +1001,6 @@ process dff_capsule {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_json} capsule/data
-    cp -r ${extraction_results} capsule/data
-
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
     clone_repo "${params.versions['DFF_CAPSULE_REPO']}" "${params.versions['DFF_CAPSULE_COMMIT']}"
@@ -1032,7 +1009,7 @@ process dff_capsule {
     cd capsule/code
     chmod +x run
     echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
-    ./run --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}' --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}' --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -1047,8 +1024,8 @@ process oasis_event_detection {
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
-    path dff_results
-    path ophys_jsons
+    path dff_results, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
 
     output:
     path 'capsule/results/*'
@@ -1071,10 +1048,6 @@ process oasis_event_detection {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${dff_results} capsule/data
-
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
     clone_repo "${params.versions['OASIS_CAPSULE_REPO']}" "${params.versions['OASIS_CAPSULE_COMMIT']}"
@@ -1082,7 +1055,7 @@ process oasis_event_detection {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --verify 1
 
     echo "[${task.tag}] completed!"
     """
@@ -1101,9 +1074,9 @@ process classifier {
 	publishDir "$RESULTS_PATH", saveAs: publishRelative
 
 	input:
-    path ophys_mount_jsons
-	path classifier_data
-	path extraction_results
+    path ophys_mount_jsons, stageAs: 'capsule/data/*'
+    path classifier_data, stageAs: 'capsule/data/*'
+    path extraction_results, stageAs: 'capsule/data/*'
 	path roinet_data
     
 	output:
@@ -1128,11 +1101,6 @@ process classifier {
 	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
 	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_jsons} capsule/data
-    cp -r ${classifier_data} capsule/data
-    cp -r ${extraction_results} capsule/data
-
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
 	ln -s "/tmp/data/roinet" "capsule/data/roinet"
 
@@ -1143,7 +1111,7 @@ process classifier {
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --tmp_dir ${params.temp_dir} --soma_classifier_path ${params['soma-classifier-path']} --dendrite_classifier_path ${params['dendrite-classifier-path']} --border_size ${params['border-size']} ${model_name_arg} --verify 1
+	./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --soma_classifier_path ${params['soma-classifier-path']} --dendrite_classifier_path ${params['dendrite-classifier-path']} --border_size ${params['border-size']} ${model_name_arg} --verify 1
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -1159,17 +1127,17 @@ process ophys_nwb {
 	publishDir "$RESULTS_PATH", saveAs: publishRelative
 
 	input:
-    path schemas
-    path ophys_mount_jsons
-    path ophys_sync_file
-    path ophys_mount_pophys_directory
-    path motion_correction_results
-    path decrosstalk_results
-    path extraction_results
-	path classifer_h5
-	path dff_results
-	path event_detection_results
-    path(upstream_processing_json, stageAs: 'processing_??/*')
+    path schemas, stageAs: 'capsule/data/schemas/*'
+    path ophys_mount_jsons, stageAs: 'capsule/data/raw/*'
+    path ophys_sync_file, stageAs: 'capsule/data/raw/behavior/*'
+    path ophys_mount_pophys_directory, stageAs: 'capsule/data/raw/*'
+    path motion_correction_results, stageAs: 'capsule/data/processed/*'
+    path decrosstalk_results, stageAs: 'capsule/data/processed/*'
+    path extraction_results, stageAs: 'capsule/data/processed/*'
+	path classifer_h5, stageAs: 'capsule/data/processed/*'
+	path dff_results, stageAs: 'capsule/data/processed/*'
+	path event_detection_results, stageAs: 'capsule/data/processed/*'
+    path(upstream_processing_json, stageAs: 'capsule/data/processed/processing_??/*')
 
 	output:
 	path 'capsule/results/*'
@@ -1195,35 +1163,7 @@ process ophys_nwb {
     mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
     mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${schemas} capsule/data/schemas
-    cp -r ${ophys_mount_jsons} capsule/data/raw
-    if [ -n "${ophys_sync_file}" ] && [ "${ophys_sync_file}" != "[]" ]; then
-        cp -r ${ophys_sync_file} capsule/data/raw/behavior
-    fi
-    cp -r ${ophys_mount_pophys_directory} capsule/data/raw
-    cp -r ${motion_correction_results} capsule/data/processed
-    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
-        cp -r ${decrosstalk_results} capsule/data/processed
-    fi
-    cp -r ${extraction_results} capsule/data/processed
-    cp -r ${classifer_h5} capsule/data/processed
-    cp -r ${dff_results} capsule/data/processed
-    cp -r ${event_detection_results} capsule/data/processed
-
-    # NWB searches data/processed, not data, for upstream provenance.
-    stage_nested() {
-        for f in "\$@"; do
-            [ -e "\$f" ] || continue
-            d="capsule/data/processed/\$(dirname "\$f")"
-            mkdir -p "\$d"
-            cp -r "\$f" "\$d/"
-        done
-    }
-    stage_nested ${upstream_processing_json}
     echo "[${task.tag}] staged \$(find capsule/data/processed -name processing.json | wc -l) upstream processing.json"
-
-	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -1233,7 +1173,7 @@ process ophys_nwb {
 	cd capsule/code
 	chmod +x run
 	ls -R /data
-    ./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --verify 1
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -1254,9 +1194,9 @@ process pipeline_processing_metadata_aggregator {
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
-    path ophys_mount_jsons
-    path(processing_json, stageAs: 'processing_??/*')
-    path(quality_control_json, stageAs: 'quality_control_??/*')
+    path ophys_mount_jsons, stageAs: 'capsule/data/*'
+    path(processing_json, stageAs: 'capsule/data/processing_??/*')
+    path(quality_control_json, stageAs: 'capsule/data/quality_control_??/*')
 
     output:
     path 'capsule/results/*'
@@ -1275,22 +1215,7 @@ process pipeline_processing_metadata_aggregator {
     mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
-    # Preserve the numbered directory stageAs gave each file. A flat cp would
-    # collapse every processing.json back onto one name and keep only the last;
-    # aind-metadata-manager rglobs for them, so the nesting costs nothing.
-    stage_nested() {
-        for f in "\$@"; do
-            [ -e "\$f" ] || continue
-            d="capsule/data/\$(dirname "\$f")"
-            mkdir -p "\$d"
-            cp -r "\$f" "\$d/"
-        done
-    }
-
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_jsons} capsule/data
-    stage_nested ${processing_json}
-    stage_nested ${quality_control_json}
+    echo "[${task.tag}] using task-local staged inputs..."
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
     echo "[${task.tag}] cloning git repo..."
@@ -1302,7 +1227,7 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} ${params.containsKey('upgrade_legacy_metadata') ? '--upgrade_legacy_metadata ' + params.upgrade_legacy_metadata : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} ${params.containsKey('upgrade_legacy_metadata') ? '--upgrade_legacy_metadata ' + params.upgrade_legacy_metadata : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
     echo "[${task.tag}] completed!"
     """
 }

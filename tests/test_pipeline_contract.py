@@ -1,7 +1,5 @@
 import json
 import re
-import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -57,7 +55,9 @@ class PipelineContractTests(unittest.TestCase):
             if mode == "git":
                 self.assertTrue(self.manifest[f"{stage}_CAPSULE_REPO"].startswith("https://"))
                 self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
-                self.assertRegex(self.manifest[f"{stage}_LIBRARY_COMMIT"], SHA_RE)
+                library_commit = self.manifest.get(f"{stage}_LIBRARY_COMMIT")
+                if library_commit:
+                    self.assertRegex(library_commit, SHA_RE)
             elif mode == "published":
                 self.assertTrue(self.manifest[f"{stage}_CAPSULE_ID"])
                 self.assertTrue(self.manifest[f"{stage}_REF"])
@@ -75,7 +75,10 @@ class PipelineContractTests(unittest.TestCase):
                 if self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"] in ("published", "co_git"):
                     self.assertIn(f"params.versions['{stage}_CO_CAPSULE_ID']", self.main)
                 else:
-                    self.assertIn(capsule_id, self.main)
+                    self.assertTrue(
+                        capsule_id in self.main
+                        or f"params.versions['{stage}_CO_CAPSULE_ID']" in self.main
+                    )
 
     def test_development_images_match_complete_published_inventory(self):
         images = read_manifest(PIPELINE / "development_images.env")
@@ -148,10 +151,33 @@ class PipelineContractTests(unittest.TestCase):
                 self.assertIn(f"{stage}_CAPSULE_REPO", self.main)
                 self.assertIn(f"{stage}_CAPSULE_COMMIT", self.main)
 
-    def test_published_holdouts_use_manifest_identity_and_ref(self):
-        for stage in ("DECROSSTALK_SPLIT",):
+    def test_splitter_uses_github_source_pin(self):
+        stage = "DECROSSTALK_SPLIT"
+        self.assertEqual(self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"], "git")
+        self.assertEqual(
+            self.manifest[f"{stage}_CAPSULE_REPO"],
+            "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json",
+        )
+        self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
+        split_process = re.search(
+            r"^process decrosstalk_split_json \{(.*?)^\}",
+            self.main,
+            re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(split_process)
+        split_process_text = split_process.group(1)
+        self.assertNotIn(f"params.versions['{stage}_REF']", split_process_text)
+        self.assertNotIn("GIT_ACCESS_TOKEN", split_process_text)
+        self.assertIn(
+            f"clone_repo \"${{params.versions['{stage}_CAPSULE_REPO']}}\" \"${{params.versions['{stage}_CAPSULE_COMMIT']}}\"",
+            split_process_text,
+        )
+        self.assertIn(f"params.versions['{stage}_CO_CAPSULE_ID']", self.main)
+
+    def test_published_source_manifest_requires_identity_and_ref(self):
+        for stage in ("AGGREGATOR",):
+            self.assertEqual(self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"], "co_git")
             self.assertIn(f"params.versions['{stage}_CAPSULE_ID']", self.main)
-            self.assertIn(f"params.versions['{stage}_REF']", self.main)
             self.assertIn(f"params.versions['{stage}_CO_CAPSULE_ID']", self.main)
 
     def test_co_internal_aggregator_uses_pinned_upgrade_capsule(self):
@@ -168,7 +194,9 @@ class PipelineContractTests(unittest.TestCase):
     def test_source_pins_match_selected_baseline(self):
         pins = self.baseline["stage_source_pins"]
         git_stages = {
-            stage for stage in STAGES if self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"] == "git"
+            stage for stage in STAGES
+            if self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"] == "git"
+            and f"{stage}_LIBRARY_COMMIT" in self.manifest
         }
         self.assertEqual(set(pins), git_stages)
         for stage, (capsule, library) in pins.items():
@@ -210,39 +238,52 @@ class PipelineContractTests(unittest.TestCase):
             self.main.count("converter_processing_json.flatten().collect().ifEmpty([])"), 2
         )
         self.assertEqual(
-            self.main.count("path(upstream_processing_json, stageAs: 'processing_??/*')"), 2
+            self.main.count(
+                "path(upstream_processing_json, stageAs: 'capsule/data/processing_??/*')"
+            ),
+            1,
+        )
+        self.assertIn(
+            "path(upstream_processing_json, stageAs: 'capsule/data/processed/processing_??/*')",
+            self.main,
         )
         self.assertIn("nwb_upstream_processing_json", self.main)
-        self.assertIn('d="capsule/data/processed/\\$(dirname "\\$f")"', self.main)
 
-    def test_metadata_staging_preserves_same_named_documents(self):
-        for process, destination in (
-            ("motion_correction", "capsule/data"),
-            ("ophys_nwb", "capsule/data/processed"),
-            ("pipeline_processing_metadata_aggregator", "capsule/data"),
+    def test_metadata_staging_uses_numbered_task_local_paths(self):
+        for stage_as in (
+            "capsule/data/processing_??/*",
+            "capsule/data/processed/processing_??/*",
+            "capsule/data/processing_??/*",
+            "capsule/data/quality_control_??/*",
         ):
-            with self.subTest(process=process), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory)
-                for number in (1, 2):
-                    path = root / f"processing_{number:02d}/processing.json"
-                    path.parent.mkdir()
-                    path.write_text(json.dumps({"source": number}))
-                block = re.search(
-                    rf"^process {process} \{{(.*?)^\}}", self.main, re.MULTILINE | re.DOTALL
-                ).group(1)
-                helper = re.search(
-                    r"    stage_nested\(\) \{.*?^    \}", block, re.MULTILINE | re.DOTALL
-                ).group(0).replace("\\$", "$")
-                subprocess.run(
-                    ["bash", "-eu", "-c", helper + "\nstage_nested processing_01/processing.json processing_02/processing.json"],
-                    cwd=root,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                )
-                for number in (1, 2):
-                    path = root / destination / f"processing_{number:02d}/processing.json"
-                    self.assertEqual(json.loads(path.read_text()), {"source": number})
+            with self.subTest(stage_as=stage_as):
+                self.assertIn(f"stageAs: '{stage_as}'", self.main)
+        self.assertNotIn("stage_nested()", self.main)
+
+    def test_scientific_processes_forward_resolved_task_paths(self):
+        processes_with_paths = {
+            "converter_capsule": ("--input_dir", "--output_dir", "--temp_dir"),
+            "motion_correction": ("--input_dir", "--output_dir", "--tmp_dir"),
+            "movie_qc": ("--input_dir", "--output_dir"),
+            "decrosstalk_roi_images": ("--input_dir", "--output_dir", "--tmp_dir"),
+            "extraction": ("--input_dir", "--output_dir", "--tmp_dir"),
+            "dff_capsule": ("--input_dir", "--output_dir"),
+            "oasis_event_detection": ("--input_dir", "--output_dir"),
+            "classifier": ("--input_dir", "--output_dir", "--tmp_dir"),
+            "ophys_nwb": ("--input_dir", "--output_dir"),
+            "pipeline_processing_metadata_aggregator": ("--input_dir", "--output_dir"),
+        }
+        for process, flags in processes_with_paths.items():
+            block = re.search(
+                rf"^process {process} \{{(.*?)^\}}",
+                self.main,
+                re.MULTILINE | re.DOTALL,
+            ).group(1)
+            for flag in flags:
+                self.assertIn(flag, block, process)
+            self.assertIn("${task_input_dir}", block, process)
+            self.assertIn("${task_output_dir}", block, process)
+        self.assertNotIn("process decrosstalk_split_json", processes_with_paths)
 
     def test_active_image_recipe_matches_manifest(self):
         environment = ROOT / "environment"
@@ -277,8 +318,12 @@ class PipelineContractTests(unittest.TestCase):
                 self.assertEqual(len(source["pyproject_sha256"]), 64)
 
     def test_v2_fan_in_contract_remains_present(self):
-        self.assertIn("stageAs: 'processing_??/*'", self.main)
-        self.assertIn("stageAs: 'quality_control_??/*'", self.main)
+        self.assertIn("stageAs: 'capsule/data/processing_??/*'", self.main)
+        self.assertIn("stageAs: 'capsule/data/quality_control_??/*'", self.main)
+        self.assertIn(
+            "stageAs: 'capsule/data/processed/processing_??/*'",
+            self.main,
+        )
         self.assertIn(".flatten().filter", self.main)
         self.assertIn("publishRelativeSkipRunLevel", self.main)
 
