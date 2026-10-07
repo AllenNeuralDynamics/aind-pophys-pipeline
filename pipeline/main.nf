@@ -529,7 +529,7 @@ process movie_qc {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --verify 1
+    ./run
 
     echo "[${task.tag}] completed!"
     """
@@ -638,10 +638,10 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] cloning git repo..."
     if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout e7e0cdb --quiet
+        git -C capsule-repo checkout 2a4d084 --quiet
 	else
 		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout e7e0cdb --quiet
+        git -C capsule-repo checkout 2a4d084 --quiet
 	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
@@ -649,7 +649,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --debug ${params.debug} --verify 1
+    ./run --debug ${params.debug}
 
     echo "[${task.tag}] completed!"
     """
@@ -713,7 +713,7 @@ process extraction {
     cd capsule/code
     chmod +x run
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
-    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg} --verify 1
+    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
 
     echo "[${task.tag}] completed!"
     """
@@ -769,7 +769,7 @@ process dff_capsule {
     cd capsule/code
     chmod +x run
     echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
-    ./run --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}' --verify 1
+    ./run --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
 
     echo "[${task.tag}] completed!"
     """
@@ -823,7 +823,7 @@ process oasis_event_detection {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --verify 1
+    ./run
 
     echo "[${task.tag}] completed!"
     """
@@ -886,7 +886,7 @@ process classifier {
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --tmp_dir ${params.temp_dir} --soma_classifier_path ${params['soma-classifier-path']} --dendrite_classifier_path ${params['dendrite-classifier-path']} --border_size ${params['border-size']} ${model_name_arg} --verify 1
+	./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --tmp_dir ${params.temp_dir} --soma_classifier_path ${params['soma-classifier-path']} --dendrite_classifier_path ${params['dendrite-classifier-path']} --border_size ${params['border-size']} ${model_name_arg}
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -991,7 +991,7 @@ process ophys_nwb {
 	cd capsule/code
 	chmod +x run
 	ls -R /data
-    ./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --verify 1
+    ./run --input_dir ${params.input_dir} --output_dir ${params.output_dir}
 
 	echo "[${task.tag}] completed!"
 	"""
