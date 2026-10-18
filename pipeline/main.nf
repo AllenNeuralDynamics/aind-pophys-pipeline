@@ -538,8 +538,10 @@ process movie_qc {
 // capsule - aind-ophys-decrosstalk-split-session-json
 process decrosstalk_split_json {
     tag 'capsule-1362518'
-    // DEV pin: the registry hash goes stale on every capsule rebuild.
-    container "$REGISTRY_HOST/capsule/f0f37c43-9b9a-49b4-a6a1-893e254ad2ba:25871dffc69e625a7c5e7fe1cb7ed8c0"
+    // TEST: capsule 1362518's image is not pullable from the registry, so borrow the
+    // decrosstalk image (Python 3.10, pydantic-settings present) and install the
+    // splitter library into it at task start.
+    container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:9bbb495e8eccd45a32173c141df59037"
 
     cpus 2
     memory '16 GB'
@@ -573,6 +575,8 @@ process decrosstalk_split_json {
     git -C capsule-repo checkout 4b759f9c4fe819beac04081c964d1f01a1ac4906 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
+
+    pip install --quiet --no-deps "git+https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json-library.git@4c62802e6038a0fac1d9f40da70ea2b4ff3d8259"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
