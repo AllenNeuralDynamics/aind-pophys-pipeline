@@ -537,8 +537,9 @@ process movie_qc {
 
 // capsule - aind-ophys-decrosstalk-split-session-json
 process decrosstalk_split_json {
-    tag 'capsule-4425001'
-    container "$REGISTRY_HOST/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
+    tag 'capsule-1362518'
+    // DEV pin: the registry hash goes stale on every capsule rebuild.
+    container "$REGISTRY_HOST/capsule/f0f37c43-9b9a-49b4-a6a1-893e254ad2ba:25871dffc69e625a7c5e7fe1cb7ed8c0"
 
     cpus 2
     memory '16 GB'
@@ -557,21 +558,19 @@ process decrosstalk_split_json {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462
+    export CO_CAPSULE_ID=f0f37c43-9b9a-49b4-a6a1-893e254ad2ba
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
-    mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data capsule/results capsule/scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_results} capsule/data
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v1.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4425001.git" capsule-repo
+    git clone --quiet https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json.git capsule-repo
+    git -C capsule-repo checkout 4b759f9c4fe819beac04081c964d1f01a1ac4906 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -618,10 +617,7 @@ process decrosstalk_roi_images {
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
-    mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data capsule/results capsule/scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${decrosstalk_split} capsule/data
@@ -636,13 +632,8 @@ process decrosstalk_roi_images {
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
 
     echo "[${task.tag}] cloning git repo..."
-    if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 5c73d48 --quiet
-	else
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 5c73d48 --quiet
-	fi
+    git clone --quiet https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images.git capsule-repo
+    git -C capsule-repo checkout 17b302fa8a1d5182511f62fa2222a5c73e765946 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
