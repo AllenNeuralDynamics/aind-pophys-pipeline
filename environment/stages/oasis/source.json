@@ -3,7 +3,6 @@
     "setuptools"
   ],
   "capsule_ref": "945af2f7f11e0567d7d2b192e6d0fe665381b177",
-  "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-data-schema==2.9.0",
     "aind-data-schema-models==6.2.0",

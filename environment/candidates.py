@@ -189,7 +189,6 @@ def capture(args):
             "build_requires": project.get("build-system", {}).get("requires", []),
             "declared_dependencies": dependencies,
             "pyproject_sha256": hashlib.sha256(raw.encode()).hexdigest() if raw else None,
-            "capsule_source_mode": pins[f"{stage}_CAPSULE_SOURCE_MODE"],
             "capsule_ref": pins[f"{stage}_CAPSULE_COMMIT"],
         })
     print(json.dumps(observations["counts"], sort_keys=True))
@@ -219,8 +218,6 @@ def validate():
             raise ValueError(f"{stage}: invalid runtime contract")
         if source["library_repo"] and source["library_commit"] != pins[f"{stage}_LIBRARY_COMMIT"]:
             raise ValueError(f"{stage}: stale library source; recapture before building")
-        if source["capsule_source_mode"] != pins[f"{stage}_CAPSULE_SOURCE_MODE"]:
-            raise ValueError(f"{stage}: stale capsule source mode")
         expected_ref = pins[f"{stage}_CAPSULE_COMMIT"]
         if source["capsule_ref"] != expected_ref:
             raise ValueError(f"{stage}: stale capsule source ref")

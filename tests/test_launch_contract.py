@@ -23,7 +23,7 @@ class LaunchContractTests(unittest.TestCase):
         self.assertIn("nextflow_local.config", script)
         self.assertIn("--params_file", script)
         self.assertIn("--ophys_mount_url", script)
-        self.assertIn("--image_set", script)
+        self.assertNotIn("image_set", script)
         self.assertIn("-work-dir", script)
         self.assertIn("preflight.sh\" local", script)
 
@@ -42,8 +42,7 @@ class LaunchContractTests(unittest.TestCase):
             "Docker executable not found",
             "Apptainer or Singularity executable not found",
             "Parameter file not found",
-            "Off-CO runs require IMAGE_SET=development-ghcr",
-            "development_images.env",
+            "images.env",
         ):
             self.assertIn(text, script)
 

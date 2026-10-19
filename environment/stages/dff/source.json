@@ -3,7 +3,6 @@
     "setuptools"
   ],
   "capsule_ref": "e568ec2cc9a5f6c155a23fa915e4700ea1187bd1",
-  "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-ophys-utils==0.1.0",
     "joblib==1.5.3",

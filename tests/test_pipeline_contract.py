@@ -49,28 +49,24 @@ class PipelineContractTests(unittest.TestCase):
 
     def test_manifest_declares_every_stage(self):
         for stage in STAGES:
-            self.assertIn(f"{stage}_CAPSULE_SOURCE_MODE", self.manifest)
-            self.assertTrue(self.manifest[f"{stage}_IMAGE_CO"])
-            self.assertEqual(self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"], "git")
             self.assertTrue(self.manifest[f"{stage}_CAPSULE_REPO"].startswith("https://github.com/"))
             self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
-            library_commit = self.manifest.get(f"{stage}_LIBRARY_COMMIT")
-            if library_commit:
-                self.assertRegex(library_commit, SHA_RE)
+            self.assertRegex(self.manifest[f"{stage}_LIBRARY_COMMIT"], SHA_RE)
+
+    def test_manifest_holds_only_source_pins(self):
+        allowed = {f"{stage}_{suffix}" for stage in STAGES
+                   for suffix in ("CAPSULE_REPO", "CAPSULE_COMMIT", "LIBRARY_COMMIT")}
+        allowed.add("AGGREGATOR_LIBRARY_REPO")
+        self.assertEqual(set(self.manifest) - allowed, set())
 
     def test_main_uses_manifest_image_map(self):
         self.assertNotIn("import groovy.json.JsonSlurper", self.main)
         for stage in STAGES:
             self.assertIn(f"params.stage_images['{stage}']", self.main)
-            capsule_id = self.manifest.get(f"{stage}_CO_CAPSULE_ID")
-            if capsule_id:
-                self.assertTrue(
-                    capsule_id in self.main
-                    or f"params.versions['{stage}_CO_CAPSULE_ID']" in self.main
-                )
+        self.assertNotIn("CO_CAPSULE_ID", self.main)
 
-    def test_development_images_match_complete_published_inventory(self):
-        images = read_manifest(PIPELINE / "development_images.env")
+    def test_images_match_complete_published_inventory(self):
+        images = read_manifest(PIPELINE / "images.env")
         inventory = json.loads((ROOT / "environment/v2-pathfix-inventory.json").read_text())
         expected = {
             row["stage"]: row["image"].rsplit(":", 1)[0] + "@" + row["platform_manifest_digest"]
@@ -82,17 +78,15 @@ class PipelineContractTests(unittest.TestCase):
         for image in images.values():
             self.assertRegex(image, r"^ghcr\.io/allenneuraldynamics/pophys-[a-z-]+@sha256:[0-9a-f]{64}$")
 
-    def test_development_selection_is_explicit_and_fail_closed(self):
-        self.assertIn("params.image_set = 'default'", self.main)
-        self.assertIn("image_set in ['default', 'development-ghcr']", self.main)
-        self.assertIn("development_images.keySet() != image_stages.toSet()", self.main)
-        self.assertIn("image_set == 'default' && backend == 'codeocean' && registry_host", self.main)
-        self.assertIn(': params.versions["${stage}${image_suffix}"]', self.main)
+    def test_one_image_list_serves_every_backend(self):
+        self.assertIn('params.stage_images = parse_key_value_file("${baseDir}/images.env")', self.main)
+        self.assertIn("params.stage_images.keySet() != image_stages.toSet()", self.main)
+        for text in ("image_set", "IMAGE_CO", "IMAGE_OFFCO", "registry_host", "development_images"):
+            self.assertNotIn(text, self.main)
         panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
         parameters = {p["param_name"]: p for p in panel["parameters"]}
         self.assertEqual(len(parameters), len(panel["parameters"]))
-        self.assertEqual(parameters["image_set"]["default_value"], "default")
-        self.assertEqual(parameters["image_set"]["extra_data"], ["default", "development-ghcr"])
+        self.assertNotIn("image_set", parameters)
         self.assertEqual(parameters["ophys_mount_url"]["default_value"],
                          re.search(r"params.ophys_mount_url = '([^']+)'", self.main).group(1))
         self.assertIn("ophys_mount_url must be a nonempty S3 URL or absolute directory", self.main)
@@ -107,7 +101,7 @@ class PipelineContractTests(unittest.TestCase):
         )
         self.assertLess(
             self.main.index("load_pipeline_parameters()"),
-            self.main.index("def image_suffix"),
+            self.main.index("params.stage_images = parse_key_value_file"),
         )
         workflow = self.main.split("workflow {", 1)[1]
         self.assertNotIn("JsonSlurper", workflow)
@@ -132,13 +126,11 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("def gitCloneFunction", self.main)
         self.assertIn("git -C capsule-repo -c core.fileMode=false checkout", self.main)
         for stage in STAGES:
-            if self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"] == "git":
-                self.assertIn(f"{stage}_CAPSULE_REPO", self.main)
-                self.assertIn(f"{stage}_CAPSULE_COMMIT", self.main)
+            self.assertIn(f"{stage}_CAPSULE_REPO", self.main)
+            self.assertIn(f"{stage}_CAPSULE_COMMIT", self.main)
 
     def test_splitter_uses_github_source_pin(self):
         stage = "DECROSSTALK_SPLIT"
-        self.assertEqual(self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"], "git")
         self.assertEqual(
             self.manifest[f"{stage}_CAPSULE_REPO"],
             "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json",
@@ -160,7 +152,6 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}",
                       split_process_text)
         self.assertRegex(self.manifest[f"{stage}_LIBRARY_COMMIT"], SHA_RE)
-        self.assertIn(f"params.versions['{stage}_CO_CAPSULE_ID']", self.main)
 
     def test_tasks_do_not_create_container_root_links(self):
         self.assertNotIn("ln -s \\$PWD/capsule", self.main)
@@ -239,12 +230,6 @@ class PipelineContractTests(unittest.TestCase):
         for asset in self.baseline["data_assets"]:
             if asset["mount"] != "ophys_mount":
                 self.assertEqual(actual[asset["mount"]], asset["id"])
-        for stage, assets in {
-            "EXTRACTION": "attached:cellpose_models",
-            "DECROSSTALK_ROI_IMAGES": "attached:cellpose_models",
-            "CLASSIFIER": "attached:2p_roi_classifier,attached:roinet",
-        }.items():
-            self.assertEqual(self.manifest[f"{stage}_RUNTIME_ASSETS"], assets)
         self.assertEqual(self.main.count('ln -s "/tmp/data/cellpose_models"'), 2)
         self.assertIn('ln -s "/tmp/data/roinet"', self.main)
         self.assertEqual(self.main.count("cellpose_data.collect().ifEmpty([])"), 3)
@@ -319,8 +304,7 @@ class PipelineContractTests(unittest.TestCase):
                 (environment / "stages" / stage.lower() / "source.json").read_text()
             )
             self.assertEqual(source["stage"], stage)
-            self.assertEqual(source["capsule_source_mode"],
-                             self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"])
+            self.assertNotIn("capsule_source_mode", source)
             self.assertEqual(source["capsule_ref"], self.manifest[f"{stage}_CAPSULE_COMMIT"])
             self.assertEqual(source["library_commit"], self.manifest[f"{stage}_LIBRARY_COMMIT"])
             self.assertRegex(source["library_commit"], SHA_RE)

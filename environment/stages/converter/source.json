@@ -4,7 +4,6 @@
     "setuptools-scm"
   ],
   "capsule_ref": "16f5f9afb66ba87098a453108dacd3a3df89dd36",
-  "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-data-schema==2.9.0",
     "aind-data-schema-models==6.2.0",

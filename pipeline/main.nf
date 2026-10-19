@@ -4,7 +4,6 @@ nextflow.enable.dsl = 2
 
 params.ghcr_smoke_only = false
 params.gpu_smoke_only = false
-params.image_set = 'default'
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 params.input_dir = '/data'
 params.output_dir = '/results'
@@ -113,14 +112,6 @@ def validate_capsule_versions(versions) {
     def sha_pattern = ~/^[0-9a-f]{40}$/
     def required = []
     stages.each { stage ->
-        required << "${stage}_CAPSULE_SOURCE_MODE"
-        required << "${stage}_IMAGE_CO"
-        def mode = versions["${stage}_CAPSULE_SOURCE_MODE"]
-        if (mode != 'git') {
-            throw new IllegalArgumentException(
-                "Unsupported ${stage}_CAPSULE_SOURCE_MODE: ${mode}; expected git"
-            )
-        }
         required << "${stage}_CAPSULE_REPO"
         required << "${stage}_CAPSULE_COMMIT"
         required << "${stage}_LIBRARY_COMMIT"
@@ -135,12 +126,6 @@ def validate_capsule_versions(versions) {
             if (!(versions[key] ==~ sha_pattern)) {
                 throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
             }
-        }
-        def capsule_id = versions["${stage}_CO_CAPSULE_ID"]
-        if (capsule_id && !versions["${stage}_IMAGE_CO"].contains(capsule_id)) {
-            throw new IllegalArgumentException(
-                "${stage}_IMAGE_CO does not contain ${stage}_CO_CAPSULE_ID"
-            )
         }
     }
     versions
@@ -165,8 +150,6 @@ if (!(backend in ['codeocean', 'local', 'slurm'])) {
         "Unsupported backend: ${backend}; expected codeocean, local, or slurm"
     )
 }
-def image_suffix = backend == 'codeocean' ? '_IMAGE_CO' : '_IMAGE_OFFCO'
-def registry_host = System.getenv('REGISTRY_HOST') ?: ''
 def image_stages = [
     'CONVERTER',
     'MOTION_CORRECTION',
@@ -180,38 +163,14 @@ def image_stages = [
     'NWB',
     'AGGREGATOR'
 ]
-params.stage_images = [:]
-def image_set = params.image_set.toString()
-if (!(image_set in ['default', 'development-ghcr'])) {
-    throw new IllegalArgumentException(
-        "Unsupported image_set: ${image_set}; expected default or development-ghcr"
-    )
+params.stage_images = parse_key_value_file("${baseDir}/images.env")
+if (params.stage_images.keySet() != image_stages.toSet()) {
+    throw new IllegalArgumentException('Image manifest must contain exactly all 11 stages')
 }
-def development_images = [:]
-if (image_set == 'development-ghcr') {
-    development_images = parse_key_value_file("${baseDir}/development_images.env")
-    if (development_images.keySet() != image_stages.toSet()) {
-        throw new IllegalArgumentException('Development image manifest must contain exactly all 11 stages')
+params.stage_images.each { stage, image ->
+    if (!(image ==~ /^ghcr\.io\/allenneuraldynamics\/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$/)) {
+        throw new IllegalArgumentException("Image for ${stage} must be GHCR digest-pinned")
     }
-    development_images.each { stage, image ->
-        if (!(image ==~ /^ghcr\.io\/allenneuraldynamics\/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$/)) {
-            throw new IllegalArgumentException("Development image for ${stage} must be GHCR digest-pinned")
-        }
-    }
-    println 'Using development GHCR images; scientific parity is not yet established'
-}
-image_stages.each { stage ->
-    def image_ref = image_set == 'development-ghcr'
-        ? development_images[stage]
-        : params.versions["${stage}${image_suffix}"]
-    if (!image_ref) {
-        throw new IllegalArgumentException(
-            "No ${backend} image configured for ${stage}; add ${stage}${image_suffix}"
-        )
-    }
-    params.stage_images[stage] = image_set == 'default' && backend == 'codeocean' && registry_host
-        ? "${registry_host}/${image_ref}"
-        : image_ref
 }
 
 def gitCloneFunction = '''
@@ -682,7 +641,6 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=ba2e9806-5561-4853-90ba-1bc269b42ff6
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -732,7 +690,6 @@ process motion_correction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=86b66e08-c26e-4d08-a904-80406e041479
     export CO_CPUS=16
     export CO_MEMORY=137438953472
     
@@ -779,7 +736,6 @@ process movie_qc {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=1e1ee66e-db39-4cc8-b760-08ed26f0c9e8
 	export CO_CPUS=16
 	export CO_MEMORY=137438953472
 
@@ -823,7 +779,6 @@ process decrosstalk_split_json {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=${params.versions['DECROSSTALK_SPLIT_CO_CAPSULE_ID']}
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
@@ -873,7 +828,6 @@ process decrosstalk_roi_images {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=38507fd5-eb29-4b40-9474-28448305e619
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
@@ -925,7 +879,6 @@ process extraction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=1ba6e32d-2a8a-4084-a449-2878724fb15d
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
@@ -975,7 +928,6 @@ process dff_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=909d4275-fc32-4b81-a3f3-f5bf6cedece1
     export CO_CPUS=4
     export CO_MEMORY=34359738368
 
@@ -1022,7 +974,6 @@ process oasis_event_detection {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=7b66080e-50f4-4c27-8345-86248812b00f
     export CO_CPUS=4
     export CO_MEMORY=34359738368
 
@@ -1077,7 +1028,6 @@ process classifier {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=570e9cb2-be0f-4972-ad49-90b3fe8ab690
 	export CO_CPUS=16
 	export CO_MEMORY=64424509440
 
@@ -1134,7 +1084,6 @@ process ophys_nwb {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=f804beaa-2ac3-46c7-82b7-f46b19531aa9
 	export CO_CPUS=1
 	export CO_MEMORY=8589934592
     echo "I AM MAKING AN NWB"
@@ -1191,7 +1140,6 @@ process pipeline_processing_metadata_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=${params.versions['AGGREGATOR_CO_CAPSULE_ID']}
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 

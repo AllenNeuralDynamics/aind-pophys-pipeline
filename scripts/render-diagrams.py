@@ -140,7 +140,6 @@ def main():
         with (case / "preview.log").open("w") as log:
             subprocess.run(command, cwd=case, env={
                 **environment, "RESULTS_PATH": str(case / "results"),
-                "REGISTRY_HOST": "registry.codeocean.allenneuraldynamics.org",
             }, stdout=log, stderr=subprocess.STDOUT, check=True)
         text = raw.read_text()
         count = sum(text.count(f'([{name}])') + text.count(f'(["{name}"])') for name in LABELS)

@@ -3,7 +3,6 @@
     "setuptools"
   ],
   "capsule_ref": "4b759f9c4fe819beac04081c964d1f01a1ac4906",
-  "capsule_source_mode": "git",
   "declared_dependencies": [
     "pydantic>=2.7",
     "pydantic-settings>=2.8.1"

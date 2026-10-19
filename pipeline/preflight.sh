@@ -9,7 +9,6 @@ results_path="${RESULTS_PATH:-${pipeline_path}/../results}"
 workdir="${WORKDIR:-${pipeline_path}/../work}"
 params_file="${PARAMS_FILE:-${pipeline_path}/../pipeline_parameters.json}"
 source_path="${OPHYS_MOUNT_URL:-${data_path}}"
-image_set="${IMAGE_SET:-development-ghcr}"
 
 if [ "$mode" != "local" ] && [ "$mode" != "slurm" ]; then
     echo "usage: $0 local|slurm" >&2
@@ -52,20 +51,12 @@ if [ ! -f "$params_file" ]; then
     echo "Parameter file not found: ${params_file}" >&2
     exit 1
 fi
-if [ "$image_set" != "default" ] && [ "$image_set" != "development-ghcr" ]; then
-    echo "IMAGE_SET must be default or development-ghcr" >&2
-    exit 1
-fi
-if [ "$mode" != "codeocean" ] && [ "$image_set" = "default" ]; then
-    echo "Off-CO runs require IMAGE_SET=development-ghcr until promoted images exist" >&2
-    exit 1
-fi
 if [[ "$source_path" != s3://* ]] && [ ! -d "$source_path" ]; then
     echo "OPHYS_MOUNT_URL directory not found: ${source_path}" >&2
     exit 1
 fi
-if [ ! -f "${pipeline_path}/development_images.env" ]; then
-    echo "Development image manifest not found" >&2
+if [ ! -f "${pipeline_path}/images.env" ]; then
+    echo "Image manifest not found: ${pipeline_path}/images.env" >&2
     exit 1
 fi
 

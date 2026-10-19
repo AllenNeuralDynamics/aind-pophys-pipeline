@@ -458,16 +458,6 @@
 			]
 		},
 		{
-			"id": "DevImageSet00001",
-			"name": "image_set",
-			"param_name": "image_set",
-			"description": "Development pipeline only: opt into the 11 digest-pinned GHCR images. Default preserves existing backend image pins.",
-			"type": "list",
-			"value_type": "string",
-			"default_value": "default",
-			"extra_data": ["default", "development-ghcr"]
-		},
-		{
 			"id": "OphysSource00001",
 			"name": "ophys_mount_url",
 			"param_name": "ophys_mount_url",
