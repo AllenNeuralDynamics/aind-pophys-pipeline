@@ -433,6 +433,12 @@ class PipelineContractTests(unittest.TestCase):
                               "errorStrategy = 'terminate'", "maxRetries = 0"):
                 self.assertIn(directive, block)
 
+    def test_configs_avoid_functions_newer_than_pinned_nextflow(self):
+        # The config env() function needs Nextflow 25; the pipeline pins 24.10.4.
+        for filename in ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config"):
+            config = (PIPELINE / filename).read_text()
+            self.assertIsNone(re.search(r"(?<![.\w])env\(", config), filename)
+
     def test_gpu_probe_matches_production_resources_and_returns_before_science(self):
         workflow = self.main.split("workflow {", 1)[1]
         self.assertIn("params.gpu_smoke_only = false", self.main)
