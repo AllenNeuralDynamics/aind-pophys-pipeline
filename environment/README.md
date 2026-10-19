@@ -1,21 +1,20 @@
 # Off-Code-Ocean image candidates
 
-**Status (2026-09-08): all eleven candidates built locally for Linux amd64.**
-`candidate-inventory.json` records the exact selected archive paths, tags, digests,
-and sizes. Every referenced manifest, config and compressed layer was verified
-against its SHA-256. The builds passed their embedded import checks; scientific
-parity and actual GPU execution remain unverified. All eleven images have been
-published with identical remote digests and API-confirmed Internal visibility.
-No production pins have been promoted.
+**Status (2026-10-19): the eleven images in `v2-pathfix-inventory.json` are published.**
+The inventory records the exact archive paths, tags, digests, and sizes. Every
+referenced manifest, config and compressed layer was verified against its SHA-256.
+Each remote digest matches its archive, every package is Public, and every image
+resolves without credentials. `pipeline/development_images.env` pins these digests.
+The builds passed their embedded import checks; no pipeline run has used this set yet.
+No production pins have been promoted. `candidate-inventory.json` and
+`procps-fleet-inventory.json` record earlier sets.
 Candidates were built across successive recipe revisions, not one identical checkout.
 
 Candidate packages default to **Private or Internal**. Public requires an explicit
 `--allow-public-package ghcr.io/allenneuraldynamics/pophys-NAME` for each approved
 repository. This only permits an existing visibility; it never changes package
-visibility. Unknown visibility is always rejected. The procps fleet preflight on
-2026-09-08 confirmed all ten selected packages are Internal; no Public opt-in was needed.
-Internal allows authenticated enterprise members; Sean explicitly accepted that
-audience. Existing `private` entries in the image map remain the preferred setting,
+visibility. Unknown visibility is always rejected. All eleven packages are now
+Public, so publication needs all eleven `--allow-public-package` options. Existing `private` entries in the image map remain the preferred setting,
 not a prohibition on Internal packages. The pipeline repository is public, while
 several installed AIND libraries are internal. GHCR creates packages on the first
 push, with private visibility by default; there is no separate empty-package creation
@@ -54,45 +53,56 @@ skopeo copy --preserve-digests \
 Replace both references with the corresponding inventory entry, check package privacy
 before copying, and verify remote digest and Private/Internal visibility afterward. Do not
 enable format conversion or recompression. Failed or mismatching copies must not
-update production pins. The procps replacement fleet has not been published.
+update production pins.
 
-### Ten-stage procps replacement fleet
+### Current eleven-image fleet
 
-Keep `candidate-inventory.json` as historical evidence. The separate
-`procps-fleet-inventory.json` records the exact replacement archives; the already
-smoke-tested splitter is deliberately excluded. A subset must be supplied explicitly
-to both tools; omitting `--stages` still requires all eleven stages.
+`v2-pathfix-inventory.json` takes six archives from `candidate-pathfix-20261018` and
+five from `candidate-v2tips-20261016`. A subset must be supplied explicitly to both
+tools with `--stages`; omitting it requires all eleven stages.
 
 Run from the repository root:
 
 ```bash
-stages=(AGGREGATOR CLASSIFIER CONVERTER DECROSSTALK_ROI_IMAGES DFF EXTRACTION \
-        MOTION_CORRECTION MOVIE_QC NWB OASIS)
 uv run --python 3.12 --no-project environment/inventory.py \
-  --stages "${stages[@]}" --output environment/procps-fleet-inventory.json \
-  --reports .image-work/candidate-procps-fleet-20260908/*/report.json
+  --output environment/v2-pathfix-inventory.json \
+  --reports .image-work/candidate-pathfix-20261018/{CONVERTER,MOTION_CORRECTION,DECROSSTALK_SPLIT,DECROSSTALK_ROI_IMAGES,EXTRACTION,CLASSIFIER}/report.json \
+            .image-work/candidate-v2tips-20261016/{AGGREGATOR,DFF,MOVIE_QC,NWB,OASIS}/report.json
+
+public=()
+for name in aggregator classifier converter decrosstalk-roi-images decrosstalk-split dff \
+            extraction motion-correction movie-qc nwb oasis; do
+  public+=(--allow-public-package "ghcr.io/allenneuraldynamics/pophys-${name}")
+done
 
 # Read-only destination preflight (also rehashes the local archives):
 uv run --python 3.12 --no-project environment/publish_inventory.py \
-  --inventory environment/procps-fleet-inventory.json --stages "${stages[@]}" \
+  --inventory environment/v2-pathfix-inventory.json \
   --authfile "$HOME/.config/containers/auth.json" \
-  --output .image-work/procps-fleet-publication-status.json
+  --output .image-work/v2-pathfix-publication-status.json "${public[@]}"
 
 # User-executed upload, only after reviewing the preflight:
 uv run --python 3.12 --no-project environment/publish_inventory.py \
-  --inventory environment/procps-fleet-inventory.json --stages "${stages[@]}" \
+  --inventory environment/v2-pathfix-inventory.json \
   --authfile "$HOME/.config/containers/auth.json" \
-  --output .image-work/procps-fleet-publication-status.json --execute
+  --output .image-work/v2-pathfix-publication-status.json "${public[@]}" --execute
 ```
 
-If a destination is Public, review that package's audience before adding its exact
-`--allow-public-package` option to both publication commands. The splitter's Public
-approval does not authorize any other package. Do not rebuild, retag, or recompress
-these archives for upload. Local verification does not establish runtime parity.
+Review a package's audience before adding its exact `--allow-public-package` option.
+Do not rebuild, retag, or recompress these archives for upload. Local verification
+does not establish runtime parity.
 
-The currently active local GitHub CLI token lacks `write:packages`. Publication
-requires a separate GHCR login with suitable package scopes and organization SSO
-authorization; source-code read access alone is insufficient.
+Publication requires a GHCR login with `write:packages` and organization SSO
+authorization; source-code read access alone is insufficient. With the GitHub CLI:
+
+```bash
+gh auth refresh -h github.com -s write:packages
+gh auth token | skopeo login ghcr.io -u <github-user> --password-stdin \
+  --authfile "$HOME/.config/containers/auth.json"
+```
+
+Afterwards, run `skopeo logout ghcr.io --authfile "$HOME/.config/containers/auth.json"`
+and `gh auth refresh -h github.com -r write:packages`.
 
 Regenerate the inventory with explicit build reports (one per stage):
 
@@ -127,12 +137,9 @@ references, model mounts, and production `*_IMAGE_OFFCO` slots are unchanged.
 | AGGREGATOR | Python 3.12 slim | manager 06ae879, schema **2.9.0**, models **6.2.0**, upgrader 0.17.12 |
 
 All image recipes retain bash, Git, certificates, timing, and `procps` (`ps`),
-required by Nextflow's task-metrics wrapper. The splitter replacement passed the
-Code Ocean smoke run `18231fbb-991c-451e-8a39-f7a8a4cdb86d`; the other ten images
-must be rebuilt with this prerequisite before their GHCR runtime trials.
-The pipeline creates
-`/data`, `/results`, and `/scratch` symlinks per task; the images deliberately
-do not pre-create those paths.
+required by Nextflow's task-metrics wrapper. Tasks use task-relative `capsule/data`,
+`capsule/results`, and `capsule/scratch` directories; the images do not create
+`/data`, `/results`, or `/scratch`.
 All model weights remain external mounts. No Dockerfile starts a notebook server.
 ROICaT's declared `[all]` extras themselves require Jupyter and numerous other packages;
 these are deliberately retained, not silently removed to meet a size target.

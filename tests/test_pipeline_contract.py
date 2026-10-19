@@ -71,16 +71,12 @@ class PipelineContractTests(unittest.TestCase):
 
     def test_development_images_match_complete_published_inventory(self):
         images = read_manifest(PIPELINE / "development_images.env")
-        inventory = json.loads((ROOT / "environment/procps-fleet-inventory.json").read_text())
+        inventory = json.loads((ROOT / "environment/v2-pathfix-inventory.json").read_text())
         expected = {
             row["stage"]: row["image"].rsplit(":", 1)[0] + "@" + row["platform_manifest_digest"]
             for row in inventory["images"]
         }
-        self.assertEqual(len(expected), 10)
-        expected["DECROSSTALK_SPLIT"] = (
-            "ghcr.io/allenneuraldynamics/pophys-decrosstalk-split@"
-            "sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6"
-        )
+        self.assertEqual(len(expected), 11)
         self.assertEqual(set(images), set(STAGES))
         self.assertEqual(images, expected)
         for image in images.values():

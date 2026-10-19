@@ -4,18 +4,15 @@ This guide runs the pipeline on a SLURM cluster with Apptainer (or Singularity),
 development GHCR images. One small head job runs Nextflow, which submits each processing step
 as its own SLURM job inside that step's container.
 
-**Status:** no run has been made on a SLURM cluster yet. The prerequisites below must be in
-place before the first run.
+**Status:** no run has been made on a SLURM cluster yet.
 
-## Before the first run
+## Open items
 
-| # | Prerequisite | Why |
+| # | Item | Why |
 |---|---|---|
-| 1 | Wrapper and library path fixes merged, and the manifest repinned to the merge commits | The manifest pins the open PR heads; feature branches are deleted on merge. |
-| 2 | Repinned images published and `pipeline/development_images.env` updated | The current digests contain the previous library commits. |
-| 3 | A short Code Ocean debug run with `image_set=development-ghcr` on this branch | Confirms the task-relative layout before the cluster run. |
-| 4 | `aind-metadata-manager-capsule` public | Every step clones its wrapper anonymously at run time. |
-| 5 | Branch pushed | The cluster clones the pipeline from GitHub. |
+| 1 | Merge the wrapper and library path fixes, then repin the manifest to the merge commits | The manifest pins open PR heads. Each step clones its wrapper and checks out the pinned commit, so keep those branches until the repin. |
+| 2 | A short Code Ocean debug run with `image_set=development-ghcr` on this branch | Confirms the task-relative layout before the cluster run. |
+| 3 | Model assets published outside Code Ocean | Only Allen Code Ocean users can download the assets in section 3. |
 
 Known limitation: an `OPHYS_MOUNT_URL` that is a local directory skips the converter, so raw
 sessions must come from S3.
@@ -82,10 +79,10 @@ names. Leave `DATA_PATH` unset so it defaults to that directory.
 
 | Directory | Code Ocean data asset | Files |
 |---|---|---|
-| `data/schemas/` | `fb4b5cef-4505-4145-b8bd-e41d6863d7a9` | `ndx-aibs-behavior-ophys.extension.yaml`, `ndx-aibs-behavior-ophys.namespace.yaml` |
-| `data/2p_roi_classifier/` | `57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae` | `soma.classification_training.autoclassifier.onnx`, `dendrite.classification_training.autoclassifier.onnx` (the rest of the asset is unused training output) |
-| `data/cellpose_models/` | `df0e5676-1354-4353-8b2c-f8062aa485db` | `cyto3`, `cytotorch_0`, `size_cyto3.npy`, `size_cytotorch_0.npy` |
-| `data/roinet/` | `7e4bd8f4-8881-4541-94b4-d1ac714d4a07` | `ROInet.zip`, `torch/hub/checkpoints/convnext_tiny-983f1562.pth` (keep the nested path) |
+| `data/schemas/` | [Ophys_Extension_schema_10_14_2024_13_44](https://codeocean.allenneuraldynamics.org/data-assets/fb4b5cef-4505-4145-b8bd-e41d6863d7a9) | `ndx-aibs-behavior-ophys.extension.yaml`, `ndx-aibs-behavior-ophys.namespace.yaml` |
+| `data/2p_roi_classifier/` | [paninhibitory_omfish_roi_classifier](https://codeocean.allenneuraldynamics.org/data-assets/57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae) | `soma.classification_training.autoclassifier.onnx`, `dendrite.classification_training.autoclassifier.onnx` (the rest of the asset is unused training output) |
+| `data/cellpose_models/` | [cellpose-cyto-cyto3](https://codeocean.allenneuraldynamics.org/data-assets/df0e5676-1354-4353-8b2c-f8062aa485db) | `cyto3`, `cytotorch_0`, `size_cyto3.npy`, `size_cytotorch_0.npy` |
+| `data/roinet/` | [roicat-roinet-classification](https://codeocean.allenneuraldynamics.org/data-assets/7e4bd8f4-8881-4541-94b4-d1ac714d4a07) | `ROInet.zip`, `torch/hub/checkpoints/convnext_tiny-983f1562.pth` (keep the nested path) |
 
 ## 4. Write a parameter file
 
