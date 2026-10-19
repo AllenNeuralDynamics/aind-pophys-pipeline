@@ -20,6 +20,10 @@ The pipeline runs on [Nextflow](https://www.nextflow.io/) DSL2 and contains the 
 
 * [aind-metadata-manager-capsule](https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule): The processing JSON generated for each plane passing through each processing capsule are appended together and saved into the top-level session directory.
 
+# Running outside Code Ocean
+
+To run on a SLURM cluster with Apptainer, follow the [HPC quickstart](docs/hpc-quickstart.md).
+
 # Parameters
 
 Development-only digest-pinned GHCR images are available through the explicit

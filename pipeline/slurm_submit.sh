@@ -7,7 +7,12 @@
 
 set -e
 
-pipeline_path="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# sbatch runs a spooled copy of this script, so its own location is not the pipeline.
+pipeline_path="${PIPELINE_PATH:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
+if [ ! -f "${pipeline_path}/main.nf" ]; then
+    echo "Set PIPELINE_PATH to the repository's pipeline/ directory" >&2
+    exit 1
+fi
 nextflow_bin="${NEXTFLOW_BIN:-nextflow}"
 data_path="${DATA_PATH:-${pipeline_path}/../data}"
 results_path="${RESULTS_PATH:-${pipeline_path}/../results}"
