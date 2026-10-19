@@ -12,6 +12,7 @@ ENTRYPOINTS = {
     "CONVERTER": ("aind_pophys_converter.job", "run"),
     "MOTION_CORRECTION": ("aind_ophys_motion_correction_library.job", "run"),
     "MOVIE_QC": ("aind_ophys_movie_qc_library.job", "run"),
+    "DECROSSTALK_SPLIT": ("aind_ophys_decrosstalk_split_session_json_library.job", "run"),
     "DECROSSTALK_ROI_IMAGES": ("aind_ophys_decrosstalk_roi_images_library.job", "run"),
     "EXTRACTION": ("aind_ophys_extraction_library.job", "run"),
     "DFF": ("aind_ophys_dff_library.job", "run"),
@@ -47,6 +48,7 @@ def main():
         "CONVERTER": ("numpy", "h5py", "ScanImageTiffReader"),
         "MOTION_CORRECTION": ("suite2p", "torch", "sbxreader", "cv2"),
         "MOVIE_QC": ("oasis.functions", "scipy", "skimage"),
+        "DECROSSTALK_SPLIT": ("pydantic_settings",),
         "DECROSSTALK_ROI_IMAGES": ("suite2p", "cellpose.models"),
         "EXTRACTION": ("caiman", "suite2p", "cellpose.models", "cv2"),
         "DFF": ("aind_ophys_utils", "numpy", "scipy"),
@@ -65,9 +67,10 @@ def main():
                 raise ValueError(f"Metadata upgrader is missing {attribute}")
         if not hasattr(mapping, "MAPPING"):
             raise ValueError("Metadata upgrader is missing MAPPING")
-    for package, expected in (("aind-data-schema", "2.9.0"), ("aind-data-schema-models", "6.2.0")):
-        if importlib.metadata.version(package) != expected:
-            raise ValueError(f"Wrong baseline version of {package}")
+    if stage != "DECROSSTALK_SPLIT":
+        for package, expected in (("aind-data-schema", "2.9.0"), ("aind-data-schema-models", "6.2.0")):
+            if importlib.metadata.version(package) != expected:
+                raise ValueError(f"Wrong baseline version of {package}")
     if stage in ("CONVERTER", "MOTION_CORRECTION", "DECROSSTALK_ROI_IMAGES", "DFF", "EXTRACTION"):
         torch = importlib.import_module("torch")
         if torch.version.cuda is not None:

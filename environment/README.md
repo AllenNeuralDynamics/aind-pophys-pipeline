@@ -116,12 +116,12 @@ references, model mounts, and production `*_IMAGE_OFFCO` slots are unchanged.
 | --- | --- | --- |
 | CONVERTER | Python 3.12 slim, CPU | aind-ophys-utils 0.0.8, ScanImage reader, selected TIFF/Pillow pins |
 | MOTION_CORRECTION | Python 3.10 slim, CPU | suite2p 0.14.6, torch 2.13.0+cpu / torchvision 0.28.0+cpu |
-| MOVIE_QC | Python 3.12 slim | oasis-deconv 0.2.0, numpy 2.2.6, scipy 1.15.3 |
-| DECROSSTALK_SPLIT | Python 3.12 slim | Standard library only; no backing library |
+| MOVIE_QC | Python 3.12 slim | oasis-deconv 0.3.2, numpy 2.2.6, scipy 1.15.3 |
+| DECROSSTALK_SPLIT | Python 3.12 slim | aind-ophys-decrosstalk-split-session-json-library, pydantic-settings |
 | DECROSSTALK_ROI_IMAGES | Python 3.10 slim, CPU | suite2p 0.14.3, cellpose 2.2.3, numpy 1.26.4 |
 | EXTRACTION | Micromamba 2.3.2, Python 3.10, CPU | CaImAn 1.10.3 from conda-forge, with an explicitly allowlisted pip overlay |
 | DFF | Python 3.12 slim, CPU | aind-ophys-utils **0.1.0**, joblib 1.5.3 |
-| OASIS | Python 3.12 slim | oasis-deconv 0.2.0, scipy 1.15.3 |
+| OASIS | Python 3.12 slim | oasis-deconv 0.3.2, scipy 1.15.3 |
 | CLASSIFIER | Python 3.12 slim, GPU | **roicat[all] 1.7.3**, torch 2.11.0, torchvision 0.26.0 |
 | NWB | Python 3.12 slim | PyNWB 4.1, HDMF 6.1, HDMF-Zarr 0.13, aind-nwb-utils 0.2.8 |
 | AGGREGATOR | Python 3.12 slim | manager 06ae879, schema **2.9.0**, models **6.2.0**, upgrader 0.17.12 |
@@ -136,18 +136,16 @@ do not pre-create those paths.
 All model weights remain external mounts. No Dockerfile starts a notebook server.
 ROICaT's declared `[all]` extras themselves require Jupyter and numerous other packages;
 these are deliberately retained, not silently removed to meet a size target.
-Similarly, `oasis-deconv==0.2.0` declares Cython as a runtime requirement, so that
-Python package is retained. The C/C++ compiler remains confined to the builder.
+`oasis-deconv==0.3.2` installs from a manylinux wheel and needs no Cython.
+The C/C++ compiler remains confined to the builder.
 The classifier uses PyPI's CUDA-enabled torch and its CUDA 13 dependencies on a plain
 Python base, avoiding a second preinstalled CUDA/PyTorch stack. Its pinned
 `fused-local-corr==0.3.211` has a Linux x86_64 cp312 wheel. GPU driver compatibility and
 actual scientific execution still require testing on the target GPU host.
 
-**Images alone do not complete off-CO portability.** The splitter and aggregator
-wrappers still clone from CO-internal Git. The splitter's algorithm and wrapper are not
-copied or rewritten here. The aggregator's library provenance has been added without
-changing `AGGREGATOR_CAPSULE_SOURCE_MODE=co_git`. Those two wrapper sources must be made
-accessible separately before a full local/SLURM pipeline run can succeed.
+Every step clones its thin wrapper from GitHub at the pinned commit, so each wrapper
+repository must allow anonymous clones for off-CO runs. `Dockerfile.splitter` builds only
+the GHCR pull-smoke image.
 
 ## Dependency and processing-library layers
 

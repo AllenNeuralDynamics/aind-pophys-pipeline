@@ -1,11 +1,11 @@
 {
-  "build_log_sha256": "e96be5d44a02ad5a474fd5ec56d1bc2d4f509bdce7a372f4a2c2e845ad467747",
-  "source_library_commit": "d5b8b8ce6648b4772d5326d551a6ca89fa20e5bc",
+  "build_log_sha256": "0f152d5c468c22ffc38bb4980d22af4dc47eb5a537fdec3e84b39a6925baa235",
+  "source_library_commit": "5cf411b5d3290663820a293f3b1f4e2db323ec44",
   "suite2p_commit": "ae0e9313b881f1d4bb51d7461f4796532a76e8aa",
   "replacements": {
     "h5py": {"before": "3.9.0", "after": "3.11.0"},
     "matplotlib": {"before": "3.8.0", "after": "3.10.9"},
-    "python-json-logger": {"before": "2.0.7", "after": "4.1.0"},
+    "python-json-logger": {"before": "2.0.7", "after": "4.2.0"},
     "pyyaml": {"before": "6.0", "after": "6.0.3"},
     "typing-extensions": {"before": "4.7.1", "after": "4.16.0"}
   },

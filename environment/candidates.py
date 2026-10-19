@@ -149,8 +149,9 @@ def capture(args):
         repo, commit = record.get("library_repo"), record.get("library_commit")
         if stage == "AGGREGATOR":
             repo, commit = "aind-metadata-manager", AGGREGATOR_SHA
-        if stage in baseline["stage_source_pins"]:
-            if [record["capsule_commit"], commit] != baseline["stage_source_pins"][stage]:
+        if stage in baseline["source_selection"]:
+            selected = baseline["source_selection"][stage]
+            if [record["capsule_commit"], commit] != [selected["capsule_commit"], selected["library_commit"]]:
                 raise ValueError(f"{stage}: inventory/source baseline mismatch")
         if repo and pins[f"{stage}_LIBRARY_COMMIT"] != commit:
             raise ValueError(f"{stage}: library manifest mismatch")
@@ -189,7 +190,7 @@ def capture(args):
             "declared_dependencies": dependencies,
             "pyproject_sha256": hashlib.sha256(raw.encode()).hexdigest() if raw else None,
             "capsule_source_mode": pins[f"{stage}_CAPSULE_SOURCE_MODE"],
-            "capsule_ref": pins.get(f"{stage}_CAPSULE_COMMIT", pins.get(f"{stage}_REF")),
+            "capsule_ref": pins[f"{stage}_CAPSULE_COMMIT"],
         })
     print(json.dumps(observations["counts"], sort_keys=True))
 
@@ -220,7 +221,7 @@ def validate():
             raise ValueError(f"{stage}: stale library source; recapture before building")
         if source["capsule_source_mode"] != pins[f"{stage}_CAPSULE_SOURCE_MODE"]:
             raise ValueError(f"{stage}: stale capsule source mode")
-        expected_ref = pins.get(f"{stage}_CAPSULE_COMMIT", pins.get(f"{stage}_REF"))
+        expected_ref = pins[f"{stage}_CAPSULE_COMMIT"]
         if source["capsule_ref"] != expected_ref:
             raise ValueError(f"{stage}: stale capsule source ref")
         requirements = (ENVIRONMENT / "stages" / stage.lower() / "requirements.in").read_text()
@@ -339,62 +340,58 @@ def resolve(stages):
     for stage in stages:
         folder = ENVIRONMENT / "stages" / stage.lower()
         status = {"dependency_inputs_sha256": dependency_hash(folder), "image_built": False}
-        if stage == "DECROSSTALK_SPLIT":
-            (folder / "requirements.lock").write_text("# Standard library only.\n")
-            status.update(status="resolved", resolver="none; standard library only")
+        command = [
+            "uv", "pip", "compile", str(folder / "requirements.in"),
+            "--constraint", str(folder / "observed.constraints"),
+            "--build-constraints", str(folder / "build.constraints"),
+            "--python-version", PYTHON[stage], "--python-platform", "x86_64-manylinux_2_28",
+            "--no-header", "--no-annotate", "--no-strip-extras",
+            "--output-file", str(folder / "requirements.lock"),
+        ]
+        if stage != "CLASSIFIER":
+            command += ["--torch-backend", "cpu"]
+        if (folder / "overrides.in").exists():
+            command += ["--overrides", str(folder / "overrides.in")]
+        if stage == "EXTRACTION":
+            try:
+                extraction_conda_contract(folder)
+            except (ValueError, OSError, KeyError) as error:
+                status.update(status="blocked", reason=str(error))
+                write_json(folder / "lock-status.json", status)
+                failed += 1
+                print(f"{stage}: blocked")
+                continue
+            # Resolve the compatible PyPI OpenCV metadata, but do not emit or install it.
+            # The real conda version 4.7.0 is separately locked and validated.
+            provided = json.loads((folder / "overlay-policy.json").read_text())["conda_only"]
+            constraints = folder / "pip.constraints"
+            constraints.write_text("\n".join(
+                line for line in (folder / "observed.constraints").read_text().splitlines()
+                if canonical(line.split("==")[0]) not in provided
+            ) + "\n")
+            command[command.index("--constraint") + 1] = str(constraints)
+            for name in sorted(provided):
+                command += ["--no-emit-package", name]
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode:
+            # Keep resolver diagnostics local, but never credential-bearing URL userinfo.
+            reason = re.sub(r"https://[^/\s]+@", "https://[REDACTED]@", result.stderr)
+            status.update(status="blocked", reason=reason.strip())
         else:
-            command = [
-                "uv", "pip", "compile", str(folder / "requirements.in"),
-                "--constraint", str(folder / "observed.constraints"),
-                "--build-constraints", str(folder / "build.constraints"),
-                "--python-version", PYTHON[stage], "--python-platform", "x86_64-manylinux_2_28",
-                "--no-header", "--no-annotate", "--no-strip-extras",
-                "--output-file", str(folder / "requirements.lock"),
-            ]
-            if stage != "CLASSIFIER":
-                command += ["--torch-backend", "cpu"]
-            if (folder / "overrides.in").exists():
-                command += ["--overrides", str(folder / "overrides.in")]
+            lock = folder / "requirements.lock"
+            lines = lock.read_text().splitlines()
+            for index, line in enumerate(lines):
+                if re.fullmatch(r"(torch|torchvision|torchaudio)==[^ ]+\+cpu", line):
+                    package, version = line.split("==")
+                    lines[index] = cpu_wheel(package, version, PYTHON[stage])
+            lock.write_text("\n".join(lines) + "\n")
+            status.update(status="resolved", resolver=subprocess.check_output(
+                ["uv", "--version"], text=True).strip())
             if stage == "EXTRACTION":
                 try:
-                    extraction_conda_contract(folder)
-                except (ValueError, OSError, KeyError) as error:
+                    status.update(extraction_overlay_contract(folder))
+                except ValueError as error:
                     status.update(status="blocked", reason=str(error))
-                    write_json(folder / "lock-status.json", status)
-                    failed += 1
-                    print(f"{stage}: blocked")
-                    continue
-                # Resolve the compatible PyPI OpenCV metadata, but do not emit or install it.
-                # The real conda version 4.7.0 is separately locked and validated.
-                provided = json.loads((folder / "overlay-policy.json").read_text())["conda_only"]
-                constraints = folder / "pip.constraints"
-                constraints.write_text("\n".join(
-                    line for line in (folder / "observed.constraints").read_text().splitlines()
-                    if canonical(line.split("==")[0]) not in provided
-                ) + "\n")
-                command[command.index("--constraint") + 1] = str(constraints)
-                for name in sorted(provided):
-                    command += ["--no-emit-package", name]
-            result = subprocess.run(command, capture_output=True, text=True)
-            if result.returncode:
-                # Keep resolver diagnostics local, but never credential-bearing URL userinfo.
-                reason = re.sub(r"https://[^/\s]+@", "https://[REDACTED]@", result.stderr)
-                status.update(status="blocked", reason=reason.strip())
-            else:
-                lock = folder / "requirements.lock"
-                lines = lock.read_text().splitlines()
-                for index, line in enumerate(lines):
-                    if re.fullmatch(r"(torch|torchvision|torchaudio)==[^ ]+\+cpu", line):
-                        package, version = line.split("==")
-                        lines[index] = cpu_wheel(package, version, PYTHON[stage])
-                lock.write_text("\n".join(lines) + "\n")
-                status.update(status="resolved", resolver=subprocess.check_output(
-                    ["uv", "--version"], text=True).strip())
-                if stage == "EXTRACTION":
-                    try:
-                        status.update(extraction_overlay_contract(folder))
-                    except ValueError as error:
-                        status.update(status="blocked", reason=str(error))
         if status["status"] == "resolved":
             status["lock_sha256"] = hashlib.sha256((folder / "requirements.lock").read_bytes()).hexdigest()
         else:

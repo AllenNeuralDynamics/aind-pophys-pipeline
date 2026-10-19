@@ -154,8 +154,8 @@ class ImageCandidateTests(unittest.TestCase):
         for stage, required in {
             "converter": ["aind-ophys-utils==0.0.8", "tifffile==2024.2.12"],
             "dff": ["aind-ophys-utils==0.1.0", "joblib==1.5.3"],
-            "movie_qc": ["oasis-deconv==0.2.0", "scipy==1.15.3", "numpy==2.2.6"],
-            "oasis": ["oasis-deconv==0.2.0", "scipy==1.15.3"],
+            "movie_qc": ["oasis-deconv==0.3.2", "scipy==1.15.3", "numpy==2.2.6"],
+            "oasis": ["oasis-deconv==0.3.2", "scipy==1.15.3"],
             "classifier": ["roicat[all]==1.7.3", "torch==2.11.0",
                            "torchvision==0.26.0", "fused-local-corr==0.3.211", "jupyter==1.1.1"],
             "decrosstalk_roi_images": ["suite2p==0.14.3", "cellpose==2.2.3", "numpy==1.26.4"],
@@ -183,7 +183,8 @@ class ImageCandidateTests(unittest.TestCase):
         for stage in ("movie_qc", "oasis"):
             constraints = (ENVIRONMENT / "stages" / stage / "build.constraints").read_text()
             self.assertIn("numpy==2.2.6", constraints)
-            self.assertIn("Cython==3.2.9", constraints)
+            lock = (ENVIRONMENT / "stages" / stage / "requirements.lock").read_text().lower()
+            self.assertNotIn("cython==", lock)
         recipe = (ENVIRONMENT / "Dockerfile.python").read_text()
         self.assertIn("--build-constraint /opt/build.constraints", recipe)
 
@@ -403,6 +404,7 @@ class ExtractionOverlayTests(unittest.TestCase):
             "aind_pophys_converter.job",
             "aind_ophys_motion_correction_library.job",
             "aind_ophys_movie_qc_library.job",
+            "aind_ophys_decrosstalk_split_session_json_library.job",
             "aind_ophys_decrosstalk_roi_images_library.job",
             "aind_ophys_extraction_library.job",
             "aind_ophys_dff_library.job",

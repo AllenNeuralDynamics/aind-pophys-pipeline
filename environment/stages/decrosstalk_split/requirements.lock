@@ -1,1 +1,7 @@
-# Standard library only.
+annotated-types==0.8.0
+pydantic==2.14.1
+pydantic-core==2.50.1
+pydantic-settings==2.16.0
+python-dotenv==1.2.4
+typing-extensions==4.16.0
+typing-inspection==0.4.4

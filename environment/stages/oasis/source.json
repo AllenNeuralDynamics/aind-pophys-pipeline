@@ -2,26 +2,27 @@
   "build_requires": [
     "setuptools"
   ],
-  "capsule_ref": "c33d680886f92ef6d97e3f8a08b1f49b8ad5a0ec",
+  "capsule_ref": "945af2f7f11e0567d7d2b192e6d0fe665381b177",
   "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-data-schema==2.9.0",
     "aind-data-schema-models==6.2.0",
-    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
-    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
-    "oasis-deconv==0.2.0",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@ba60ba340de7c273d7801d21c4d45fbb9bb7f45f",
+    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/log-schema.git@f09685e#subdirectory=python",
+    "oasis-deconv==0.3.2",
     "scipy==1.15.3",
     "numpy==2.2.6",
     "h5py==3.16.0",
     "matplotlib==3.10.9",
     "seaborn==0.13.2",
+    "pydantic==2.11.10",
     "pydantic-settings==2.14.2",
     "pytz==2026.3.post1"
   ],
   "distribution": "aind-ophys-oasis-event-detection-library",
-  "library_commit": "fc3200997ed27acc15fec1b88438b8363a90d296",
+  "library_commit": "e56df5e2018b04f7650ada2a80266e8d803629ad",
   "library_repo": "aind-ophys-oasis-event-detection-library",
-  "pyproject_sha256": "944bdcf8fa95661133fc3373eaca1d7ef6288767af424f14857164780ecca915",
+  "pyproject_sha256": "57d95d0f7288552689d9d2d376b539a9cb94f2389ddb5153bd3a4fdd0414e46e",
   "python": "3.12",
   "requires_python": ">=3.10,<3.13",
   "stage": "OASIS"

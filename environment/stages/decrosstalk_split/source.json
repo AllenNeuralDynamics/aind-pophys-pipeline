@@ -1,14 +1,18 @@
 {
-  "build_requires": [],
-  "capsule_ref": "adfc788f1a61c434f359b970c36b971ee7e2d43f",
-  "capsule_repo": "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json",
+  "build_requires": [
+    "setuptools"
+  ],
+  "capsule_ref": "4b759f9c4fe819beac04081c964d1f01a1ac4906",
   "capsule_source_mode": "git",
-  "declared_dependencies": [],
-  "distribution": null,
-  "library_commit": null,
-  "library_repo": null,
-  "pyproject_sha256": null,
+  "declared_dependencies": [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.8.1"
+  ],
+  "distribution": "aind-ophys-decrosstalk-split-session-json-library",
+  "library_commit": "4c62802e6038a0fac1d9f40da70ea2b4ff3d8259",
+  "library_repo": "aind-ophys-decrosstalk-split-session-json-library",
+  "pyproject_sha256": "f0c2a506a7c526ee46367c38e2ec65e606bd201e4a013a5121824a09d0610cf8",
   "python": "3.12",
-  "requires_python": null,
+  "requires_python": ">=3.10",
   "stage": "DECROSSTALK_SPLIT"
 }

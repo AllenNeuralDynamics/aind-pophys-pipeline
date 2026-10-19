@@ -2,27 +2,28 @@
   "build_requires": [
     "setuptools"
   ],
-  "capsule_ref": "389a1d35bc63a3909874ba971c052846d386f889",
+  "capsule_ref": "e568ec2cc9a5f6c155a23fa915e4700ea1187bd1",
   "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-ophys-utils==0.1.0",
     "joblib==1.5.3",
+    "jax==0.6.2",
     "aind-data-schema==2.9.0",
     "aind-data-schema-models==6.2.0",
-    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@ba60ba340de7c273d7801d21c4d45fbb9bb7f45f",
     "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
-    "h5py",
-    "matplotlib",
-    "numpy",
-    "scipy",
-    "pydantic>=2.7",
-    "pydantic-settings>=2.8.1"
+    "h5py==3.16.0",
+    "matplotlib==3.10.9",
+    "numpy==2.2.6",
+    "scipy==1.15.3",
+    "pydantic==2.11.10",
+    "pydantic-settings==2.14.2"
   ],
   "distribution": "aind-ophys-dff-library",
-  "library_commit": "89135385d91dd01955cbb553c0cf0107733ea5de",
+  "library_commit": "56e1a298c687706f40cbb03b89f5b40b52e891aa",
   "library_repo": "aind-ophys-dff-library",
-  "pyproject_sha256": "f13ade9e24193b0e2d29af8e66181a9718a1d3a887ef4bddecb183bc2d61326d",
+  "pyproject_sha256": "f2ef3b1576c7a388a7d5ff607038c356bdd17598e439b578ab04511b1ecfac5f",
   "python": "3.12",
-  "requires_python": ">=3.10",
+  "requires_python": ">=3.10,<3.14",
   "stage": "DFF"
 }

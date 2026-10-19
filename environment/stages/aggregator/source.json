@@ -2,8 +2,8 @@
   "build_requires": [
     "setuptools"
   ],
-  "capsule_ref": "b2ecb5d",
-  "capsule_source_mode": "co_git",
+  "capsule_ref": "8e0156338edd42488b30c75fd45eb4ab6c60fc46",
+  "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-data-schema>=2.0",
     "aind-metadata-upgrader",

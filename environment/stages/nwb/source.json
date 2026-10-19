@@ -2,13 +2,13 @@
   "build_requires": [
     "setuptools"
   ],
-  "capsule_ref": "8fc11b991f5715e293f9410c43c3a5086bdf1a0b",
+  "capsule_ref": "c84a8ceefd741ad4aa194b93a4bd03d4da0b5ecd",
   "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-data-schema==2.9.0",
     "aind-data-schema-models==6.2.0",
-    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
-    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@ba60ba340de7c273d7801d21c4d45fbb9bb7f45f",
+    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/log-schema.git@f09685e#subdirectory=python",
     "aind-nwb-utils==0.2.8",
     "aind-behavior-utils==0.3.4",
     "pynwb==4.1.0",
@@ -17,16 +17,14 @@
     "h5py==3.16.0",
     "numpy==2.2.6",
     "sparse==0.17.0",
-    "imageio==2.37.4",
     "matplotlib==3.10.9",
-    "pandas==2.3.3",
-    "pydantic-settings==2.14.2",
-    "pytz==2026.3.post1"
+    "pydantic==2.11.10",
+    "pydantic-settings==2.14.2"
   ],
   "distribution": "aind-ophys-nwb-library",
-  "library_commit": "bf70a3ebeea374fc52f34b7dd2c96e394503712f",
+  "library_commit": "297d27bc08ca3a60bdd7c4334dc1e28ea9e7e56a",
   "library_repo": "aind-ophys-nwb-library",
-  "pyproject_sha256": "345b15882058471f1a138aa2ae2e9ec52864f10f14542c015df2dbe5240d7645",
+  "pyproject_sha256": "025fd494badb672a05f89fc6375022021b31de72141a286312ff632bb68f7426",
   "python": "3.12",
   "requires_python": ">=3.10,<3.13",
   "stage": "NWB"

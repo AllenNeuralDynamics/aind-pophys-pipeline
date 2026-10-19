@@ -23,7 +23,7 @@
     "scanimage-tiff-reader==1.4.1.4"
   ],
   "distribution": "aind-pophys-converter",
-  "library_commit": "e1de8a67f6ffc57337ae8e611d0ecce6472769f1",
+  "library_commit": "e1df9fe7d3c95582854cdd197b5cd472929d1b04",
   "library_repo": "aind-pophys-converter",
   "pyproject_sha256": "0341060209c21af94da2ddfa51aa55d77bf465143ff9209c4502180ba915c992",
   "python": "3.12",

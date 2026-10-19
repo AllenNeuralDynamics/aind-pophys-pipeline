@@ -2,26 +2,27 @@
   "build_requires": [
     "setuptools"
   ],
-  "capsule_ref": "1cfab459b31b6e896316aa12be93bf7ea134cb4b",
+  "capsule_ref": "7a6a2f13db75dffec1afed2b93d35a7d24b80de4",
   "capsule_source_mode": "git",
   "declared_dependencies": [
     "aind-data-schema==2.9.0",
     "aind-data-schema-models==6.2.0",
-    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@adac8ebee57f895bb2d30b69cde01dd41afbce10",
-    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/aind-log-utils.git@f09685e#subdirectory=python",
-    "oasis-deconv==0.2.0",
+    "aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@ba60ba340de7c273d7801d21c4d45fbb9bb7f45f",
+    "log-schema[cloudwatch] @ git+https://github.com/AllenNeuralDynamics/log-schema.git@f09685e#subdirectory=python",
+    "oasis-deconv==0.3.2",
     "scipy==1.15.3",
     "numpy==2.2.6",
     "h5py==3.16.0",
     "matplotlib==3.10.9",
     "scikit-image==0.25.2",
     "pillow==12.3.0",
+    "pydantic==2.11.10",
     "pydantic-settings==2.14.2"
   ],
   "distribution": "aind-ophys-movie-qc-library",
-  "library_commit": "e9d2e824845fbb949fa66430a04de35e6bc09218",
+  "library_commit": "5fdd48cfdc08daa23bcc003d3f5ad6e7fa522f63",
   "library_repo": "aind-ophys-movie-qc-library",
-  "pyproject_sha256": "0c07546e58af310dbcbde688d38b70b6c241009c7898fb2aa9bfaf7b67331514",
+  "pyproject_sha256": "3358f4c32f328f5c4071e70f8daa045952b2286bb0f0f2f9cb48eb063b51189a",
   "python": "3.12",
   "requires_python": ">=3.10,<3.13",
   "stage": "MOVIE_QC"
