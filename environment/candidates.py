@@ -153,8 +153,6 @@ def capture(args):
             selected = baseline["source_selection"][stage]
             if [record["capsule_commit"], commit] != [selected["capsule_commit"], selected["library_commit"]]:
                 raise ValueError(f"{stage}: inventory/source baseline mismatch")
-        if repo and pins[f"{stage}_LIBRARY_COMMIT"] != commit:
-            raise ValueError(f"{stage}: library manifest mismatch")
         project = {}
         raw = ""
         if repo:
@@ -216,8 +214,6 @@ def validate():
         source = json.loads((ENVIRONMENT / "stages" / stage.lower() / "source.json").read_text())
         if source["stage"] != stage or source["python"] != PYTHON[stage]:
             raise ValueError(f"{stage}: invalid runtime contract")
-        if source["library_repo"] and source["library_commit"] != pins[f"{stage}_LIBRARY_COMMIT"]:
-            raise ValueError(f"{stage}: stale library source; recapture before building")
         expected_ref = pins[f"{stage}_CAPSULE_COMMIT"]
         if source["capsule_ref"] != expected_ref:
             raise ValueError(f"{stage}: stale capsule source ref")

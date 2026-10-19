@@ -114,18 +114,15 @@ def validate_process_versions(versions) {
     stages.each { stage ->
         required << "${stage}_CAPSULE_REPO"
         required << "${stage}_CAPSULE_COMMIT"
-        required << "${stage}_LIBRARY_COMMIT"
     }
     def missing = required.findAll { key -> !versions[key] }
     if (missing) {
         throw new IllegalArgumentException("Missing process manifest keys: ${missing.join(', ')}")
     }
     stages.each { stage ->
-        ['CAPSULE_COMMIT', 'LIBRARY_COMMIT'].each { suffix ->
-            def key = "${stage}_${suffix}"
-            if (!(versions[key] ==~ sha_pattern)) {
-                throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
-            }
+        def key = "${stage}_CAPSULE_COMMIT"
+        if (!(versions[key] ==~ sha_pattern)) {
+            throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
         }
     }
     versions

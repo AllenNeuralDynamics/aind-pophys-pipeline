@@ -51,12 +51,10 @@ class PipelineContractTests(unittest.TestCase):
         for stage in STAGES:
             self.assertTrue(self.manifest[f"{stage}_CAPSULE_REPO"].startswith("https://github.com/"))
             self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
-            self.assertRegex(self.manifest[f"{stage}_LIBRARY_COMMIT"], SHA_RE)
 
     def test_manifest_holds_only_source_pins(self):
         allowed = {f"{stage}_{suffix}" for stage in STAGES
-                   for suffix in ("CAPSULE_REPO", "CAPSULE_COMMIT", "LIBRARY_COMMIT")}
-        allowed.add("AGGREGATOR_LIBRARY_REPO")
+                   for suffix in ("CAPSULE_REPO", "CAPSULE_COMMIT")}
         self.assertEqual(set(self.manifest) - allowed, set())
 
     def test_main_uses_manifest_image_map(self):
@@ -151,7 +149,6 @@ class PipelineContractTests(unittest.TestCase):
         )
         self.assertIn("./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}",
                       split_process_text)
-        self.assertRegex(self.manifest[f"{stage}_LIBRARY_COMMIT"], SHA_RE)
 
     def test_tasks_do_not_create_container_root_links(self):
         self.assertNotIn("ln -s \\$PWD/capsule", self.main)
@@ -176,10 +173,8 @@ class PipelineContractTests(unittest.TestCase):
             self.manifest["AGGREGATOR_CAPSULE_REPO"],
             "https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule",
         )
-        self.assertEqual(
-            self.manifest["AGGREGATOR_LIBRARY_COMMIT"],
-            "06ae8790b1ecf106ea376ddc52785a027877a3d3",
-        )
+        source = json.loads((ROOT / "environment/stages/aggregator/source.json").read_text())
+        self.assertEqual(source["library_commit"], "06ae8790b1ecf106ea376ddc52785a027877a3d3")
         aggregator = re.search(
             r"^process pipeline_processing_metadata_aggregator \{(.*?)^\}",
             self.main,
@@ -202,7 +197,10 @@ class PipelineContractTests(unittest.TestCase):
             self.assertEqual(entry["validated_capsule_commit"], validated_capsule)
             self.assertEqual(entry["validated_library_commit"], validated_library)
             self.assertEqual(self.manifest[f"{stage}_CAPSULE_COMMIT"], entry["capsule_commit"])
-            self.assertEqual(self.manifest[f"{stage}_LIBRARY_COMMIT"], entry["library_commit"])
+            source = json.loads(
+                (ROOT / "environment/stages" / stage.lower() / "source.json").read_text()
+            )
+            self.assertEqual(source["library_commit"], entry["library_commit"])
             self.assertEqual(
                 entry["validated_in_pipeline"],
                 (entry["capsule_commit"], entry["library_commit"])
@@ -306,7 +304,6 @@ class PipelineContractTests(unittest.TestCase):
             self.assertEqual(source["stage"], stage)
             self.assertNotIn("capsule_source_mode", source)
             self.assertEqual(source["capsule_ref"], self.manifest[f"{stage}_CAPSULE_COMMIT"])
-            self.assertEqual(source["library_commit"], self.manifest[f"{stage}_LIBRARY_COMMIT"])
             self.assertRegex(source["library_commit"], SHA_RE)
             self.assertEqual(len(source["pyproject_sha256"]), 64)
 
