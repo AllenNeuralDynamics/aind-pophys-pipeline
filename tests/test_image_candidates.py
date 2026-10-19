@@ -225,7 +225,7 @@ class ImageCandidateTests(unittest.TestCase):
         self.assertNotIn("packages: write", build_job)
         self.assertEqual(workflow.count("packages: write"), 1)
         self.assertIn("publish: false", build_job)
-        self.assertNotIn("capsule_versions.env", worker)
+        self.assertNotIn("process_versions.env", worker)
         self.assertIn("provenance: false", worker)
         self.assertIn("Record digest and size", worker)
         self.assertIn("persist-credentials: false", worker)

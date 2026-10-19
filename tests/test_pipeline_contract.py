@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 PIPELINE = ROOT / "pipeline"
-MANIFEST = PIPELINE / "capsule_versions.env"
+MANIFEST = PIPELINE / "process_versions.env"
 MAIN = PIPELINE / "main.nf"
 
 STAGES = (
@@ -97,7 +97,7 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("load_pipeline_parameters()\nvalidate_runtime_paths()", self.main)
         self.assertLess(
             self.main.index("load_pipeline_parameters()"),
-            self.main.index("params.versions = parse_capsule_versions()"),
+            self.main.index("params.versions = parse_process_versions()"),
         )
         self.assertLess(
             self.main.index("load_pipeline_parameters()"),

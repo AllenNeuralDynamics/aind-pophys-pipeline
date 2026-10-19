@@ -95,7 +95,7 @@ def task_input_dir = task_runtime_path(params.input_dir, '../data')
 def task_output_dir = task_runtime_path(params.output_dir, '../results')
 def task_temp_dir = task_runtime_path(params.temp_dir, '../scratch')
 
-def validate_capsule_versions(versions) {
+def validate_process_versions(versions) {
     def stages = [
         'CONVERTER',
         'MOTION_CORRECTION',
@@ -118,7 +118,7 @@ def validate_capsule_versions(versions) {
     }
     def missing = required.findAll { key -> !versions[key] }
     if (missing) {
-        throw new IllegalArgumentException("Missing capsule manifest keys: ${missing.join(', ')}")
+        throw new IllegalArgumentException("Missing process manifest keys: ${missing.join(', ')}")
     }
     stages.each { stage ->
         ['CAPSULE_COMMIT', 'LIBRARY_COMMIT'].each { suffix ->
@@ -131,18 +131,18 @@ def validate_capsule_versions(versions) {
     versions
 }
 
-def parse_capsule_versions() {
-    def custom = file("${baseDir}/capsule_versions_custom.env")
-    def defaults = file("${baseDir}/capsule_versions.env")
+def parse_process_versions() {
+    def custom = file("${baseDir}/process_versions_custom.env")
+    def defaults = file("${baseDir}/process_versions.env")
     def manifest = custom.exists() ? custom : defaults
     if (!manifest.exists()) {
-        throw new IllegalArgumentException("Capsule manifest not found: ${manifest}")
+        throw new IllegalArgumentException("Process manifest not found: ${manifest}")
     }
-    println "Using capsule manifest: ${manifest}"
-    validate_capsule_versions(parse_key_value_file(manifest))
+    println "Using process manifest: ${manifest}"
+    validate_process_versions(parse_key_value_file(manifest))
 }
 
-params.versions = parse_capsule_versions()
+params.versions = parse_process_versions()
 
 def backend = params.backend ?: 'codeocean'
 if (!(backend in ['codeocean', 'local', 'slurm'])) {

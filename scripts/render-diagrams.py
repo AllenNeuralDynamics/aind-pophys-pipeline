@@ -117,7 +117,7 @@ def main():
         pipeline = case / "pipeline"
         data = case / "data"
         pipeline.mkdir(parents=True, exist_ok=True)
-        for filename in ("main.nf", "capsule_versions.env"):
+        for filename in ("main.nf", "process_versions.env"):
             shutil.copyfile(ROOT / "pipeline" / filename, pipeline / filename)
         for mount in ("schemas", "2p_roi_classifier", "cellpose_models", "roinet", "raw/pophys"):
             folder = data / mount

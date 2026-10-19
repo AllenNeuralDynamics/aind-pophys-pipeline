@@ -47,7 +47,7 @@ def canonical(name):
 def manifest():
     return dict(
         line.split("=", 1)
-        for line in (ROOT / "pipeline/capsule_versions.env").read_text().splitlines()
+        for line in (ROOT / "pipeline/process_versions.env").read_text().splitlines()
         if line and not line.startswith("#")
     )
 
