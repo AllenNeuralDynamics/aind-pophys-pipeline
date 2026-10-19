@@ -51,20 +51,12 @@ class PipelineContractTests(unittest.TestCase):
         for stage in STAGES:
             self.assertIn(f"{stage}_CAPSULE_SOURCE_MODE", self.manifest)
             self.assertTrue(self.manifest[f"{stage}_IMAGE_CO"])
-            mode = self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"]
-            if mode == "git":
-                self.assertTrue(self.manifest[f"{stage}_CAPSULE_REPO"].startswith("https://"))
-                self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
-                library_commit = self.manifest.get(f"{stage}_LIBRARY_COMMIT")
-                if library_commit:
-                    self.assertRegex(library_commit, SHA_RE)
-            elif mode == "published":
-                self.assertTrue(self.manifest[f"{stage}_CAPSULE_ID"])
-                self.assertTrue(self.manifest[f"{stage}_REF"])
-            else:
-                self.assertEqual(mode, "co_git")
-                self.assertTrue(self.manifest[f"{stage}_CAPSULE_ID"])
-                self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], r"^[0-9a-f]{7,40}$")
+            self.assertEqual(self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"], "git")
+            self.assertTrue(self.manifest[f"{stage}_CAPSULE_REPO"].startswith("https://github.com/"))
+            self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
+            library_commit = self.manifest.get(f"{stage}_LIBRARY_COMMIT")
+            if library_commit:
+                self.assertRegex(library_commit, SHA_RE)
 
     def test_main_uses_manifest_image_map(self):
         self.assertNotIn("import groovy.json.JsonSlurper", self.main)
@@ -72,13 +64,10 @@ class PipelineContractTests(unittest.TestCase):
             self.assertIn(f"params.stage_images['{stage}']", self.main)
             capsule_id = self.manifest.get(f"{stage}_CO_CAPSULE_ID")
             if capsule_id:
-                if self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"] in ("published", "co_git"):
-                    self.assertIn(f"params.versions['{stage}_CO_CAPSULE_ID']", self.main)
-                else:
-                    self.assertTrue(
-                        capsule_id in self.main
-                        or f"params.versions['{stage}_CO_CAPSULE_ID']" in self.main
-                    )
+                self.assertTrue(
+                    capsule_id in self.main
+                    or f"params.versions['{stage}_CO_CAPSULE_ID']" in self.main
+                )
 
     def test_development_images_match_complete_published_inventory(self):
         images = read_manifest(PIPELINE / "development_images.env")
@@ -172,44 +161,76 @@ class PipelineContractTests(unittest.TestCase):
             f"clone_repo \"${{params.versions['{stage}_CAPSULE_REPO']}}\" \"${{params.versions['{stage}_CAPSULE_COMMIT']}}\"",
             split_process_text,
         )
+        self.assertIn("./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}",
+                      split_process_text)
+        self.assertRegex(self.manifest[f"{stage}_LIBRARY_COMMIT"], SHA_RE)
         self.assertIn(f"params.versions['{stage}_CO_CAPSULE_ID']", self.main)
 
-    def test_published_source_manifest_requires_identity_and_ref(self):
-        for stage in ("AGGREGATOR",):
-            self.assertEqual(self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"], "co_git")
-            self.assertIn(f"params.versions['{stage}_CAPSULE_ID']", self.main)
-            self.assertIn(f"params.versions['{stage}_CO_CAPSULE_ID']", self.main)
+    def test_tasks_do_not_create_container_root_links(self):
+        self.assertNotIn("ln -s \\$PWD/capsule", self.main)
+        self.assertNotIn("ls -R /data", self.main)
+        self.assertNotIn("ls -a /results", self.main)
 
-    def test_co_internal_aggregator_uses_pinned_upgrade_capsule(self):
-        self.assertEqual(self.manifest["AGGREGATOR_CAPSULE_SOURCE_MODE"], "co_git")
-        self.assertEqual(self.manifest["AGGREGATOR_CAPSULE_ID"], "7054171")
-        self.assertEqual(self.manifest["AGGREGATOR_CAPSULE_COMMIT"], "b2ecb5d")
-        self.assertIn(
-            "git -C capsule-repo checkout ${params.versions['AGGREGATOR_CAPSULE_COMMIT']} --quiet",
-            self.main,
+    def test_classifier_model_paths_default_to_the_library(self):
+        parameters = json.loads((ROOT / "pipeline_parameters.json").read_text())
+        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
+        defaults = {p["param_name"]: p["default_value"] for p in panel["parameters"]}
+        for name in ("soma-classifier-path", "dendrite-classifier-path"):
+            self.assertEqual(parameters[name], "")
+            self.assertEqual(defaults[name], "")
+        self.assertIn("${soma_classifier_arg} ${dendrite_classifier_arg}", self.main)
+
+    def test_no_stage_clones_code_ocean_git(self):
+        self.assertNotIn("GIT_ACCESS_TOKEN", self.main)
+        self.assertNotIn("GIT_HOST", self.main)
+
+    def test_aggregator_uses_github_wrapper_and_upgrader_library(self):
+        self.assertEqual(
+            self.manifest["AGGREGATOR_CAPSULE_REPO"],
+            "https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule",
         )
-        self.assertNotIn("AGGREGATOR_REF", self.main)
-        self.assertIn("--upgrade_legacy_metadata", self.main)
+        self.assertEqual(
+            self.manifest["AGGREGATOR_LIBRARY_COMMIT"],
+            "06ae8790b1ecf106ea376ddc52785a027877a3d3",
+        )
+        aggregator = re.search(
+            r"^process pipeline_processing_metadata_aggregator \{(.*?)^\}",
+            self.main,
+            re.MULTILINE | re.DOTALL,
+        )
+        self.assertIsNotNone(aggregator)
+        self.assertIn(
+            "clone_repo \"${params.versions['AGGREGATOR_CAPSULE_REPO']}\" "
+            "\"${params.versions['AGGREGATOR_CAPSULE_COMMIT']}\"",
+            aggregator.group(1),
+        )
+        self.assertIn("--upgrade_legacy_metadata", aggregator.group(1))
 
     def test_source_pins_match_selected_baseline(self):
         pins = self.baseline["stage_source_pins"]
-        git_stages = {
-            stage for stage in STAGES
-            if self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"] == "git"
-            and f"{stage}_LIBRARY_COMMIT" in self.manifest
-        }
-        self.assertEqual(set(pins), git_stages)
-        for stage, (capsule, library) in pins.items():
-            self.assertEqual(self.manifest[f"{stage}_CAPSULE_COMMIT"], capsule)
-            self.assertEqual(self.manifest[f"{stage}_LIBRARY_COMMIT"], library)
+        selection = self.baseline["source_selection"]
+        self.assertEqual(set(pins), set(selection))
+        for stage, (validated_capsule, validated_library) in pins.items():
+            entry = selection[stage]
+            self.assertEqual(entry["validated_capsule_commit"], validated_capsule)
+            self.assertEqual(entry["validated_library_commit"], validated_library)
+            self.assertEqual(self.manifest[f"{stage}_CAPSULE_COMMIT"], entry["capsule_commit"])
+            self.assertEqual(self.manifest[f"{stage}_LIBRARY_COMMIT"], entry["library_commit"])
+            self.assertEqual(
+                entry["validated_in_pipeline"],
+                (entry["capsule_commit"], entry["library_commit"])
+                == (validated_capsule, validated_library),
+            )
 
-    def test_baseline_records_debug_evidence_without_changing_defaults(self):
-        self.assertEqual(self.baseline["parameters"]["debug"], "True")
-        self.assertEqual(self.baseline["parameters"]["aggregate_quality_control"], "0")
-        self.assertFalse(self.baseline["evidence_scope"]["full_length"])
+    def test_baseline_records_full_length_evidence(self):
+        self.assertEqual(self.baseline["parameters"]["debug"], "False")
+        self.assertEqual(self.baseline["parameters"]["aggregate_quality_control"], "1")
+        self.assertTrue(self.baseline["evidence_scope"]["full_length"])
+        self.assertTrue(self.baseline["evidence_scope"]["root_quality_control_present"])
         self.assertNotIn("STOP_AFTER_CONVERTER", self.main)
         parameters = json.loads((ROOT / "pipeline_parameters.json").read_text())
         self.assertEqual(parameters["debug"], "0")
+        self.assertEqual(parameters["aggregate_quality_control"], "1")
         self.assertEqual(parameters["upgrade_legacy_metadata"], "True")
         panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
         defaults = {p["param_name"]: p["default_value"] for p in panel["parameters"]}
@@ -272,6 +293,7 @@ class PipelineContractTests(unittest.TestCase):
             "classifier": ("--input_dir", "--output_dir", "--tmp_dir"),
             "ophys_nwb": ("--input_dir", "--output_dir"),
             "pipeline_processing_metadata_aggregator": ("--input_dir", "--output_dir"),
+            "decrosstalk_split_json": ("--input_dir", "--output_dir"),
         }
         for process, flags in processes_with_paths.items():
             block = re.search(
@@ -283,7 +305,6 @@ class PipelineContractTests(unittest.TestCase):
                 self.assertIn(flag, block, process)
             self.assertIn("${task_input_dir}", block, process)
             self.assertIn("${task_output_dir}", block, process)
-        self.assertNotIn("process decrosstalk_split_json", processes_with_paths)
 
     def test_active_image_recipe_matches_manifest(self):
         environment = ROOT / "environment"
@@ -304,18 +325,10 @@ class PipelineContractTests(unittest.TestCase):
             self.assertEqual(source["stage"], stage)
             self.assertEqual(source["capsule_source_mode"],
                              self.manifest[f"{stage}_CAPSULE_SOURCE_MODE"])
-            expected = self.manifest.get(
-                f"{stage}_CAPSULE_COMMIT", self.manifest.get(f"{stage}_REF")
-            )
-            self.assertEqual(source["capsule_ref"], expected)
-            if stage == "DECROSSTALK_SPLIT":
-                self.assertIsNone(source["library_repo"])
-                self.assertIsNone(source["library_commit"])
-            else:
-                self.assertEqual(source["library_commit"],
-                                 self.manifest[f"{stage}_LIBRARY_COMMIT"])
-                self.assertRegex(source["library_commit"], SHA_RE)
-                self.assertEqual(len(source["pyproject_sha256"]), 64)
+            self.assertEqual(source["capsule_ref"], self.manifest[f"{stage}_CAPSULE_COMMIT"])
+            self.assertEqual(source["library_commit"], self.manifest[f"{stage}_LIBRARY_COMMIT"])
+            self.assertRegex(source["library_commit"], SHA_RE)
+            self.assertEqual(len(source["pyproject_sha256"]), 64)
 
     def test_v2_fan_in_contract_remains_present(self):
         self.assertIn("stageAs: 'capsule/data/processing_??/*'", self.main)
@@ -363,7 +376,8 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("executor = 'local'", local)
         self.assertIn("params.backend = 'slurm'", slurm)
         self.assertIn("executor = 'slurm'", slurm)
-        self.assertIn("clusterOptions = '--gres=gpu:1'", slurm)
+        self.assertIn("System.getenv('GPU_CLUSTER_OPTIONS') ?: '--gres=gpu:1'", slurm)
+        self.assertEqual(slurm.count("clusterOptions = gpu_cluster_options"), 2)
         self.assertIn("def writable_tmpfs = '--writable-tmpfs'", slurm)
         self.assertIn('containerOptions = "${writable_tmpfs} ${data_bind}"', slurm)
         self.assertIn('containerOptions = "${writable_tmpfs} --nv ${data_bind}"', slurm)

@@ -1,50 +1,172 @@
 {
   "pipeline_repository": "https://github.com/AllenNeuralDynamics/aind-pophys-pipeline",
-  "pipeline_commit": "745be7a183c9b285f89105f7969a67ad9ad4b071",
-  "main_nf_sha256": "982781c0a91c962e2b5091c37c1dcce291cb4bf3d0f4e653166f846180e2f558",
-  "nextflow_script_revision": "1db94b3638",
+  "pipeline_commit": "d16dad4ad62b18e412a3104e53a42490add0d465",
+  "main_nf_sha256": "74a843b03d78e4a9871ddeed468ad468e33fd5131785950e21c5c1d8941a0d3d",
+  "nextflow_script_revision": "34efd34ee6",
   "nextflow_version": "24.10.4",
-  "selected_on": "2026-09-08",
-  "computation_id": "eea0f242-8983-43e2-a367-430f33c60969",
-  "computation_url": "https://codeocean.allenneuraldynamics.org/capsule/5409275/tree?results=eea0f242-8983-43e2-a367-430f33c60969_computation",
+  "selected_on": "2026-10-16",
+  "computation_id": "e4124505-8095-45d5-a114-97fa2fc0f17f",
+  "computation_url": "https://codeocean.allenneuraldynamics.org/capsule/5409275/tree?results=e4124505-8095-45d5-a114-97fa2fc0f17f_computation",
   "pipeline_id": "228068a8-e03a-4709-8917-10b247212f09",
   "evidence_scope": {
-    "debug": true,
-    "full_length": false,
+    "debug": false,
+    "full_length": true,
     "exit_code": 0,
+    "planes": 8,
     "processing_records": 60,
     "dependency_graph_keys": 60,
     "nonempty_dependency_lists": 58,
-    "root_quality_control_present": false,
-    "whole_repository_snapshot_commit_exposed_by_api": false,
-    "source_identity_method": "Logged Nextflow script fingerprint matched to historical main.nf; historical source bytes also matched GitHub.",
+    "dependency_edges": 219,
+    "root_quality_control_present": true,
+    "source_identity_method": "Nextflow log names this computation; main.nf hash is of the selected commit.",
     "limitations": [
-      "This is an eight-plane debug-length run, not evidence of full-length validation at this revision.",
-      "Root QC aggregation was disabled in the selected computation; per-stage QC was still emitted.",
-      "The historical repository revision supplies companion configuration files; the API does not prove a complete immutable repository snapshot.",
-      "Code Ocean image tags and recorded Git pins are preserved, not OCI digest-locked rebuilds.",
-      "The CO-internal aggregator retains the historical abbreviated checkout b2ecb5d; its full capsule commit has not been recovered.",
-      "Library dependencies include mutable/ranged references; rebuilding an image is not proven byte-identical to its historical runtime."
+      "Source commits differing from their validated_* commit have not run in any pipeline.",
+      "Six selected libraries pin unreleased aind-pophys-metadata ba60ba340de7c273d7801d21c4d45fbb9bb7f45f.",
+      "Code Ocean image tags are preserved, not OCI digest-locked rebuilds."
     ]
   },
-  "library_metadata_commit": "adac8ebee57f895bb2d30b69cde01dd41afbce10",
   "stage_source_pins": {
-    "CONVERTER": ["16f5f9afb66ba87098a453108dacd3a3df89dd36", "e1de8a67f6ffc57337ae8e611d0ecce6472769f1"],
-    "MOTION_CORRECTION": ["85ba3f2b1bcfcda103de0d24c7eec648880a343b", "3d3d09191b9ee1cc95d09ac0462c5e0e9f10a5b9"],
-    "MOVIE_QC": ["1cfab459b31b6e896316aa12be93bf7ea134cb4b", "e9d2e824845fbb949fa66430a04de35e6bc09218"],
-    "DECROSSTALK_ROI_IMAGES": ["e7e0cdbf19128984ba02f1d8283b4d7ac5781d0f", "22075812fdc25fe2de2d3af8485454c7312b7b2b"],
-    "EXTRACTION": ["621b50b77c97c7324270d054022080cdff58c6e7", "d5b8b8ce6648b4772d5326d551a6ca89fa20e5bc"],
-    "DFF": ["389a1d35bc63a3909874ba971c052846d386f889", "89135385d91dd01955cbb553c0cf0107733ea5de"],
-    "OASIS": ["c33d680886f92ef6d97e3f8a08b1f49b8ad5a0ec", "fc3200997ed27acc15fec1b88438b8363a90d296"],
-    "CLASSIFIER": ["cbd08485bea7a0939249583183352f86c663e9c0", "8f278e0faf39921b0c8afbf581cc31a06aa57af4"],
-    "NWB": ["8fc11b991f5715e293f9410c43c3a5086bdf1a0b", "bf70a3ebeea374fc52f34b7dd2c96e394503712f"]
+    "CONVERTER": [
+      "16f5f9afb66ba87098a453108dacd3a3df89dd36",
+      "e1de8a67f6ffc57337ae8e611d0ecce6472769f1"
+    ],
+    "MOTION_CORRECTION": [
+      "3f744746b11f5fe98745e98749457eec09b69c9e",
+      "0b7053ade83a9fbfcb1188e1fafe5cd31e804832"
+    ],
+    "MOVIE_QC": [
+      "7a6a2f13db75dffec1afed2b93d35a7d24b80de4",
+      "90eb39041879ad67d4bd0c1105e0d0472ec76fca"
+    ],
+    "DECROSSTALK_ROI_IMAGES": [
+      "5c73d48b7937a7c291aab276bd4a97aa183f8179",
+      "bc9a9caebc96243b7a5b32f36d42684edfb2ab70"
+    ],
+    "EXTRACTION": [
+      "666d2658367e8a016220b05ff991454cfd54c6d9",
+      "5cf411b5d3290663820a293f3b1f4e2db323ec44"
+    ],
+    "DFF": [
+      "e568ec2cc9a5f6c155a23fa915e4700ea1187bd1",
+      "63aba05d5f9a6a7838ab54f557522d3c405330ee"
+    ],
+    "OASIS": [
+      "945af2f7f11e0567d7d2b192e6d0fe665381b177",
+      "47afb431d16488777930959f32abf43eb44211b4"
+    ],
+    "CLASSIFIER": [
+      "394a10c9bceef5191dfc318974ca9c7a32406341",
+      "3859d0c818ad10dbc6c48bc304b40693d5910c20"
+    ],
+    "NWB": [
+      "c84a8ceefd741ad4aa194b93a4bd03d4da0b5ecd",
+      "d8fd5a26fd86a474810e94a9e45e794bd11d13f6"
+    ]
+  },
+  "source_selection": {
+    "CONVERTER": {
+      "library_repo": "aind-pophys-converter",
+      "library_ref": "fix/task-relative-paths",
+      "capsule_commit": "16f5f9afb66ba87098a453108dacd3a3df89dd36",
+      "validated_capsule_commit": "16f5f9afb66ba87098a453108dacd3a3df89dd36",
+      "library_commit": "e1df9fe7d3c95582854cdd197b5cd472929d1b04",
+      "validated_library_commit": "e1de8a67f6ffc57337ae8e611d0ecce6472769f1",
+      "validated_in_pipeline": false
+    },
+    "MOTION_CORRECTION": {
+      "library_repo": "aind-ophys-motion-correction-library",
+      "library_ref": "fix/task-relative-paths",
+      "capsule_commit": "3f744746b11f5fe98745e98749457eec09b69c9e",
+      "validated_capsule_commit": "3f744746b11f5fe98745e98749457eec09b69c9e",
+      "library_commit": "7efda2f8311703c963c49ae3e30963d23bef5419",
+      "validated_library_commit": "0b7053ade83a9fbfcb1188e1fafe5cd31e804832",
+      "validated_in_pipeline": false
+    },
+    "MOVIE_QC": {
+      "library_repo": "aind-ophys-movie-qc-library",
+      "library_ref": "upgrade-schema-v2-july26",
+      "capsule_commit": "7a6a2f13db75dffec1afed2b93d35a7d24b80de4",
+      "validated_capsule_commit": "7a6a2f13db75dffec1afed2b93d35a7d24b80de4",
+      "library_commit": "5fdd48cfdc08daa23bcc003d3f5ad6e7fa522f63",
+      "validated_library_commit": "90eb39041879ad67d4bd0c1105e0d0472ec76fca",
+      "validated_in_pipeline": false
+    },
+    "DECROSSTALK_ROI_IMAGES": {
+      "library_repo": "aind-ophys-decrosstalk-roi-images-library",
+      "library_ref": "stack/10-coupled-fov-qc",
+      "capsule_commit": "17b302fa8a1d5182511f62fa2222a5c73e765946",
+      "validated_capsule_commit": "5c73d48b7937a7c291aab276bd4a97aa183f8179",
+      "library_commit": "bc9a9caebc96243b7a5b32f36d42684edfb2ab70",
+      "validated_library_commit": "bc9a9caebc96243b7a5b32f36d42684edfb2ab70",
+      "validated_in_pipeline": false
+    },
+    "EXTRACTION": {
+      "library_repo": "aind-ophys-extraction-library",
+      "library_ref": "stack/07-readme",
+      "capsule_commit": "330d6d6115bf1c09554c5a29147fe52ca4f53445",
+      "validated_capsule_commit": "666d2658367e8a016220b05ff991454cfd54c6d9",
+      "library_commit": "f29f6369af5d3bacbb6381e11d7ca620ae8b1895",
+      "validated_library_commit": "5cf411b5d3290663820a293f3b1f4e2db323ec44",
+      "validated_in_pipeline": false
+    },
+    "DFF": {
+      "library_repo": "aind-ophys-dff-library",
+      "library_ref": "upgrade-schema-v2-july26",
+      "capsule_commit": "e568ec2cc9a5f6c155a23fa915e4700ea1187bd1",
+      "validated_capsule_commit": "e568ec2cc9a5f6c155a23fa915e4700ea1187bd1",
+      "library_commit": "56e1a298c687706f40cbb03b89f5b40b52e891aa",
+      "validated_library_commit": "63aba05d5f9a6a7838ab54f557522d3c405330ee",
+      "validated_in_pipeline": false
+    },
+    "OASIS": {
+      "library_repo": "aind-ophys-oasis-event-detection-library",
+      "library_ref": "upgrade-schema-v2-july26",
+      "capsule_commit": "945af2f7f11e0567d7d2b192e6d0fe665381b177",
+      "validated_capsule_commit": "945af2f7f11e0567d7d2b192e6d0fe665381b177",
+      "library_commit": "e56df5e2018b04f7650ada2a80266e8d803629ad",
+      "validated_library_commit": "47afb431d16488777930959f32abf43eb44211b4",
+      "validated_in_pipeline": false
+    },
+    "CLASSIFIER": {
+      "library_repo": "aind-ophys-classifier-library",
+      "library_ref": "upgrade-schema-v2-july26",
+      "capsule_commit": "42b32ed66afaaa22de00d5a57a5a595c7e719204",
+      "validated_capsule_commit": "394a10c9bceef5191dfc318974ca9c7a32406341",
+      "library_commit": "66d4761a265e6d64db9f10cf6b12182f1beacd00",
+      "validated_library_commit": "3859d0c818ad10dbc6c48bc304b40693d5910c20",
+      "validated_in_pipeline": false
+    },
+    "NWB": {
+      "library_repo": "aind-ophys-nwb-library",
+      "library_ref": "upgrade-schema-v2-july26",
+      "capsule_commit": "c84a8ceefd741ad4aa194b93a4bd03d4da0b5ecd",
+      "validated_capsule_commit": "c84a8ceefd741ad4aa194b93a4bd03d4da0b5ecd",
+      "library_commit": "297d27bc08ca3a60bdd7c4334dc1e28ea9e7e56a",
+      "validated_library_commit": "d8fd5a26fd86a474810e94a9e45e794bd11d13f6",
+      "validated_in_pipeline": false
+    }
   },
   "data_assets": [
-    {"id": "57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae", "mount": "2p_roi_classifier"},
-    {"id": "7e4bd8f4-8881-4541-94b4-d1ac714d4a07", "mount": "roinet"},
-    {"id": "df0e5676-1354-4353-8b2c-f8062aa485db", "mount": "cellpose_models"},
-    {"id": "fb4b5cef-4505-4145-b8bd-e41d6863d7a9", "mount": "schemas"},
-    {"id": "ff2fa171-9905-40d8-b058-cbf177e8cbb0", "mount": "ophys_mount"}
+    {
+      "id": "df0e5676-1354-4353-8b2c-f8062aa485db",
+      "mount": "cellpose_models"
+    },
+    {
+      "id": "fb4b5cef-4505-4145-b8bd-e41d6863d7a9",
+      "mount": "schemas"
+    },
+    {
+      "id": "ff2fa171-9905-40d8-b058-cbf177e8cbb0",
+      "mount": "ophys_mount"
+    },
+    {
+      "id": "57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae",
+      "mount": "2p_roi_classifier"
+    },
+    {
+      "id": "7e4bd8f4-8881-4541-94b4-d1ac714d4a07",
+      "mount": "roinet"
+    }
   ],
   "parameters": {
     "do_registration": "True",
@@ -76,7 +198,7 @@
     "triexp_config_overrides": "{}",
     "processor_full_name": "Sean McCulloch",
     "modality": "pophys",
-    "aggregate_quality_control": "0",
+    "aggregate_quality_control": "1",
     "verbose": "1",
     "skip_ancillary_files": "0",
     "upgrade_legacy_metadata": "True",
@@ -86,7 +208,7 @@
     "model-name": "",
     "border-size": "10",
     "acquisition_data_type": "multiplane",
-    "debug": "True",
+    "debug": "False",
     "input_dir": "/data",
     "output_dir": "/results",
     "temp_dir": "/scratch"

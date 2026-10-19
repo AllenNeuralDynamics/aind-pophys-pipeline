@@ -111,51 +111,30 @@ def validate_capsule_versions(versions) {
         'AGGREGATOR'
     ]
     def sha_pattern = ~/^[0-9a-f]{40}$/
-    def library_stages = stages - ['DECROSSTALK_SPLIT']
     def required = []
     stages.each { stage ->
         required << "${stage}_CAPSULE_SOURCE_MODE"
         required << "${stage}_IMAGE_CO"
         def mode = versions["${stage}_CAPSULE_SOURCE_MODE"]
-        if (mode == 'git') {
-            required << "${stage}_CAPSULE_REPO"
-            required << "${stage}_CAPSULE_COMMIT"
-            if (stage in library_stages) {
-                required << "${stage}_LIBRARY_COMMIT"
-            }
-        } else if (mode == 'published') {
-            required << "${stage}_CAPSULE_ID"
-            required << "${stage}_REF"
-        } else if (mode == 'co_git') {
-            required << "${stage}_CAPSULE_ID"
-            required << "${stage}_CAPSULE_COMMIT"
-        } else {
+        if (mode != 'git') {
             throw new IllegalArgumentException(
-                "Unsupported ${stage}_CAPSULE_SOURCE_MODE: ${mode}; expected git, co_git, or published"
+                "Unsupported ${stage}_CAPSULE_SOURCE_MODE: ${mode}; expected git"
             )
         }
+        required << "${stage}_CAPSULE_REPO"
+        required << "${stage}_CAPSULE_COMMIT"
+        required << "${stage}_LIBRARY_COMMIT"
     }
     def missing = required.findAll { key -> !versions[key] }
     if (missing) {
         throw new IllegalArgumentException("Missing capsule manifest keys: ${missing.join(', ')}")
     }
     stages.each { stage ->
-        if (versions["${stage}_CAPSULE_SOURCE_MODE"] == 'git') {
-            def sha_keys = ['CAPSULE_COMMIT']
-            if (stage in library_stages) {
-                sha_keys << 'LIBRARY_COMMIT'
+        ['CAPSULE_COMMIT', 'LIBRARY_COMMIT'].each { suffix ->
+            def key = "${stage}_${suffix}"
+            if (!(versions[key] ==~ sha_pattern)) {
+                throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
             }
-            sha_keys.each { suffix ->
-                def key = "${stage}_${suffix}"
-                if (!(versions[key] ==~ sha_pattern)) {
-                    throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
-                }
-            }
-        } else if (versions["${stage}_CAPSULE_SOURCE_MODE"] == 'co_git' &&
-                !(versions["${stage}_CAPSULE_COMMIT"] ==~ /^[0-9a-f]{7,40}$/)) {
-            throw new IllegalArgumentException(
-                "${stage}_CAPSULE_COMMIT must be a 7-40 character lowercase SHA"
-            )
         }
         def capsule_id = versions["${stage}_CO_CAPSULE_ID"]
         if (capsule_id && !versions["${stage}_IMAGE_CO"].contains(capsule_id)) {
@@ -646,6 +625,8 @@ process gpu_smoke {
 
     if not torch.cuda.is_available():
         raise RuntimeError("torch.cuda.is_available() returned false")
+    # A kernel launch fails on GPUs the CUDA runtime does not support.
+    kernel_check = float((torch.arange(8, device="cuda", dtype=torch.float32) * 2).sum().item())
 
     nvidia_smi = subprocess.run(
         [
@@ -667,6 +648,8 @@ process gpu_smoke {
         "cuda_available": True,
         "cuda_device_count": torch.cuda.device_count(),
         "cuda_device_name": torch.cuda.get_device_name(0),
+        "cuda_capability": list(torch.cuda.get_device_capability(0)),
+        "cuda_kernel_check": kernel_check,
         "nvidia_smi": nvidia_smi,
         "scientific_processing": False,
     }
@@ -704,9 +687,9 @@ process converter_capsule {
     export CO_MEMORY=137438953472
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -719,7 +702,7 @@ process converter_capsule {
     echo "converter_capsule parameters: --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}"
     ./run --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}
     echo "[${task.tag}] completed!"
-    ls -a /results
+    ls -a ${task_output_dir}
     """
 }
 
@@ -754,9 +737,9 @@ process motion_correction {
     export CO_MEMORY=137438953472
     
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -801,11 +784,11 @@ process movie_qc {
 	export CO_MEMORY=137438953472
 
 	mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-	mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/zstacks && ln -s \$PWD/capsule/data/zstacks /zstacks
-	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+	mkdir -p capsule/data/raw
+    mkdir -p capsule/data/zstacks
+	mkdir -p capsule/results
+	mkdir -p capsule/scratch
 
 	echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -814,7 +797,7 @@ process movie_qc {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
@@ -845,9 +828,9 @@ process decrosstalk_split_json {
     export CO_MEMORY=17179869184
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -856,7 +839,7 @@ process decrosstalk_split_json {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
@@ -895,9 +878,9 @@ process decrosstalk_roi_images {
     export CO_MEMORY=68719476736
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
@@ -908,7 +891,7 @@ process decrosstalk_roi_images {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --debug ${params.debug} --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --debug ${params.debug}
 
     echo "[${task.tag}] completed!"
     """
@@ -947,9 +930,9 @@ process extraction {
     export CO_MEMORY=68719476736
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
@@ -961,7 +944,7 @@ process extraction {
     cd capsule/code
     chmod +x run
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg} --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
 
     echo "[${task.tag}] completed!"
     """
@@ -997,9 +980,9 @@ process dff_capsule {
     export CO_MEMORY=34359738368
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -1009,7 +992,7 @@ process dff_capsule {
     cd capsule/code
     chmod +x run
     echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}' --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
 
     echo "[${task.tag}] completed!"
     """
@@ -1044,9 +1027,9 @@ process oasis_event_detection {
     export CO_MEMORY=34359738368
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     echo "[${task.tag}] cloning git repo..."
     ${gitCloneFunction}
@@ -1055,7 +1038,7 @@ process oasis_event_detection {
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --verify 1
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
@@ -1088,6 +1071,8 @@ process classifier {
 
 	script:
 	def model_name_arg = params.containsKey('model-name') && params['model-name'] ? "--model_name ${params['model-name']}" : ""
+	def soma_classifier_arg = params.containsKey('soma-classifier-path') && params['soma-classifier-path'] ? "--soma_classifier_path ${params['soma-classifier-path']}" : ""
+	def dendrite_classifier_arg = params.containsKey('dendrite-classifier-path') && params['dendrite-classifier-path'] ? "--dendrite_classifier_path ${params['dendrite-classifier-path']}" : ""
 	"""
 	#!/usr/bin/env bash
 	set -e
@@ -1097,9 +1082,9 @@ process classifier {
 	export CO_MEMORY=64424509440
 
 	mkdir -p capsule
-	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+	mkdir -p capsule/data
+	mkdir -p capsule/results
+	mkdir -p capsule/scratch
 
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
 	ln -s "/tmp/data/roinet" "capsule/data/roinet"
@@ -1111,7 +1096,7 @@ process classifier {
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --soma_classifier_path ${params['soma-classifier-path']} --dendrite_classifier_path ${params['dendrite-classifier-path']} --border_size ${params['border-size']} ${model_name_arg} --verify 1
+	./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} ${soma_classifier_arg} ${dendrite_classifier_arg} --border_size ${params['border-size']} ${model_name_arg}
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -1154,14 +1139,14 @@ process ophys_nwb {
 	export CO_MEMORY=8589934592
     echo "I AM MAKING AN NWB"
 	mkdir -p capsule
-	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
-    mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
-    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsule/data/raw/behavior /behavior
-    mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
-    mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
+	mkdir -p capsule/data
+	mkdir -p capsule/results
+	mkdir -p capsule/scratch
+    mkdir -p capsule/data/schemas
+    mkdir -p capsule/data/raw
+    mkdir -p capsule/data/raw/behavior
+    mkdir -p capsule/data/nwb
+    mkdir -p capsule/data/processed
 
     echo "[${task.tag}] staged \$(find capsule/data/processed -name processing.json | wc -l) upstream processing.json"
 
@@ -1172,8 +1157,8 @@ process ophys_nwb {
 	echo "[${task.tag}] running capsule..."
 	cd capsule/code
 	chmod +x run
-	ls -R /data
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --verify 1
+	ls -R ${task_input_dir}
+    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -1211,18 +1196,16 @@ process pipeline_processing_metadata_aggregator {
     export CO_MEMORY=17179869184
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
     echo "[${task.tag}] using task-local staged inputs..."
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-${params.versions['AGGREGATOR_CAPSULE_ID']}.git" capsule-repo
-    git -C capsule-repo checkout ${params.versions['AGGREGATOR_CAPSULE_COMMIT']} --quiet
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${gitCloneFunction}
+    clone_repo "${params.versions['AGGREGATOR_CAPSULE_REPO']}" "${params.versions['AGGREGATOR_CAPSULE_COMMIT']}"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code

@@ -374,20 +374,20 @@
 			"category": "ClsfCat01xY7z9Qw",
 			"name": "soma_classifier_path",
 			"param_name": "soma-classifier-path",
-			"description": "Path of the classifier model, comma-delimited",
+			"description": "Path of the soma classifier model; empty uses 2p_roi_classifier under the input directory",
 			"type": "text",
 			"value_type": "string",
-			"default_value": "/data/2p_roi_classifier/soma.classification_training.autoclassifier.onnx"
+			"default_value": ""
 		},
 		{
 			"id": "ClsDend05rS7tU8v",
 			"category": "ClsfCat01xY7z9Qw",
 			"name": "dendrite_classifier_path",
 			"param_name": "dendrite-classifier-path",
-			"description": "Path of the classifier model, comma-delimited",
+			"description": "Path of the dendrite classifier model; empty uses 2p_roi_classifier under the input directory",
 			"type": "text",
 			"value_type": "string",
-			"default_value": "/data/2p_roi_classifier/dendrite.classification_training.autoclassifier.onnx"
+			"default_value": ""
 		},
 		{
 			"id": "ClsMdlNm06xY9zA0",
