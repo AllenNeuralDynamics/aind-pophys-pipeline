@@ -357,7 +357,7 @@ workflow {
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-9191145'
-	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:c85addfe3daa068c8728c36f2d351a18"
+	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:052bc90a10521c6f811542553000f2a6"
     publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
 
     cpus 16
@@ -390,7 +390,7 @@ process converter_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout 16f5f9a --quiet
+    git -C capsule-repo checkout 5031a45 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -408,7 +408,7 @@ process converter_capsule {
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
     tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:dc4a743519900e5a122ac8796f4122dd"
+	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:ffbe73c7a187d7be977716950e2757b4"
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     cpus 16
@@ -463,7 +463,7 @@ process motion_correction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
-    git -C capsule-repo checkout 3f74474 --quiet
+    git -C capsule-repo checkout 7b257d4 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -480,7 +480,7 @@ process motion_correction {
 // capsule - aind-ophys-movie-qc
 process movie_qc {
 	tag 'capsule-5974042'
-	container "$REGISTRY_HOST/capsule/1e1ee66e-db39-4cc8-b760-08ed26f0c9e8:c3a9823f9e87adecf0b36dca5182343b"
+	container "$REGISTRY_HOST/capsule/1e1ee66e-db39-4cc8-b760-08ed26f0c9e8:0459d1407b870a97af1c9572e30d5841"
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
 	cpus 16
@@ -522,7 +522,7 @@ process movie_qc {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5974042.git" capsule-repo
-	git -C capsule-repo checkout 7a6a2f1 --quiet
+	git -C capsule-repo checkout 720123c --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -537,11 +537,8 @@ process movie_qc {
 
 // capsule - aind-ophys-decrosstalk-split-session-json
 process decrosstalk_split_json {
-    tag 'capsule-1362518'
-    // TEST: capsule 1362518's image is not pullable from the registry, so borrow the
-    // decrosstalk image (Python 3.10, pydantic-settings present) and install the
-    // splitter library into it at task start.
-    container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:9bbb495e8eccd45a32173c141df59037"
+    tag 'capsule-4425001'
+    container "$REGISTRY_HOST/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
 
     cpus 2
     memory '16 GB'
@@ -560,23 +557,23 @@ process decrosstalk_split_json {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=f0f37c43-9b9a-49b4-a6a1-893e254ad2ba
+    export CO_CAPSULE_ID=fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
-    mkdir -p capsule/data capsule/results capsule/scratch
+    mkdir -p capsule
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${motion_results} capsule/data
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --quiet https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json.git capsule-repo
-    git -C capsule-repo checkout 4b759f9c4fe819beac04081c964d1f01a1ac4906 --quiet
+    git clone --branch v1.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4425001.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
-
-    pip install --quiet --no-deps "git+https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json-library.git@4c62802e6038a0fac1d9f40da70ea2b4ff3d8259"
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
@@ -591,7 +588,7 @@ process decrosstalk_split_json {
 process decrosstalk_roi_images {
     tag 'capsule-4886340'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:9bbb495e8eccd45a32173c141df59037"
+	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:eefc98ad8d523f0180dbf6fa61cdb6b1"
 
     cpus 8
     memory '64 GB'
@@ -621,7 +618,10 @@ process decrosstalk_roi_images {
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
-    mkdir -p capsule/data capsule/results capsule/scratch
+    mkdir -p capsule
+    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
+    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
+    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] copying data to capsule..."
     cp -r ${decrosstalk_split} capsule/data
@@ -636,8 +636,13 @@ process decrosstalk_roi_images {
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --quiet https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images.git capsule-repo
-    git -C capsule-repo checkout 17b302fa8a1d5182511f62fa2222a5c73e765946 --quiet
+    if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
+		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
+        git -C capsule-repo checkout e830eda --quiet
+	else
+		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
+        git -C capsule-repo checkout e830eda --quiet
+	fi
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -654,7 +659,7 @@ process decrosstalk_roi_images {
 // capsule - aind-ophys-extraction
 process extraction {
     tag 'capsule-8797010'
-	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:95bad8c97ecf2bad9187fd17ca021b31"
+	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:ba8fed35d9d2357913cefb8f01f87efd"
 
     cpus 8
     memory '64 GB'
@@ -700,7 +705,7 @@ process extraction {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
-    git -C capsule-repo checkout 666d265 --quiet
+    git -C capsule-repo checkout 2c39f3f --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -718,7 +723,7 @@ process extraction {
 process dff_capsule {
     tag 'capsule-7970481'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/909d4275-fc32-4b81-a3f3-f5bf6cedece1:969976905b9564199f1952935589da3c"
+	container "$REGISTRY_HOST/capsule/909d4275-fc32-4b81-a3f3-f5bf6cedece1:ee7df2433fa800e140716a5f75a54f9e"
 
     cpus 4
     memory '32 GB'
@@ -756,7 +761,7 @@ process dff_capsule {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7970481.git" capsule-repo
-    git -C capsule-repo checkout e568ec2 --quiet
+    git -C capsule-repo checkout d095be3 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -773,7 +778,7 @@ process dff_capsule {
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
     tag 'capsule-3856982'
-	container "$REGISTRY_HOST/capsule/7b66080e-50f4-4c27-8345-86248812b00f:cb38aa2935516f0e8ddbec8981a6c910"
+	container "$REGISTRY_HOST/capsule/7b66080e-50f4-4c27-8345-86248812b00f:2bfc905b7c4793d0b5c9fc8d5c0217fb"
 
     cpus 4
     memory '32 GB'
@@ -811,7 +816,7 @@ process oasis_event_detection {
 
     echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3856982.git" capsule-repo
-    git -C capsule-repo checkout 945af2f --quiet
+    git -C capsule-repo checkout deefa5e --quiet
 	mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -827,7 +832,7 @@ process oasis_event_detection {
 // capsule - aind-ophys-classifier
 process classifier {
 	tag 'capsule-2013356'
-	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:3c320ae624106d4ca54e76c9fa52c447"
+	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:18b39bf57a7d5cfd882cde72ee052ae2"
 
 	cpus 16
 	memory '60 GB'
@@ -874,7 +879,7 @@ process classifier {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2013356.git" capsule-repo
-	git -C capsule-repo checkout 394a10c --quiet
+	git -C capsule-repo checkout d2503a9 --quiet
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -891,7 +896,7 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-8338960'
-	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:9ff4b464bbc5ad39c36aab339e3d2554"
+	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:7a380614b45a2a2aa961329dc7fa7bad"
 
 	cpus 4
 	memory '32 GB'
@@ -978,7 +983,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] cloning git repo..."
 	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
-	git -C capsule-repo checkout c84a8ce --quiet
+	git -C capsule-repo checkout 0378f53 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -995,7 +1000,7 @@ process ophys_nwb {
 // capsule - aind-pipeline-processing-metadata-aggregator
 process pipeline_processing_metadata_aggregator {
     tag 'capsule-7054171'
-	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:04e03d120a53b0a35fa4980683259505"
+	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:1a7f3fc501c6ecfedf8b62b940e64eaa"
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
