@@ -66,8 +66,7 @@ mv nextflow ~/bin/
 ## 2. Get the pipeline
 
 ```bash
-git clone --branch proj21/multi-backend-refactor \
-  https://github.com/AllenNeuralDynamics/aind-pophys-pipeline.git
+git clone https://github.com/AllenNeuralDynamics/aind-pophys-pipeline.git
 cd aind-pophys-pipeline
 ```
 

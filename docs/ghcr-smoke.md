@@ -2,7 +2,7 @@
 
 Use only the isolated development pipeline:
 <https://codeocean.allenneuraldynamics.org/capsule/9120064/tree>
-(`e4c03dcc-f43a-481c-ac55-257cfe538041`), linked to `proj21/multi-backend-refactor`.
+(`e4c03dcc-f43a-481c-ac55-257cfe538041`).
 
 Set the named pipeline parameter `ghcr_smoke_only=true` to run one small process
 using the published splitter image by digest. The workflow returns before constructing

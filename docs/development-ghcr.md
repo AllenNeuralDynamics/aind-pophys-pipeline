@@ -1,8 +1,8 @@
 # Development GHCR scientific trial
 
 Use only development pipeline `e4c03dcc-f43a-481c-ac55-257cfe538041`
-([9120064](https://codeocean.allenneuraldynamics.org/capsule/9120064/tree)),
-linked to `proj21/multi-backend-refactor`. Do not sync the production or Project 19 pipeline.
+([9120064](https://codeocean.allenneuraldynamics.org/capsule/9120064/tree)).
+Do not sync the production or Project 19 pipeline.
 
 ## Image selection
 
