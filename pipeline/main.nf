@@ -539,8 +539,8 @@ process movie_qc {
 // Not connected to the results: its pair*.txt files only route each coupled
 // pair to decrosstalk_roi_images.
 process decrosstalk_split_json {
-    tag 'capsule-4425001'
-    container "$REGISTRY_HOST/published/fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462:v1"
+    tag 'capsule-2670251'
+    container "$REGISTRY_HOST/published/cd0f7d02-d3e1-4a3d-943f-84de5c8f4ddc:v1"
 
     cpus 2
     memory '16 GB'
@@ -557,7 +557,7 @@ process decrosstalk_split_json {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=fc1b1e9a-fb4b-47e8-a223-b06d8eeb1462
+    export CO_CAPSULE_ID=cd0f7d02-d3e1-4a3d-943f-84de5c8f4ddc
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
@@ -571,9 +571,7 @@ process decrosstalk_split_json {
     cp -r ${ophys_jsons} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    # From GitHub: the released capsule-4425001 v1.0 reads only a v1 session.json.
-    git clone --quiet https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json.git capsule-repo
-    git -C capsule-repo checkout 45dd45f --quiet
+    git clone --branch v1.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2670251.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -998,10 +996,10 @@ process ophys_nwb {
 	"""
 }
 
-// capsule - aind-pipeline-processing-metadata-aggregator
+// capsule - aind-metadata-manager-capsule
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-7054171'
-	container "$REGISTRY_HOST/capsule/fe78a736-913b-4ce0-8959-375e3d6b66e5:1a7f3fc501c6ecfedf8b62b940e64eaa"
+    tag 'capsule-8324994'
+	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v6"
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
@@ -1027,7 +1025,7 @@ process pipeline_processing_metadata_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=fe78a736-913b-4ce0-8959-375e3d6b66e5
+    export CO_CAPSULE_ID=22261566-0b4f-42aa-bcaa-58efa55bf653
     export CO_CPUS=2
     export CO_MEMORY=17179869184
 
@@ -1055,15 +1053,14 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7054171.git" capsule-repo
-    git -C capsule-repo checkout b2ecb5d --quiet
+    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
     echo "[${task.tag}] running capsule..."
     cd capsule/code
     chmod +x run
-    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} ${params.containsKey('upgrade_legacy_metadata') ? '--upgrade_legacy_metadata ' + params.upgrade_legacy_metadata : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
+    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
     echo "[${task.tag}] completed!"
     """
 }
