@@ -356,8 +356,8 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
-    tag 'capsule-9191145'
-	container "$REGISTRY_HOST/capsule/ba2e9806-5561-4853-90ba-1bc269b42ff6:ebdb7229d04c3f116ee6666a8d0ffd71"
+    tag 'capsule-2840051'
+	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v12"
     publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
 
     cpus 16
@@ -379,7 +379,7 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=ba2e9806-5561-4853-90ba-1bc269b42ff6
+    export CO_CAPSULE_ID=d05f6de4-c0fb-46af-8c9f-a4acb4081497
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -389,8 +389,7 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9191145.git" capsule-repo
-    git -C capsule-repo checkout 7e22c10 --quiet
+    git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -407,8 +406,8 @@ process converter_capsule {
 
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
-    tag 'capsule-2071646'
-	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:0c6aac0605fa76aecd8a0ff2325e4370"
+    tag 'capsule-7474660'
+	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v20"
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     cpus 16
@@ -435,7 +434,7 @@ process motion_correction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=86b66e08-c26e-4d08-a904-80406e041479
+    export CO_CAPSULE_ID=91a8ed4d-3b9a-49c6-9283-3f16ea5482bf
     export CO_CPUS=16
     export CO_MEMORY=137438953472
     
@@ -462,8 +461,7 @@ process motion_correction {
     stage_nested ${upstream_processing_json}
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
-    git -C capsule-repo checkout b483771 --quiet
+    git clone --branch v20.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -479,8 +477,8 @@ process motion_correction {
 
 // capsule - aind-ophys-movie-qc
 process movie_qc {
-	tag 'capsule-5974042'
-	container "$REGISTRY_HOST/capsule/1e1ee66e-db39-4cc8-b760-08ed26f0c9e8:a30fcf3ab36804c22c6ce6d0f1f878d3"
+	tag 'capsule-0300037'
+	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v12"
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
 	cpus 16
@@ -521,8 +519,7 @@ process movie_qc {
     fi
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-5974042.git" capsule-repo
-	git -C capsule-repo checkout 9fb8985 --quiet
+	git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -586,9 +583,9 @@ process decrosstalk_split_json {
 
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
-    tag 'capsule-4886340'
+    tag 'capsule-1533578'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/38507fd5-eb29-4b40-9474-28448305e619:4bdbd01f19146a8ac0dc30e0aac42f58"
+	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v16"
 
     cpus 8
     memory '64 GB'
@@ -614,7 +611,7 @@ process decrosstalk_roi_images {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=38507fd5-eb29-4b40-9474-28448305e619
+    export CO_CAPSULE_ID=1383b25a-ecd2-4c56-8b7f-cde811c0b053
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
@@ -636,13 +633,7 @@ process decrosstalk_roi_images {
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
 
     echo "[${task.tag}] cloning git repo..."
-    if [[ "\$(printf '%s\n' "2.20.0" "\$(git version | awk '{print \$3}')" | sort -V | head -n1)" = "2.20.0" ]]; then
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 157f953 --quiet
-	else
-		git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-4886340.git" capsule-repo
-        git -C capsule-repo checkout 157f953 --quiet
-	fi
+    git clone --branch v16.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -658,8 +649,8 @@ process decrosstalk_roi_images {
 
 // capsule - aind-ophys-extraction
 process extraction {
-    tag 'capsule-8797010'
-	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:0bb4a26f7018f2fdfc1f79a0f5395ba2"
+    tag 'capsule-9911715'
+	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v15"
 
     cpus 8
     memory '64 GB'
@@ -685,7 +676,7 @@ process extraction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=1ba6e32d-2a8a-4084-a449-2878724fb15d
+    export CO_CAPSULE_ID=5e1d659c-e149-4a57-be83-12f5a448a0c9
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
@@ -704,8 +695,7 @@ process extraction {
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
-    git -C capsule-repo checkout 0cc2fb8 --quiet
+    git clone --branch v15.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -721,9 +711,9 @@ process extraction {
 
 // capsule - aind-ophys-dff
 process dff_capsule {
-    tag 'capsule-7970481'
+    tag 'capsule-6574773'
     // DEV pin: the registry hash goes stale on every capsule rebuild.
-	container "$REGISTRY_HOST/capsule/909d4275-fc32-4b81-a3f3-f5bf6cedece1:94a8f054941a41b76fc8c95e5cfa05fd"
+	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v7"
 
     cpus 4
     memory '32 GB'
@@ -746,7 +736,7 @@ process dff_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=909d4275-fc32-4b81-a3f3-f5bf6cedece1
+    export CO_CAPSULE_ID=85987e27-601c-4863-811b-71e5b4bdea37
     export CO_CPUS=4
     export CO_MEMORY=34359738368
 
@@ -760,8 +750,7 @@ process dff_capsule {
     cp -r ${extraction_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7970481.git" capsule-repo
-    git -C capsule-repo checkout 920fb8c --quiet
+    git clone --branch v7.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -777,8 +766,8 @@ process dff_capsule {
 
 // capsule - aind-ophys-oasis-event-detection
 process oasis_event_detection {
-    tag 'capsule-3856982'
-	container "$REGISTRY_HOST/capsule/7b66080e-50f4-4c27-8345-86248812b00f:e70a5935ff67904940da17abde3c3444"
+    tag 'capsule-8957649'
+	container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v11"
 
     cpus 4
     memory '32 GB'
@@ -801,7 +790,7 @@ process oasis_event_detection {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=7b66080e-50f4-4c27-8345-86248812b00f
+    export CO_CAPSULE_ID=c6394aab-0db7-47b2-90ba-864866d6755e
     export CO_CPUS=4
     export CO_MEMORY=34359738368
 
@@ -815,8 +804,7 @@ process oasis_event_detection {
     cp -r ${dff_results} capsule/data
 
     echo "[${task.tag}] cloning git repo..."
-    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-3856982.git" capsule-repo
-    git -C capsule-repo checkout ccbaa74 --quiet
+	git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8957649.git" capsule-repo
 	mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -831,8 +819,8 @@ process oasis_event_detection {
 
 // capsule - aind-ophys-classifier
 process classifier {
-	tag 'capsule-2013356'
-	container "$REGISTRY_HOST/capsule/570e9cb2-be0f-4972-ad49-90b3fe8ab690:0d318d1546b641c22ccdc1b726cfb97f"
+	tag 'capsule-0630574'
+	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v6"
 
 	cpus 16
 	memory '60 GB'
@@ -860,7 +848,7 @@ process classifier {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=570e9cb2-be0f-4972-ad49-90b3fe8ab690
+	export CO_CAPSULE_ID=3819d125-9f03-48f3-ba09-b44c84a7a2c7
 	export CO_CPUS=16
 	export CO_MEMORY=64424509440
 
@@ -878,8 +866,7 @@ process classifier {
 	ln -s "/tmp/data/roinet" "capsule/data/roinet" # id: 7e4bd8f4-8881-4541-94b4-d1ac714d4a07
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2013356.git" capsule-repo
-	git -C capsule-repo checkout f4247e7 --quiet
+	git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
 	mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -895,8 +882,8 @@ process classifier {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-8338960'
-	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:c605f4f10f142c167d35b2b9fad3c221"
+	tag 'capsule-9383700'
+	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v17"
 
 	cpus 4
 	memory '32 GB'
@@ -931,7 +918,7 @@ process ophys_nwb {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=f804beaa-2ac3-46c7-82b7-f46b19531aa9
+	export CO_CAPSULE_ID=8c436e95-8607-4752-8e9f-2b62024f9326
 	export CO_CPUS=4
 	export CO_MEMORY=34359738368
 	mkdir -p capsule
@@ -981,8 +968,7 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-	git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
-	git -C capsule-repo checkout 827a2d6 --quiet
+    git clone --branch v17.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
