@@ -6,11 +6,7 @@ import groovy.json.JsonSlurper
 
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 
-// saveAs is invoked once per MATCH of each output glob, so a process declaring
-// 'capsule/results/*' gets one call per plane directory AND one per file sitting
-// at that level. Keeping the relative path means an artifact published from a
-// nested glob lands at <plane>/<step>/..., and a directory match publishes its
-// subtree there.
+// saveAs runs once per published file; keep its path relative to capsule/results.
 CAPSULE_RESULTS = 'capsule/results/'
 RUN_LEVEL_DOCS = ['processing.json', 'quality_control.json']
 
@@ -20,15 +16,7 @@ publishRelative = { String filename ->
         : filename
 }
 
-// For a capsule that writes its own processing.json / quality_control.json at
-// the TOP of capsule/results/ rather than under <plane>/<step>/. Those would
-// publish to the results ROOT, which is where the aggregator writes the
-// run-level pair -- two tasks, one target, last writer wins. Skipping the
-// publish costs nothing: the documents still travel on their emit channels into
-// the aggregator, which is what actually produces the run-level pair. Only the
-// converter needs this today (verified 2026-08-04 from runs b462ae9b and
-// 2368efda, whose root processing.json held the converter's single
-// "Raw movie conversion to HDF5" process while the aggregator had not run).
+// Skips a step's own root-level processing.json / quality_control.json; the run-level pair is published there.
 publishRelativeSkipRunLevel = { String filename ->
     def rel = publishRelative(filename)
     rel in RUN_LEVEL_DOCS ? null : rel
@@ -80,11 +68,7 @@ workflow {
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
-    // Runtime model assets. checkIfExists is false on purpose: an absent mount
-    // must reach the capsule wrapper, which names the missing file and the
-    // expected SHA-256, rather than dying at channel creation with no context.
-    // Consumers link the read-only mount straight into capsule/data, so these
-    // channels exist only to make the asset a task staging dependency.
+    // Model assets: no checkIfExists, so the capsule reports a missing file by name.
     def cellpose_data = Channel.fromPath("${base_path}cellpose_models/*", type: 'any', checkIfExists: false)
     def roinet_data = Channel.fromPath("${base_path}roinet/*", type: 'any', checkIfExists: false)
     
@@ -134,13 +118,6 @@ workflow {
         motion_correction_input = ophys_data
     }
 
-    // TEMP (proj_19 converter validation): stop the run after the converter so
-    // its in-pipeline output can be inspected. Set STOP_AFTER_CONVERTER = false,
-    // or delete this guard and its matching closing brace below, to restore the
-    // full pipeline.
-    def STOP_AFTER_CONVERTER = false
-    if (!STOP_AFTER_CONVERTER) {
-
     if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
         motion_correction(
@@ -151,22 +128,20 @@ workflow {
         )
         z_stacks = converter_capsule.out.local_stacks
 
+        // Run movie qc
         movie_qc(
             motion_correction.out.motion_results_all.flatten(),
             ophys_mount_jsons.collect(),
             z_stacks.collect().ifEmpty([])
         )
 
-        // Split the motion-corrected planes into pairs for decrosstalk
+        // Run decrosstalk split to prep for decrosstalk_roi_images
         decrosstalk_split_json(
             motion_correction.out.motion_results_all.collect(),
             ophys_mount_jsons.collect()
         )
 
-        // Remove paired-plane crosstalk. Restored now that the capsule is
-        // v2-upgraded: extraction prefers *decrosstalk.h5 over *registered.h5,
-        // so while this was bypassed multiplane extraction ran on the wrong
-        // input and everything downstream of it inherited that.
+        // Run decrosstalk using ROI images
         decrosstalk_roi_images(
             decrosstalk_split_json.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
@@ -180,6 +155,7 @@ workflow {
         decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
         decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
 
+        // Run extraction Suite2P
         extraction(
             decrosstalk_roi_images.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
@@ -187,7 +163,7 @@ workflow {
         )
 
     } else {
-        // Run motion correction for single plane
+        // Run motion correction for single plane (adjusted input order)
         motion_correction(
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
@@ -195,6 +171,7 @@ workflow {
             converter_processing_json.flatten().collect().ifEmpty([]),
         )
 
+        // Run movie qc
         movie_qc(
             motion_correction.out.motion_results_all.flatten(),
             ophys_mount_jsons.collect(),
@@ -208,8 +185,7 @@ workflow {
         )
     }
 
-    // Run DF / F. Independent of the classifier, so it runs while the
-    // classifier is still on v1.
+    // Run DF / F
     if (params.acquisition_data_type == "multiplane"){
         dff_capsule(
             extraction.out.capsule_results.flatten(),
@@ -247,34 +223,11 @@ workflow {
     }
 
     // Run Ophys NWB Packaging for Multiplane
-    //
-    // The three per-step channels below glob <plane>/<step>/*, which under v2
-    // sweeps up the bare processing.json / quality_control.json those steps now
-    // write. Collected across 8 planes that is 8 files per name into one path
-    // input, which Nextflow rejects outright:
-    //   "input file name collision -- There are multiple input files for each
-    //    of the following file names: processing.json, quality_control.json"
-    // Under v1 the same globs were safe because every file was <plane>_-prefixed.
-    // nwb never reads them -- it rglobs for <plane>_*<part>, epoch_locations.json
-    // and the sync h5 -- so they are dropped rather than staged into numbered
-    // directories the way the aggregator needs.
-    //
-    // .flatten() is load-bearing. A `path` output whose glob matches several
-    // files emits ONE List per task, not one item per file, so a bare
-    // .filter { it.name in ... } tests a List: Groovy's GPath turns List.name
-    // into a list OF names, which is never `in` a list of strings, so the
-    // predicate is always true and the filter silently passes everything.
-    // That cost a full run. flatten() first, then filter, then re-collect.
+    // NWB reads no step's processing.json / quality_control.json; drop them to avoid an input name collision.
+    // flatten() before filter: each task emits a List, and filtering a List passes everything.
     def metadata_json = ['processing.json', 'quality_control.json']
 
-    // The same six steps whose results NWB packages, but their processing.json
-    // documents, so NWB can record them as its upstreams in dependency_graph.
-    // They travel on their own stageAs'd input rather than inside the results
-    // inputs above, because those deliberately strip processing.json to avoid
-    // the input-name collision. flatten() before collect(): decrosstalk runs
-    // per PAIR, so its depth-2 glob matches twice and it emits a List per task.
-    // Built here rather than reusing all_processing_json, which is assembled
-    // after this call and includes NWB's own output.
+    // Upstream processing.json for NWB's dependency_graph; decrosstalk emits a List per pair, so flatten().
     def nwb_upstream_processing_json = motion_correction.out.motion_processing_json
         .mix(decrosstalk_processing_json)
         .mix(extraction.out.extraction_processing_json)
@@ -299,24 +252,7 @@ workflow {
         nwb_upstream_processing_json
     )
 
-    // Aggregate every capsule's v2 metadata into the run-level
-    // processing.json / quality_control.json.
-    //
-    // quality_control_aggregator is gone: v2 deletes QCEvaluation, so that
-    // capsule is unbuildable, and aind-metadata-manager >=0.3.1 does the same
-    // job behind --aggregate_quality_control.
-    //
-    // Every capsule writes bare processing.json / quality_control.json --
-    // write_standard_file() hardcodes those names -- so on a multiplane run
-    // each per-plane channel carries N identically-named files. Mixing them
-    // into two channels keeps this call short; the stageAs on the aggregator's
-    // inputs is what actually prevents Nextflow rejecting the task for
-    // duplicate input file names.
-    //
-    // The trailing .flatten() normalises the mix. Most of these emit one bare
-    // path per task, but decrosstalk handles a PAIR per task, so its depth-2
-    // globs match twice and it emits a List -- mixing the two shapes would
-    // hand stageAs a nested collection to number.
+    // Every step's processing.json / quality_control.json, flattened for the same reason.
     def all_processing_json = converter_processing_json
         .mix(motion_correction.out.motion_processing_json)
         .mix(movie_qc.out.movie_qc_processing_json)
@@ -339,18 +275,13 @@ workflow {
         .mix(ophys_nwb.out.nwb_qc_json)
         .flatten()
 
-    // ifEmpty([]) so an all-empty channel still runs the aggregator. Without
-    // it collect() emits nothing, the process is silently skipped, and the run
-    // "succeeds" with no run-level processing.json at all. With it, the
-    // aggregator runs and raises on zero metrics -- a loud failure beats a
-    // missing document.
+    // Run Pipeline Processing Metadata Aggregator
+    // ifEmpty([]) keeps it running, and failing loudly, when no step emitted metadata.
     pipeline_processing_metadata_aggregator(
         ophys_mount_jsons.collect(),
         all_processing_json.collect().ifEmpty([]),
         all_quality_control_json.collect().ifEmpty([])
     )
-
-    }  // end TEMP STOP_AFTER_CONVERTER guard
 }
 
 
@@ -417,9 +348,7 @@ process motion_correction {
     path ophys_mount
     path ophys_jsons
     path pophys_dir
-    // The converter's processing.json, so this step can record it as its
-    // upstream in dependency_graph. stageAs keeps each file in its own numbered
-    // directory: every one is named processing.json, so a flat stage collides.
+    // Upstream processing.json files share one name, so stageAs gives each its own directory.
     path(upstream_processing_json, stageAs: 'processing_??/*')
 
     output:
@@ -533,8 +462,6 @@ process movie_qc {
 }
 
 // capsule - aind-ophys-decrosstalk-split-session-json
-// Not connected to the results: its pair*.txt files only route each coupled
-// pair to decrosstalk_roi_images.
 process decrosstalk_split_json {
     tag 'capsule-2670251'
     container "$REGISTRY_HOST/published/cd0f7d02-d3e1-4a3d-943f-84de5c8f4ddc:v1"
@@ -584,7 +511,6 @@ process decrosstalk_split_json {
 // capsule - aind-ophys-decrosstalk-roi-images
 process decrosstalk_roi_images {
     tag 'capsule-1533578'
-    // DEV pin: the registry hash goes stale on every capsule rebuild.
 	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v16"
 
     cpus 8
@@ -712,7 +638,6 @@ process extraction {
 // capsule - aind-ophys-dff
 process dff_capsule {
     tag 'capsule-6574773'
-    // DEV pin: the registry hash goes stale on every capsule rebuild.
 	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v7"
 
     cpus 4
@@ -901,11 +826,7 @@ process ophys_nwb {
 	path classifer_h5
 	path dff_results
 	path event_detection_results
-    // Every upstream processing.json, so NWB packaging can record what it
-    // packaged in dependency_graph. These are deliberately NOT the same objects
-    // as the *_results inputs above: those are filtered to strip processing.json
-    // and quality_control.json, because staging them flat collides on the bare
-    // filename. stageAs gives each its own numbered directory instead.
+    // Upstream processing.json files share one name, so stageAs gives each its own directory.
     path(upstream_processing_json, stageAs: 'processing_??/*')
 
 	output:
@@ -993,9 +914,7 @@ process pipeline_processing_metadata_aggregator {
     cpus 2
     memory '16 GB'
 
-    // This task's processing.json / quality_control.json are the run-level
-    // documents, and they sit directly under capsule/results/, so the shared
-    // saveAs publishes them at the results root -- where they belong.
+    // The run-level processing.json / quality_control.json publish at the results root.
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     input:
