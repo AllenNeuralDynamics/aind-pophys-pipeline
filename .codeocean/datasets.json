@@ -12,6 +12,14 @@
 		{
 			"id": "fb4b5cef-4505-4145-b8bd-e41d6863d7a9",
 			"mount": "schemas"
+		},
+		{
+			"id": "df0e5676-1354-4353-8b2c-f8062aa485db",
+			"mount": "cellpose_models"
+		},
+		{
+			"id": "7e4bd8f4-8881-4541-94b4-d1ac714d4a07",
+			"mount": "roinet"
 		}
 	]
 }
