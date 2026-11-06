@@ -10,5 +10,8 @@ __pycache__/
 .image-work/
 .nextflow/
 
+# Sphinx build output
+/docs/build/
+
 # PyCharm folder
 .idea/
