@@ -807,8 +807,8 @@ process classifier {
 
 // capsule - aind-ophys-nwb
 process ophys_nwb {
-	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v17"
+	tag 'capsule-8338960'
+	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:d71e931392295b3e1fb99a02028fb694"
 
 	cpus 4
 	memory '32 GB'
@@ -839,7 +839,7 @@ process ophys_nwb {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=8c436e95-8607-4752-8e9f-2b62024f9326
+	export CO_CAPSULE_ID=f804beaa-2ac3-46c7-82b7-f46b19531aa9
 	export CO_CPUS=4
 	export CO_MEMORY=34359738368
 	mkdir -p capsule
@@ -889,7 +889,8 @@ process ophys_nwb {
 	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
 
 	echo "[${task.tag}] cloning git repo..."
-    git clone --branch v17.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
+    git -C capsule-repo checkout 8ea017877e137a154cbda4b641742dae0e4df208 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
