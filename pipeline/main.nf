@@ -260,8 +260,8 @@ workflow {
 
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
-    tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v12"
+    tag 'capsule-2135944'
+	container "$REGISTRY_HOST/capsule/6794edc9-25b7-4246-bfda-972fef434a49:f30138a0b3722913b552a4c9a39dd83e"
     publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
 
     cpus 16
@@ -283,7 +283,7 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=d05f6de4-c0fb-46af-8c9f-a4acb4081497
+    export CO_CAPSULE_ID=6794edc9-25b7-4246-bfda-972fef434a49
     export CO_CPUS=16
     export CO_MEMORY=137438953472
 
@@ -293,7 +293,8 @@ process converter_capsule {
     mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2135944.git" capsule-repo
+    git -C capsule-repo checkout b0e9a0962bb692dca693bad8be84186444470919 --quiet
     mv capsule-repo/code capsule/code
 	rm -rf capsule-repo
 
@@ -310,8 +311,8 @@ process converter_capsule {
 
 // capsule - aind-ophys-motion-correction multiplane
 process motion_correction {
-    tag 'capsule-7474660'
-	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v20"
+    tag 'capsule-2071646'
+	container "$REGISTRY_HOST/capsule/86b66e08-c26e-4d08-a904-80406e041479:8aab95e67fb74e4d7afbd77da1f0e9bf"
     publishDir "$RESULTS_PATH", saveAs: publishRelative
 
     cpus 16
@@ -336,7 +337,7 @@ process motion_correction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=91a8ed4d-3b9a-49c6-9283-3f16ea5482bf
+    export CO_CAPSULE_ID=86b66e08-c26e-4d08-a904-80406e041479
     export CO_CPUS=16
     export CO_MEMORY=137438953472
     
@@ -363,7 +364,8 @@ process motion_correction {
     stage_nested ${upstream_processing_json}
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v20.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2071646.git" capsule-repo
+    git -C capsule-repo checkout 7181e6354790e0b01cccc771d9678f2ca31a518a --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
     
@@ -548,8 +550,8 @@ process decrosstalk_roi_images {
 
 // capsule - aind-ophys-extraction
 process extraction {
-    tag 'capsule-9911715'
-	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v15"
+    tag 'capsule-8797010'
+	container "$REGISTRY_HOST/capsule/1ba6e32d-2a8a-4084-a449-2878724fb15d:f7d01089d26050cd60a8e11ac7f79432"
 
     cpus 8
     memory '64 GB'
@@ -575,7 +577,7 @@ process extraction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=5e1d659c-e149-4a57-be83-12f5a448a0c9
+    export CO_CAPSULE_ID=1ba6e32d-2a8a-4084-a449-2878724fb15d
     export CO_CPUS=8
     export CO_MEMORY=68719476736
 
@@ -594,7 +596,8 @@ process extraction {
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
 
     echo "[${task.tag}] cloning git repo..."
-    git clone --branch v15.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
+    git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8797010.git" capsule-repo
+    git -C capsule-repo checkout ed62b21a79a87fe017b852f2b207f2544674c8ea --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
@@ -781,7 +784,7 @@ process classifier {
 // capsule - aind-ophys-nwb
 process ophys_nwb {
 	tag 'capsule-8338960'
-	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:d71e931392295b3e1fb99a02028fb694"
+	container "$REGISTRY_HOST/capsule/f804beaa-2ac3-46c7-82b7-f46b19531aa9:874a9d2c76eb8b84f1e0e9721bdc32ec"
 
 	cpus 4
 	memory '32 GB'
@@ -863,7 +866,7 @@ process ophys_nwb {
 
 	echo "[${task.tag}] cloning git repo..."
     git clone "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8338960.git" capsule-repo
-    git -C capsule-repo checkout 8ea017877e137a154cbda4b641742dae0e4df208 --quiet
+    git -C capsule-repo checkout 694e8378de5455f5bb38b64e1e03685d936b20f9 --quiet
     mv capsule-repo/code capsule/code
     rm -rf capsule-repo
 
