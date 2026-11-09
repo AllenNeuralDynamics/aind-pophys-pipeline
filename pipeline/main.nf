@@ -4,8 +4,6 @@ nextflow.enable.dsl = 2
 
 import groovy.json.JsonSlurper
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
-
 // saveAs runs once per published file; keep its path relative to capsule/results.
 CAPSULE_RESULTS = 'capsule/results/'
 RUN_LEVEL_DOCS = ['processing.json', 'quality_control.json']
@@ -23,9 +21,6 @@ publishRelativeSkipRunLevel = { String filename ->
 }
 
 workflow {
-    // Parameterized data source selection
-    def use_s3_source = params.containsKey('ophys_mount_url')
-    
     // Declare all variables outside conditional blocks
     def ophys_data = Channel.empty()
     def ophys_mount_jsons = Channel.empty()
@@ -54,17 +49,12 @@ workflow {
             println "Added params.${key} = ${value}"
         }
     }
-    // Data source setup
-    if (use_s3_source) {
-        ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
-        ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
-    } else {
-        
-        ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
-        ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
+    if (!params.ophys_mount_url) {
+        error "No input session: attach the session's data asset at mount 'ophys_mount', or pass --ophys_mount_url."
     }
+    ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
+    ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
+    ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
@@ -72,51 +62,34 @@ workflow {
     def cellpose_data = Channel.fromPath("${base_path}cellpose_models/*", type: 'any', checkIfExists: false)
     def roinet_data = Channel.fromPath("${base_path}roinet/*", type: 'any', checkIfExists: false)
     
-    // Set ophys_mount_sync_file - look for .h5 files in behavior subdirectory when using ophys_mount_url
-    def ophys_mount_sync_file = params.ophys_mount_url ? 
-        Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any', checkIfExists: false) :
-        Channel.empty()
-    
-    // Debug: Check for all files in the behavior directory (only when using ophys_mount_url)
-    def all_behavior_files = params.ophys_mount_url ? 
-        Channel.fromPath("${params.ophys_mount_url}/behavior/*", type: 'any', checkIfExists: false) :
-        Channel.empty()
+    def ophys_mount_sync_file = Channel.fromPath("${params.ophys_mount_url}/behavior/*.h5", type: 'any', checkIfExists: false)
+    def all_behavior_files = Channel.fromPath("${params.ophys_mount_url}/behavior/*", type: 'any', checkIfExists: false)
 
     // Initialize channels for multiplane-specific processes
     def decrosstalk_processing_json = Channel.empty()
     def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
 
-    // Only produced when the converter runs (S3 sources only).
-    def converter_processing_json = Channel.empty()
-    def converter_qc_json = Channel.empty()
-    
-    // Conditional converter execution - only run for S3 sources
-    def motion_correction_input
-    if (use_s3_source) {
-        converter_capsule(ophys_data)
+    converter_capsule(ophys_data)
 
-        converter_processing_json = converter_capsule.out.converter_processing_json
-        converter_qc_json = converter_capsule.out.converter_qc_json
-        
-        // Separate the directories we want to filter out
-        converter_capsule.out.converter_results
-            .flatten()
-            .filter { it.isDirectory() }
-            .branch {
-                vasculature: it.name == 'vasculature'
-                matched_tiff_vals: it.name == 'matched_tiff_vals'
-                other: true
-            }
-            .set { converter_split }
-        
-        // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
-        motion_correction_input = converter_split.other
-        vasculature_dir = converter_split.vasculature
-        matched_tiff_vals_dir = converter_split.matched_tiff_vals   
-    } else {
-        motion_correction_input = ophys_data
-    }
+    def converter_processing_json = converter_capsule.out.converter_processing_json
+    def converter_qc_json = converter_capsule.out.converter_qc_json
+
+    // Separate the directories we want to filter out
+    converter_capsule.out.converter_results
+        .flatten()
+        .filter { it.isDirectory() }
+        .branch {
+            vasculature: it.name == 'vasculature'
+            matched_tiff_vals: it.name == 'matched_tiff_vals'
+            other: true
+        }
+        .set { converter_split }
+
+    // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
+    def motion_correction_input = converter_split.other
+    vasculature_dir = converter_split.vasculature
+    matched_tiff_vals_dir = converter_split.matched_tiff_vals
 
     if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
@@ -147,7 +120,7 @@ workflow {
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
             motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
+            converter_capsule.out.converter_results_all.collect(),
             cellpose_data.collect().ifEmpty([])
         )
 
