@@ -82,8 +82,8 @@ load_pipeline_parameters()
 validate_runtime_paths()
 
 def task_runtime_path(configured_path, task_relative_path) {
-    // Capsule defaults are exposed as task-relative paths after each process
-    // changes into capsule/code; non-default absolute paths pass through.
+    // The default /data, /results and /scratch become task-relative paths, which
+    // resolve once the task changes into capsule/code; other paths pass through.
     configured_path.toString() in ['/data', '/results', '/scratch']
         ? task_relative_path
         : configured_path.toString()
@@ -329,15 +329,11 @@ publishRelative = { String filename ->
         : filename
 }
 
-// For a capsule that writes its own processing.json / quality_control.json at
-// the TOP of capsule/results/ rather than under <plane>/<step>/. Those would
-// publish to the results ROOT, which is where the aggregator writes the
-// run-level pair -- two tasks, one target, last writer wins. Skipping the
-// publish costs nothing: the documents still travel on their emit channels into
-// the aggregator, which is what actually produces the run-level pair. Only the
-// converter needs this today (verified 2026-08-04 from runs b462ae9b and
-// 2368efda, whose root processing.json held the converter's single
-// "Raw movie conversion to HDF5" process while the aggregator had not run).
+// For a step that writes its own processing.json / quality_control.json at
+// the top of capsule/results/ rather than under <plane>/<step>/ (the converter).
+// Those would publish to the results root, where the aggregator writes the
+// run-level pair. The documents still reach the aggregator on their emit
+// channels, so they are not published.
 publishRelativeSkipRunLevel = { String filename ->
     def rel = publishRelative(filename)
     rel in RUN_LEVEL_DOCS ? null : rel
@@ -453,11 +449,8 @@ workflow {
             ophys_mount_jsons.collect()
         )
 
-        // Remove paired-plane crosstalk. Restored now that the capsule is
-        // v2-upgraded: extraction prefers *decrosstalk.h5 over *registered.h5,
-        // so while this was bypassed multiplane extraction ran on the wrong
-        // input and everything downstream of it inherited that.
-        // Each pair task stages only the motion-correction directories and
+        // Remove paired-plane crosstalk; extraction reads *decrosstalk.h5 when
+        // present. Each pair task stages only the motion-correction directories and
         // converter outputs of the two planes its pair file names; both are
         // matched by plane directory name.
         def decrosstalk_inputs = decrosstalk_split_json.out.capsule_results
@@ -512,19 +505,16 @@ workflow {
         )
     }
 
-    // Run DF / F. Independent of the classifier, so it runs while the
-    // classifier is still on v1.
+    // Run DF / F. Independent of the classifier.
     if (params.acquisition_data_type == "multiplane"){
         dff(
             extraction.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
-            // motion_correction.out.motion_results_csv.collect()
         )
     } else {
         dff(
             extraction.out.capsule_results.collect(),
             ophys_mount_jsons.collect(),
-            // motion_correction.out.motion_results_csv.collect()
         )
     }
 
@@ -552,23 +542,15 @@ workflow {
 
     // Run Ophys NWB Packaging for Multiplane
     //
-    // The three per-step channels below glob <plane>/<step>/*, which under v2
-    // sweeps up the bare processing.json / quality_control.json those steps now
-    // write. Collected across 8 planes that is 8 files per name into one path
-    // input, which Nextflow rejects outright:
-    //   "input file name collision -- There are multiple input files for each
-    //    of the following file names: processing.json, quality_control.json"
-    // Under v1 the same globs were safe because every file was <plane>_-prefixed.
-    // nwb never reads them -- it rglobs for <plane>_*<part>, epoch_locations.json
-    // and the sync h5 -- so they are dropped rather than staged into numbered
-    // directories the way the aggregator needs.
+    // The three per-step channels below glob <plane>/<step>/*, which includes
+    // each plane's processing.json / quality_control.json. Collected across
+    // planes, those names collide in one path input, and nwb does not read
+    // them (it globs for <plane>_*<part>, epoch_locations.json and the sync
+    // h5), so they are filtered out.
     //
-    // .flatten() is load-bearing. A `path` output whose glob matches several
-    // files emits ONE List per task, not one item per file, so a bare
-    // .filter { it.name in ... } tests a List: Groovy's GPath turns List.name
-    // into a list OF names, which is never `in` a list of strings, so the
-    // predicate is always true and the filter silently passes everything.
-    // That cost a full run. flatten() first, then filter, then re-collect.
+    // A `path` output whose glob matches several files emits one List per
+    // task, and .filter { it.name in ... } on a List always passes, so each
+    // channel is flattened before filtering and collected after.
     def metadata_json = ['processing.json', 'quality_control.json']
     // Provenance travels separately from the flat scientific inputs to avoid
     // collisions between identically named per-plane documents.
@@ -596,14 +578,10 @@ workflow {
         nwb_upstream_processing_json
     )   
 
-    // Aggregate every capsule's v2 metadata into the run-level
+    // Aggregate every step's metadata into the run-level
     // processing.json / quality_control.json.
     //
-    // quality_control_aggregator is gone: v2 deletes QCEvaluation, so that
-    // capsule is unbuildable, and aind-metadata-manager >=0.3.1 does the same
-    // job behind --aggregate_quality_control.
-    //
-    // Every capsule writes bare processing.json / quality_control.json --
+    // Every step writes bare processing.json / quality_control.json --
     // write_standard_file() hardcodes those names -- so on a multiplane run
     // each per-plane channel carries N identically-named files. Mixing them
     // into two channels keeps this call short; the stageAs on the aggregator's
@@ -934,7 +912,6 @@ process dff {
     input:
     path extraction_results, stageAs: 'capsule/data/*'
     path ophys_mount_json, stageAs: 'capsule/data/*'
-    // path motion_correction_results
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'

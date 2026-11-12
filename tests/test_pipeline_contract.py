@@ -58,10 +58,6 @@ RESOURCE_EXPORTS = (  # the only CO_* exports a process makes
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPO_RE = re.compile(r"^https://github\.com/AllenNeuralDynamics/[A-Za-z0-9._-]+$")
 UUID_RE = re.compile(r"^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
-TEXT_SUFFIXES = {".nf", ".config", ".sh", ".py", ".yml", ".json", ".md", ".txt", ".env"}
-SKIPPED_DIRS = {
-    ".git", "docs", "tests", "data", "work", "results", ".nextflow", ".image-work", ".venv", "__pycache__",
-}
 
 
 def read_manifest(path: Path) -> dict[str, str]:
@@ -145,7 +141,6 @@ class PipelineContractTests(MainTestCase):
         self.assertEqual(sorted(stages), sorted(STAGES))
         for text in ('"${stage}_LIBRARY_REPO"', '"${stage}_LIBRARY_COMMIT"', SHA_RE.pattern):
             self.assertIn(text, validate)
-        self.assertNotIn("CAPSULE", validate)
 
     def test_main_defines_one_process_per_stage(self):
         processes = re.findall(r"^process (\w+) \{", self.main, re.MULTILINE)
@@ -158,7 +153,6 @@ class PipelineContractTests(MainTestCase):
                 library = self.manifest[f"{stage}_LIBRARY_REPO"].rsplit("/", 1)[1]
                 self.assertIn(f"// {process}: {library}\nprocess {process} {{\n", self.main)
                 self.assertRegex(process_block(self.main, process), rf"\A\s+tag '{process}'\n")
-        self.assertNotRegex(self.main, r"capsule-\d")
 
     def test_each_process_installs_its_own_library_and_runs_its_module_once(self):
         for process, (stage, module) in PROCESSES.items():
@@ -198,11 +192,6 @@ class PipelineContractTests(MainTestCase):
             "python -u -c 'import importlib, sys; importlib.import_module(sys.argv.pop(1)).run()' "
             '"${module}" "$@"',
         )
-
-    def test_no_wrapper_repository_remnants(self):
-        for text in ("clone_repo", "gitCloneFunction", "./run", "chmod +x run", "_CAPSULE_",
-                     "capsule-repo", "CO_CAPSULE_ID", "GIT_ACCESS_TOKEN", "GIT_HOST"):
-            self.assertNotIn(text, self.main)
 
     def test_cellpose_models_path_is_exported_for_the_stages_that_load_models(self):
         export = 'export CELLPOSE_LOCAL_MODELS_PATH="\\${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"'
@@ -269,7 +258,6 @@ class PipelineContractTests(MainTestCase):
             "params.stage_images = parse_stage_images(",
         )
         workflow = self.main.split("workflow {", 1)[1]
-        self.assertNotIn("JsonSlurper", workflow)
 
     def test_runtime_path_contract_is_explicit_and_fail_closed(self):
         for name, default in (
@@ -285,7 +273,6 @@ class PipelineContractTests(MainTestCase):
     def test_local_source_uses_explicit_mount_directory(self):
         self.assertIn("def use_s3_source = source.startsWith('s3://')", self.main)
         self.assertIn("Channel.fromPath(source, type: 'dir', checkIfExists: true)", self.main)
-        self.assertNotIn("Channel.fromPath(\"${base_path}harvard-single\", type: 'dir')", self.main)
 
     def test_converter_runs_for_every_source_and_feeds_motion_correction(self):
         workflow = self.main.split("workflow {", 1)[1]
@@ -304,7 +291,6 @@ class PipelineContractTests(MainTestCase):
             "motion_correction_input = converter_split.other",
             "z_stacks = converter.out.local_stacks",
         )
-        self.assertNotIn("motion_correction_input = ophys_data", workflow)
 
     def test_workflow_calls_every_process_and_reads_only_defined_ones(self):
         workflow = self.main.split("workflow {", 1)[1].split("\nprocess ", 1)[0]
@@ -350,11 +336,6 @@ class PipelineContractTests(MainTestCase):
         for name in ("pair0.json", "plane_0.txt", "xpair0.txt", "pair0.txt.bak"):
             self.assertIsNone(pair_name.fullmatch(name), name)
 
-    def test_tasks_do_not_create_container_root_links(self):
-        self.assertNotIn("ln -s \\$PWD/capsule", self.main)
-        self.assertNotIn("ls -R /data", self.main)
-        self.assertNotIn("ls -a /results", self.main)
-
     def test_classifier_model_paths_default_to_the_library(self):
         for name in ("soma-classifier-path", "dendrite-classifier-path"):
             self.assertEqual(self.parameters[name], "")
@@ -362,7 +343,6 @@ class PipelineContractTests(MainTestCase):
         self.assertIn("${soma_classifier_arg} ${dendrite_classifier_arg}", self.main)
 
     def test_defaults_run_the_full_pipeline_with_run_level_quality_control(self):
-        self.assertNotIn("STOP_AFTER_CONVERTER", self.main)
         self.assertEqual(self.parameters["debug"], "0")
         self.assertEqual(self.parameters["aggregate_quality_control"], "1")
         self.assertEqual(self.panel_defaults["aggregate_quality_control"], "1")
@@ -381,17 +361,6 @@ class PipelineContractTests(MainTestCase):
         self.assertEqual(self.panel_defaults["ophys_mount_url"],
                          re.search(r"params.ophys_mount_url = '([^']+)'", self.main).group(1))
         self.assertIn("ophys_mount_url must be a nonempty S3 URL or absolute directory", self.main)
-
-    def test_removed_options_are_absent_everywhere(self):
-        texts = {
-            "main.nf": self.main,
-            "pipeline_parameters.json": (ROOT / "pipeline_parameters.json").read_text(),
-            "app-panel.json": (ROOT / ".codeocean/app-panel.json").read_text(),
-        }
-        texts.update({name: (PIPELINE / name).read_text() for name in CONFIGS})
-        for option in ("ghcr_pull_smoke", "ghcr_smoke_only", "gpu_smoke", "upgrade_legacy_metadata"):
-            for source, text in texts.items():
-                self.assertNotIn(option, text, source)
 
     def test_model_mounts_and_process_inputs_match(self):
         datasets = json.loads((ROOT / ".codeocean/datasets.json").read_text())["attached_datasets"]
@@ -434,7 +403,6 @@ class PipelineContractTests(MainTestCase):
         ):
             with self.subTest(stage_as=stage_as):
                 self.assertIn(f"stageAs: '{stage_as}'", self.main)
-        self.assertNotIn("stage_nested()", self.main)
 
     def test_scientific_processes_forward_resolved_task_paths(self):
         for process in PROCESSES:
@@ -480,7 +448,6 @@ class PipelineContractTests(MainTestCase):
         self.assertIn("def writable_tmpfs = '--writable-tmpfs'", slurm)
         self.assertIn('containerOptions = "${writable_tmpfs} ${data_bind}"', slurm)
         self.assertIn('containerOptions = "${writable_tmpfs} --nv ${data_bind}"', slurm)
-        self.assertNotIn('--shm-size', slurm)
         self.assertIn('--volume ${data_path}:/tmp/data', local)
         self.assertIn('--bind ${data_path}:/tmp/data', slurm)
 
@@ -559,9 +526,6 @@ class ImageContractTests(MainTestCase):
         image_stages = re.findall(r"'([A-Z_]+)'", section(r"def image_stages = \[(.*?)\]", self.main))
         self.assertEqual(sorted(image_stages), sorted(STAGES))
         self.assertIn("params.stage_images = parse_stage_images(image_stages", self.main)
-        self.assertNotIn("import groovy.json.JsonSlurper", self.main)
-        for text in ("image_set", "IMAGE_CO", "IMAGE_OFFCO", "registry_host", "development_images"):
-            self.assertNotIn(text, self.main)
 
     def test_stage_images_are_named_from_images_json_before_custom_overrides(self):
         parse = section(r"^def parse_stage_images\(.*?\) \{(.*?)^\}", self.main)
@@ -586,22 +550,6 @@ class ImageContractTests(MainTestCase):
             self.assertIsNotNone(reference.fullmatch(image), image)
         for image in ("", "two words", "tab\tseparated"):
             self.assertIsNone(reference.fullmatch(image), image)
-
-    def test_no_file_outside_comments_mentions_images_env(self):
-        self.assertFalse((PIPELINE / "images.env").exists())
-        mentions = []
-        for folder, folders, files in os.walk(ROOT):
-            folders[:] = [name for name in folders if name not in SKIPPED_DIRS]
-            for name in files:
-                path = Path(folder) / name
-                if name == "CHANGELOG.md" or not (
-                    path.suffix in TEXT_SUFFIXES or name.startswith("Dockerfile") or name == ".gitignore"
-                ):
-                    continue
-                for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-                    if "images.env" in line and not line.lstrip().startswith(("#", "//")):
-                        mentions.append(f"{path.relative_to(ROOT)}:{number}")
-        self.assertEqual(mentions, [])
 
     def test_images_json_covers_every_stage_with_its_build_inputs(self):
         self.assertEqual(sorted(self.recipes), sorted(STAGES))

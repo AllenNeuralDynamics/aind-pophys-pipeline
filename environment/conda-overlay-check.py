@@ -1,4 +1,4 @@
-"""Install only pip additions and exact, historically observed conda replacements."""
+"""Install only pip additions and the conda replacements listed in overlay-policy.json."""
 
 import argparse
 import importlib.metadata

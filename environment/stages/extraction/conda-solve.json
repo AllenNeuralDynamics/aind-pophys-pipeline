@@ -1,7 +1,6 @@
 {
   "base_distribution": "Debian trixie",
   "base_image": "mambaorg/micromamba:2.3.2@sha256:955819619f303e2aa1dc1ba89beefe7f326a378b3d0782a4a0d28b1cf11b68b6",
-  "build_log_sha256": "0f152d5c468c22ffc38bb4980d22af4dc47eb5a537fdec3e84b39a6925baa235",
   "channels": [
     "conda-forge"
   ],

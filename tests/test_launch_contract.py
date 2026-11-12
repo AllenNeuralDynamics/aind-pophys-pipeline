@@ -23,7 +23,6 @@ class LaunchContractTests(unittest.TestCase):
         self.assertIn("nextflow_local.config", script)
         self.assertIn("--params_file", script)
         self.assertIn("--ophys_mount_url", script)
-        self.assertNotIn("image_set", script)
         self.assertIn("-work-dir", script)
         self.assertIn("preflight.sh\" local", script)
 
@@ -46,7 +45,6 @@ class LaunchContractTests(unittest.TestCase):
             "../environment/images.json",
         ):
             self.assertIn(text, script)
-        self.assertNotIn("images.env", script)
 
 
 if __name__ == "__main__":

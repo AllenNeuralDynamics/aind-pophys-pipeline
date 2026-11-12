@@ -1,6 +1,4 @@
 {
-  "build_log_sha256": "0f152d5c468c22ffc38bb4980d22af4dc47eb5a537fdec3e84b39a6925baa235",
-  "source_library_commit": "5cf411b5d3290663820a293f3b1f4e2db323ec44",
   "suite2p_commit": "ae0e9313b881f1d4bb51d7461f4796532a76e8aa",
   "replacements": {
     "h5py": {"before": "3.9.0", "after": "3.11.0"},
@@ -27,6 +25,6 @@
     "pip_distribution": "opencv-python-headless",
     "pip_version": "4.11.0.86",
     "expected_import_version": "4.11.0",
-    "risk": "The historical pip step overlays cv2 files owned by conda under a different distribution name. This is not namespace-safe; the effective import must be measured in the built candidate."
+    "risk": "The pip wheel installs cv2 over the conda package's files under a different distribution name, so the build checks which version imports."
   }
 }

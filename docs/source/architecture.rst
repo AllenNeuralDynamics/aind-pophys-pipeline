@@ -79,37 +79,37 @@ sets the new version and promotes those images to ``<version>`` and ``latest`` (
 Pipeline Steps Detailed Breakdown
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-1. **Converter** (`aind-pophys-converter-capsule <https://github.com/AllenNeuralDynamics/aind-pophys-converter-capsule>`_):
+1. **Converter** (`aind-pophys-converter <https://github.com/AllenNeuralDynamics/aind-pophys-converter>`_):
    Converts the raw ScanImage TIFFs into one HDF5 movie per plane.
 
-2. **Registration** (`aind-ophys-motion-correction <https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction>`_):
+2. **Registration** (`aind-ophys-motion-correction-library <https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction-library>`_):
    Suite2p rigid and non-rigid motion correction of each plane.
 
-3. **Movie QC** (`aind-ophys-movie-qc <https://github.com/AllenNeuralDynamics/aind-ophys-movie-qc>`_):
+3. **Movie QC** (`aind-ophys-movie-qc-library <https://github.com/AllenNeuralDynamics/aind-ophys-movie-qc-library>`_):
    Saturation, photon, epileptiform event and z-drift metrics for each registered movie.
 
-4. **Pair Splitting** (`aind-ophys-decrosstalk-split-session-json <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json>`_):
+4. **Pair Splitting** (`aind-ophys-decrosstalk-split-session-json-library <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json-library>`_):
    Groups the planes of a multiplane session into coupled pairs.
 
-5. **Decrosstalk** (`aind-ophys-decrosstalk-roi-images <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images>`_):
+5. **Decrosstalk** (`aind-ophys-decrosstalk-roi-images-library <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images-library>`_):
    Removes crosstalk between the two planes of each coupled pair.
 
-6. **Extraction** (`aind-ophys-extraction <https://github.com/AllenNeuralDynamics/aind-ophys-extraction>`_):
+6. **Extraction** (`aind-ophys-extraction-library <https://github.com/AllenNeuralDynamics/aind-ophys-extraction-library>`_):
    Cell detection and ROI and neuropil trace extraction.
 
-7. **dF/F** (`aind-ophys-dff <https://github.com/AllenNeuralDynamics/aind-ophys-dff>`_):
+7. **dF/F** (`aind-ophys-dff-library <https://github.com/AllenNeuralDynamics/aind-ophys-dff-library>`_):
    dF/F traces for every ROI.
 
-8. **Classifier** (`aind-ophys-classifier <https://github.com/AllenNeuralDynamics/aind-ophys-classifier>`_):
+8. **Classifier** (`aind-ophys-classifier-library <https://github.com/AllenNeuralDynamics/aind-ophys-classifier-library>`_):
    Soma, dendrite and border labels for every ROI, on a GPU.
 
-9. **Events** (`aind-ophys-oasis-event-detection <https://github.com/AllenNeuralDynamics/aind-ophys-oasis-event-detection>`_):
+9. **Events** (`aind-ophys-oasis-event-detection-library <https://github.com/AllenNeuralDynamics/aind-ophys-oasis-event-detection-library>`_):
    OASIS event detection on each dF/F trace.
 
-10. **NWB Packaging** (`aind-ophys-nwb <https://github.com/AllenNeuralDynamics/aind-ophys-nwb>`_):
+10. **NWB Packaging** (`aind-ophys-nwb-library <https://github.com/AllenNeuralDynamics/aind-ophys-nwb-library>`_):
     One NWB Zarr store with every plane's masks, images and traces.
 
-11. **Metadata Merge** (`aind-metadata-manager-capsule <https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule>`_):
+11. **Metadata Merge** (`aind-metadata-manager <https://github.com/AllenNeuralDynamics/aind-metadata-manager>`_):
     Run-level ``processing.json``, ``quality_control.json`` and ``data_description.json``.
 
 Pair Splitting and Decrosstalk run only for multiplane sessions. See :doc:`pipeline_steps` for

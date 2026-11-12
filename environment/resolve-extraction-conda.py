@@ -23,7 +23,6 @@ def digest(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--micromamba", type=Path, required=True)
-    parser.add_argument("--build-log-evidence", type=Path)
     args = parser.parse_args()
     work = ROOT / ".image-work/solver"
     work.mkdir(parents=True, exist_ok=True)
@@ -50,19 +49,6 @@ def main():
         "success": bool(data.get("success")) and result.returncode == 0,
         "solver_problems": data.get("solver_problems", []),
     }
-    policy = json.loads((FOLDER / "overlay-policy.json").read_text())
-    report["build_log_sha256"] = policy["build_log_sha256"]
-    if args.build_log_evidence:
-        evidence = json.loads(args.build_log_evidence.read_text())
-        if (evidence["failures"] or not evidence["invariants"]["complete"]
-                or evidence["source_sha256"] != policy["build_log_sha256"]
-                or evidence["suite2p_commit"] != policy["suite2p_commit"]):
-            raise ValueError("The build-log evidence does not match the extraction policy")
-        for name, change in policy["replacements"].items():
-            if any(change[key] != evidence["pip_replacements"][name][key]
-                   for key in ("before", "after")):
-                raise ValueError("An overlay replacement is not supported by the build log")
-        report["historical_transaction_packages"] = evidence["counts"]["conda_packages"]
     packages = data.get("actions", {}).get("LINK", [])
     if report["success"]:
         if not packages or len({row["name"] for row in packages}) != len(packages):

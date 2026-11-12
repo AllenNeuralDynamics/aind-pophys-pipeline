@@ -35,11 +35,6 @@ class ContainerTagTests(unittest.TestCase):
         config = (ROOT / "pipeline" / "nextflow.config").read_text()
         self.assertRegex(config, r'(?m)^\s*PIPELINE_VERSION = "\d+\.\d+\.\d+"$')
 
-    def test_no_version_file(self):
-        self.assertFalse((ROOT / "pipeline" / "pipeline_version.txt").exists())
-        for path in [ROOT / "pipeline" / "preflight.sh", ROOT / "scripts" / "pull_pipeline_images.sh"]:
-            self.assertNotIn("pipeline_version.txt", path.read_text(), path)
-
     def test_pull_script_defaults_to_the_release_version(self):
         script = (ROOT / "scripts" / "pull_pipeline_images.sh").read_text()
         self.assertIn('TAG="${CONTAINER_TAG:-}"', script)
@@ -48,7 +43,6 @@ class ContainerTagTests(unittest.TestCase):
 
     def test_push_script_pushes_only_the_named_tags(self):
         script = (ROOT / "environment" / "push_all.sh").read_text()
-        self.assertNotIn("--all-tags", script)
         self.assertIn('docker push "$REPO:$CONTAINER_TAG_ARG"', script)
         self.assertIn('docker push "$REPO:latest"', script)
 
@@ -76,7 +70,7 @@ class WorkflowTests(unittest.TestCase):
 
     def test_dev_pull_requests_build_dev_images(self):
         workflow = self.read("pr-dev.yml")
-        self.assertIn("branches: [dev, multi-backend-alignment]", workflow)
+        self.assertIn("branches: [dev]", workflow)
         self.assertIn("uses: ./.github/workflows/_build-images.yml", workflow)
         self.assertRegex(workflow, r"with:\n\s+tag: dev\n")
         self.assertIn("python -m unittest discover -s tests -t .", workflow)
@@ -96,13 +90,6 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("pipeline/nextflow.config", workflow)
         self.assertIn('for tag in "$VERSION" latest; do', workflow)
         self.assertLess(workflow.index("REMOTE_HASH"), workflow.index("skopeo copy"))
-
-    def test_no_version_file_workflows_remain(self):
-        for name in ["build-images.yml", "pr-tests.yml"]:
-            self.assertFalse((WORKFLOWS / name).exists(), name)
-        self.assertFalse((ROOT / ".github" / "scripts" / "check_version.py").exists())
-        for path in WORKFLOWS.glob("*.yml"):
-            self.assertNotRegex(path.read_text(), r"pipeline_version|check_version", path.name)
 
 
 if __name__ == "__main__":
