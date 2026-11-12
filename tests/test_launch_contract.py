@@ -42,9 +42,11 @@ class LaunchContractTests(unittest.TestCase):
             "Docker executable not found",
             "Apptainer or Singularity executable not found",
             "Parameter file not found",
-            "images.env",
+            "Image list not found",
+            "../environment/images.json",
         ):
             self.assertIn(text, script)
+        self.assertNotIn("images.env", script)
 
 
 if __name__ == "__main__":

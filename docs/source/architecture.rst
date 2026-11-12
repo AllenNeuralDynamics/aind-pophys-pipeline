@@ -67,16 +67,20 @@ Three sets of files pin every piece of code a run uses, ensuring reproducibility
 runs:
 
 * ``pipeline/process_versions.env``: the processing library repository and commit of each step
-* ``pipeline/images.env``: the image digest of each step
+* ``PIPELINE_VERSION`` in ``pipeline/nextflow.config``: the release version, which is also the tag
+  of every step's image (``ghcr.io/allenneuraldynamics/<image_name>:<version>``, names in
+  ``environment/images.json``)
 * ``environment/stages/<step>/requirements.lock``: the dependency versions built into each image
 
-Pipeline releases are tagged from Conventional Commit messages (see :ref:`releases`).
+Pull requests and pushes into ``dev`` build each step's image with the ``dev`` tag. Each release
+sets the new version and promotes those images to ``<version>`` and ``latest`` (see
+:ref:`releases`).
 
 Pipeline Steps Detailed Breakdown
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 1. **Converter** (`aind-pophys-converter-capsule <https://github.com/AllenNeuralDynamics/aind-pophys-converter-capsule>`_):
-   Converts the raw ScanImage TIFFs into one HDF5 movie per plane, for S3 inputs.
+   Converts the raw ScanImage TIFFs into one HDF5 movie per plane.
 
 2. **Registration** (`aind-ophys-motion-correction <https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction>`_):
    Suite2p rigid and non-rigid motion correction of each plane.

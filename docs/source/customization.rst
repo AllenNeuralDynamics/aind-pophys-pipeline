@@ -83,9 +83,18 @@ The full list of steps is:
 Building images
 ~~~~~~~~~~~~~~~
 
-``pipeline/images.env`` pins each step's published image by digest. To use an image you built,
-for example after changing a library's dependencies, list it in ``pipeline/images_custom.env``,
-which git ignores and which overrides only the steps it names:
+Every step runs ``ghcr.io/allenneuraldynamics/<image_name>:<tag>``, with image names from
+``environment/images.json``. The tag is ``--container_tag`` (CLI or config), then the
+``CONTAINER_TAG`` environment variable, then the release version (``PIPELINE_VERSION`` in
+``pipeline/nextflow.config``). To run the images built from the ``dev`` branch:
+
+.. code:: bash
+
+    ./run_local.sh --container_tag dev
+
+To use an image you built for only some steps, for example after changing a library's
+dependencies, list it in ``pipeline/images_custom.env``, which git ignores and which overrides only
+the steps it names:
 
 .. code:: bash
 
@@ -104,8 +113,8 @@ pins its dependencies. With Docker, ``jq`` and, for re-locking, ``uv``:
 
 ``IMAGE_REGISTRY`` (default ``ghcr.io/allenneuraldynamics``) sets the registry part of the image
 name. For SLURM, push the image to a registry the cluster can reach with
-``environment/push_all.sh my-build main DFF``, which prints the digest to put in
-``images_custom.env``. Review the lock diff before building: a re-lock keeps the versions already
+``environment/push_all.sh my-build main DFF`` and name it in ``images_custom.env``. If you build
+every step with one tag, pass that tag as ``--container_tag`` instead. Review the lock diff before building: a re-lock keeps the versions already
 locked wherever the library's dependencies allow.
 
 

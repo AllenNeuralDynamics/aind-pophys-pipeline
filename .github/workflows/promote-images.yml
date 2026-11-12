@@ -1,0 +1,81 @@
+# After the Release workflow sets the new version in pipeline/nextflow.config:
+#   promote each step's `dev` image to {version} and `latest`.
+#
+# Promotion only happens if the `dev` image was built from the same environment/
+# files as main (org.aind.env-hash label). No-op for steps already at {version}.
+name: Promote images
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: promote-images
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  meta:
+    name: Resolve version
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      images: ${{ steps.images.outputs.images }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Read the released version
+        id: version
+        run: |
+          VERSION=$(sed -n 's/^ *PIPELINE_VERSION = "\([^"]*\)".*/\1/p' pipeline/nextflow.config | head -1)
+          [[ -n "$VERSION" ]] || { echo "::error::No PIPELINE_VERSION in pipeline/nextflow.config"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: List images
+        id: images
+        run: echo "images=$(jq -c 'keys' environment/images.json)" >> "$GITHUB_OUTPUT"
+
+  promote:
+    name: Promote ${{ matrix.image }}
+    needs: meta
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.meta.outputs.images) }}
+    env:
+      GHCR_CREDS: ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Promote ${{ matrix.image }}:dev to ${{ needs.meta.outputs.version }} and latest
+        run: |
+          NAME=$(.github/scripts/image_info.sh ${{ matrix.image }} name)
+          HASH=$(.github/scripts/image_info.sh ${{ matrix.image }} hash)
+          if skopeo inspect --creds "$GHCR_CREDS" "docker://$NAME:$VERSION" >/dev/null 2>&1; then
+            echo "$NAME:$VERSION already exists"
+            exit 0
+          fi
+          REMOTE_HASH=$(skopeo inspect --creds "$GHCR_CREDS" "docker://$NAME:dev" 2>/dev/null \
+            | jq -r '.Labels["org.aind.env-hash"] // empty' || true)
+          if [[ "$REMOTE_HASH" != "$HASH" ]]; then
+            echo "::error::$NAME:dev (env-hash ${REMOTE_HASH:-<missing>}) does not match main ($HASH)."
+            exit 1
+          fi
+          for tag in "$VERSION" latest; do
+            skopeo copy --all --src-creds "$GHCR_CREDS" --dest-creds "$GHCR_CREDS" \
+              "docker://$NAME:dev" "docker://$NAME:$tag"
+          done

@@ -43,9 +43,11 @@ environment/push_all.sh <tag> [main|dev] [STEP,STEP|all]
 
 `build_all.sh` loads each image into the local Docker daemon as
 `$IMAGE_REGISTRY/<image_name>:<tag>` (default registry `ghcr.io/allenneuraldynamics`); `dev` appends
-`-dev` to the tag. `push_all.sh` pushes them and prints a `STEP=<image>@sha256:<digest>` line per
-step. Put those lines in `pipeline/images.env` to publish a new default, or in
-`pipeline/images_custom.env` to use an image only on your machine or cluster.
+`-dev` to the tag. `push_all.sh` pushes them, and with `main` also tags them `latest`. Run every
+step with one tag with `--container_tag <tag>`, or name individual images in
+`pipeline/images_custom.env`.
 
-The **Images** GitHub Actions workflow builds and pushes the same images to ghcr.io and reports
-their digests. It skips a step whose image tag already carries the same dependency hash.
+In CI, pull requests and pushes into `dev` build every image with the `dev` tag, skipping a step
+whose image already carries the same build-input hash (`.github/scripts/image_info.sh`). The release
+pull request into `main` checks the `dev` images match its head, and after each release they are
+promoted to the new version and `latest`.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Push images built by build_all.sh and print their digests for pipeline/images.env.
+# Push images built by build_all.sh.
 set -euo pipefail
 
 ENV_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
@@ -29,6 +29,9 @@ fi
 
 if [[ "$TARGET_ARG" == "dev" ]]; then
     CONTAINER_TAG_ARG="$CONTAINER_TAG_ARG-dev"
+    LABEL_LATEST=false
+else
+    LABEL_LATEST=true
 fi
 
 IFS=',' read -r -a IMAGES_LIST <<< "$IMAGES_ARG"
@@ -43,8 +46,10 @@ for image in "${IMAGES_LIST[@]}"; do
     fi
     IMAGE_NAME=$(jq -r --arg i "$image" '.[$i].image_name' "$IMAGES_JSON")
     REPO="$REGISTRY/$IMAGE_NAME"
-    echo "Pushing $REPO:$CONTAINER_TAG_ARG"
+    echo "Pushing $image image with tag $CONTAINER_TAG_ARG"
     docker push "$REPO:$CONTAINER_TAG_ARG"
-    DIGEST=$(docker buildx imagetools inspect "$REPO:$CONTAINER_TAG_ARG" --format '{{json .Manifest}}' | jq -r .digest)
-    echo "$image=$REPO@$DIGEST"
+    if [[ "$LABEL_LATEST" == true ]]; then
+        docker tag "$REPO:$CONTAINER_TAG_ARG" "$REPO:latest"
+        docker push "$REPO:latest"
+    fi
 done

@@ -158,18 +158,46 @@ def image_stages = [
     'NWB',
     'AGGREGATOR'
 ]
-// images.env pins every step's published image by digest. images_custom.env,
-// which git ignores, overrides individual steps with any image reference, such
-// as a locally built image.
-def parse_stage_images(image_stages) {
-    def images = parse_key_value_file("${baseDir}/images.env")
-    if (images.keySet() != image_stages.toSet()) {
-        throw new IllegalArgumentException('Image manifest must contain exactly all 11 stages')
+// Every step runs ghcr.io/allenneuraldynamics/<image_name>:<container_tag>,
+// with image names from environment/images.json. The tag comes from
+// --container_tag (CLI or config), then the CONTAINER_TAG environment variable,
+// then PIPELINE_VERSION in nextflow.config, which each release sets, so a
+// released pipeline runs its released images. Development runs use the `dev`
+// tag. images_custom.env, which git ignores, overrides individual steps with
+// any image reference, such as a locally built image.
+def resolve_container_tag() {
+    if (params.containsKey('container_tag') && params.container_tag) {
+        println "CONTAINER TAG (from CLI/config): ${params.container_tag}"
+        return params.container_tag.toString()
     }
-    images.each { stage, image ->
-        if (!(image ==~ /^ghcr\.io\/allenneuraldynamics\/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$/)) {
-            throw new IllegalArgumentException("Image for ${stage} must be GHCR digest-pinned")
-        }
+    def env_tag = System.getenv('CONTAINER_TAG')
+    if (env_tag) {
+        println "CONTAINER TAG (from ENV): ${env_tag}"
+        return env_tag
+    }
+    def config_file = file("${baseDir}/nextflow.config")
+    def matcher = config_file.exists() ? (config_file.text =~ /PIPELINE_VERSION = "([^"]+)"/) : null
+    if (!matcher || !matcher.find()) {
+        throw new IllegalArgumentException(
+            'Cannot determine container tag: set --container_tag, CONTAINER_TAG or PIPELINE_VERSION in nextflow.config'
+        )
+    }
+    def version = matcher.group(1)
+    println "CONTAINER TAG (from nextflow.config PIPELINE_VERSION): ${version}"
+    version
+}
+
+def parse_stage_images(image_stages, container_tag) {
+    def catalog = new groovy.json.JsonSlurper().parse(file("${baseDir}/../environment/images.json").toFile())
+    if (catalog.keySet() != image_stages.toSet()) {
+        throw new IllegalArgumentException('environment/images.json must list exactly all 11 stages')
+    }
+    if (!(container_tag ==~ /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/)) {
+        throw new IllegalArgumentException("Invalid container tag: ${container_tag}")
+    }
+    def images = [:]
+    catalog.each { stage, entry ->
+        images[stage] = "ghcr.io/allenneuraldynamics/${entry.image_name}:${container_tag}"
     }
     def custom = file("${baseDir}/images_custom.env")
     if (custom.exists()) {
@@ -189,7 +217,8 @@ def parse_stage_images(image_stages) {
     images
 }
 
-params.stage_images = parse_stage_images(image_stages)
+params.container_tag = resolve_container_tag()
+params.stage_images = parse_stage_images(image_stages, params.container_tag)
 
 // Each task clones its processing library at the pinned commit, installs it
 // with --no-deps over the dependencies already in the step's image, and runs
@@ -316,8 +345,8 @@ workflow {
         throw new IllegalArgumentException('ophys_mount_url must be a nonempty S3 URL or absolute directory')
     }
 
-    // Parameterized data source selection. A local absolute directory uses the
-    // attached/staged files directly; only S3 inputs need the converter.
+    // The session comes from an S3 URL or a local absolute directory; the
+    // converter reads either.
     def source = params.ophys_mount_url.toString()
     def use_s3_source = source.startsWith('s3://')
     
@@ -368,36 +397,31 @@ workflow {
     def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
 
-    // Only produced when the converter runs (S3 sources only).
     def converter_processing_json = Channel.empty()
     def converter_qc_json = Channel.empty()
     
-    // Conditional converter execution - only run for S3 sources
+    // The converter writes one HDF5 movie per plane from the raw session, S3 or local.
     def motion_correction_input
-    if (use_s3_source) {
-        converter_capsule(ophys_data)
+    converter(ophys_data)
 
-        converter_processing_json = converter_capsule.out.converter_processing_json
-        converter_qc_json = converter_capsule.out.converter_qc_json
-        
-        // Separate the directories we want to filter out
-        converter_capsule.out.converter_results
-            .flatten()
-            .filter { it.isDirectory() }
-            .branch {
-                vasculature: it.name == 'vasculature'
-                matched_tiff_vals: it.name == 'matched_tiff_vals'
-                other: true
-            }
-            .set { converter_split }
-        
-        // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
-        motion_correction_input = converter_split.other
-        vasculature_dir = converter_split.vasculature
-        matched_tiff_vals_dir = converter_split.matched_tiff_vals   
-    } else {
-        motion_correction_input = ophys_data
-    }
+    converter_processing_json = converter.out.converter_processing_json
+    converter_qc_json = converter.out.converter_qc_json
+    
+    // Separate the directories we want to filter out
+    converter.out.converter_results
+        .flatten()
+        .filter { it.isDirectory() }
+        .branch {
+            vasculature: it.name == 'vasculature'
+            matched_tiff_vals: it.name == 'matched_tiff_vals'
+            other: true
+        }
+        .set { converter_split }
+    
+    // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
+    motion_correction_input = converter_split.other
+    vasculature_dir = converter_split.vasculature
+    matched_tiff_vals_dir = converter_split.matched_tiff_vals   
 
     if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
@@ -407,7 +431,7 @@ workflow {
             ophys_mount_pophys_directory.collect(),
             converter_processing_json.flatten().collect().ifEmpty([]),
         )
-        z_stacks = converter_capsule.out.local_stacks
+        z_stacks = converter.out.local_stacks
 
         movie_qc(
             motion_correction.out.motion_results_all.flatten(),
@@ -425,12 +449,26 @@ workflow {
         // v2-upgraded: extraction prefers *decrosstalk.h5 over *registered.h5,
         // so while this was bypassed multiplane extraction ran on the wrong
         // input and everything downstream of it inherited that.
+        // Each pair task stages only the motion-correction directories and
+        // converter outputs of the two planes its pair file names; both are
+        // matched by plane directory name.
+        def decrosstalk_inputs = decrosstalk_split_json.out.capsule_results
+            .flatten()
+            .filter { it.name ==~ /pair.*\.txt/ }
+            .combine(motion_correction.out.motion_results_all.flatten().collect().map { [it] })
+            .combine(converter.out.converter_results_all.flatten().collect().ifEmpty([]).map { [it] })
+            .map { pair_file, motion_dirs, converter_results ->
+                def planes = pair_file.readLines()*.trim().findAll { it }.collect { it.replaceFirst(/^\/data\//, '') }
+                [
+                    pair_file,
+                    motion_dirs.findAll { it.name in planes },
+                    converter_results.findAll { it.parent.name in planes },
+                ]
+            }
         decrosstalk_roi_images(
-            decrosstalk_split_json.out.capsule_results.flatten(),
+            decrosstalk_inputs,
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
-            motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
             cellpose_data.collect().ifEmpty([])
         )
 
@@ -469,13 +507,13 @@ workflow {
     // Run DF / F. Independent of the classifier, so it runs while the
     // classifier is still on v1.
     if (params.acquisition_data_type == "multiplane"){
-        dff_capsule(
+        dff(
             extraction.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
             // motion_correction.out.motion_results_csv.collect()
         )
     } else {
-        dff_capsule(
+        dff(
             extraction.out.capsule_results.collect(),
             ophys_mount_jsons.collect(),
             // motion_correction.out.motion_results_csv.collect()
@@ -493,13 +531,13 @@ workflow {
     if (params.acquisition_data_type == "multiplane"){
         // Run Oasis Event detection
         oasis_event_detection(
-            dff_capsule.out.capsule_results.flatten(),
+            dff.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
     } else {
         // Run Oasis Event detection
         oasis_event_detection(
-            dff_capsule.out.capsule_results.collect(),
+            dff.out.capsule_results.collect(),
             ophys_mount_jsons.collect()
         )
     }
@@ -529,7 +567,7 @@ workflow {
     def nwb_upstream_processing_json = motion_correction.out.motion_processing_json
         .mix(decrosstalk_processing_json)
         .mix(extraction.out.extraction_processing_json)
-        .mix(dff_capsule.out.dff_processing_json)
+        .mix(dff.out.dff_processing_json)
         .mix(classifier.out.classifier_processing_json)
         .mix(oasis_event_detection.out.oasis_processing_json)
         .flatten()
@@ -545,7 +583,7 @@ workflow {
         decrosstalk_results_all.flatten().filter { !(it.name in metadata_json) }.collect().ifEmpty([]),
         extraction.out.extraction_results_all.flatten().filter { !(it.name in metadata_json) }.collect(),
         classifier.out.classifer_h5.collect(),
-        dff_capsule.out.dff_results_all.collect(),
+        dff.out.dff_results_all.collect(),
         oasis_event_detection.out.events_h5.collect(),
         nwb_upstream_processing_json
     )   
@@ -573,7 +611,7 @@ workflow {
         .mix(movie_qc.out.movie_qc_processing_json)
         .mix(decrosstalk_processing_json)
         .mix(extraction.out.extraction_processing_json)
-        .mix(dff_capsule.out.dff_processing_json)
+        .mix(dff.out.dff_processing_json)
         .mix(classifier.out.classifier_processing_json)
         .mix(oasis_event_detection.out.oasis_processing_json)
         .mix(ophys_nwb.out.nwb_processing_json)
@@ -584,7 +622,7 @@ workflow {
         .mix(movie_qc.out.movie_qc_qc_json)
         .mix(decrosstalk_qc_json)
         .mix(extraction.out.extraction_qc_json)
-        .mix(dff_capsule.out.dff_qc_json)
+        .mix(dff.out.dff_qc_json)
         .mix(classifier.out.classifier_qc_json)
         .mix(oasis_event_detection.out.oasis_qc_json)
         .mix(ophys_nwb.out.nwb_qc_json)
@@ -603,9 +641,9 @@ workflow {
 }
 
 
-// Process: aind-pophys-converter-capsule
-process converter_capsule {
-    tag 'capsule-9191145'
+// converter: aind-pophys-converter
+process converter {
+    tag 'converter'
     def container_name = params.stage_images['CONVERTER']
     container container_name
     publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelativeSkipRunLevel
@@ -626,8 +664,8 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=16
-    export CO_MEMORY=137438953472
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
     mkdir -p capsule/data
@@ -640,16 +678,16 @@ process converter_capsule {
     echo "[${task.tag}] running converter..."
     echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
-    echo "converter_capsule parameters: --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}"
+    echo "converter parameters: --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}"
     run_library aind_pophys_converter.job --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}
     echo "[${task.tag}] completed!"
     ls -a ${task_output_dir}
     """
 }
 
-// capsule - aind-ophys-motion-correction multiplane
+// motion_correction: aind-ophys-motion-correction-library
 process motion_correction {
-    tag 'capsule-2071646'
+    tag 'motion_correction'
     def container_name = params.stage_images['MOTION_CORRECTION']
     container container_name
     publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
@@ -673,8 +711,8 @@ process motion_correction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=16
-    export CO_MEMORY=137438953472
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
     
     mkdir -p capsule
     mkdir -p capsule/data
@@ -693,9 +731,9 @@ process motion_correction {
     """
 }
 
-// capsule - aind-ophys-movie-qc
+// movie_qc: aind-ophys-movie-qc-library
 process movie_qc {
-	tag 'capsule-5974042'
+	tag 'movie_qc'
     def container_name = params.stage_images['MOVIE_QC']
     container container_name
     publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
@@ -717,8 +755,8 @@ process movie_qc {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CPUS=16
-	export CO_MEMORY=137438953472
+	export CO_CPUS=${task.cpus}
+	export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
 	mkdir -p capsule
     mkdir -p capsule/data
@@ -738,9 +776,9 @@ process movie_qc {
     """
 }
 
-// capsule - aind-ophys-decrosstalk-split-session-json
+// decrosstalk_split_json: aind-ophys-decrosstalk-split-session-json-library
 process decrosstalk_split_json {
-    tag 'decrosstalk-split'
+    tag 'decrosstalk_split_json'
     def container_name = params.stage_images['DECROSSTALK_SPLIT']
     container container_name
 
@@ -758,8 +796,8 @@ process decrosstalk_split_json {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=2
-    export CO_MEMORY=17179869184
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
     mkdir -p capsule/data
@@ -777,21 +815,18 @@ process decrosstalk_split_json {
     """
 }
 
-// capsule - aind-ophys-decrosstalk-roi-images
+// decrosstalk_roi_images: aind-ophys-decrosstalk-roi-images-library
 process decrosstalk_roi_images {
-    tag 'capsule-4886340'
-    // DEV pin: the registry hash goes stale on every capsule rebuild.
+    tag 'decrosstalk_roi_images'
     def container_name = params.stage_images['DECROSSTALK_ROI_IMAGES']
     container container_name
 
     publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path decrosstalk_split, stageAs: 'capsule/data/*'
+    tuple path(decrosstalk_split, stageAs: 'capsule/data/*'), path(motion_results, stageAs: 'capsule/data/*'), path(converter_files, stageAs: 'capsule/data/*')
     path ophys_jsons, stageAs: 'capsule/data/*'
     path pophys_dir, stageAs: 'capsule/data/*'
-    path motion_results, stageAs: 'capsule/data/*'
-    path converter_files, stageAs: 'capsule/data/*'
     path cellpose_data
 
     output:
@@ -805,8 +840,8 @@ process decrosstalk_roi_images {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=8
-    export CO_MEMORY=68719476736
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
     mkdir -p capsule/data
@@ -830,9 +865,9 @@ process decrosstalk_roi_images {
 }
 
 
-// capsule - aind-ophys-extraction
+// extraction: aind-ophys-extraction-library
 process extraction {
-    tag 'capsule-8797010'
+    tag 'extraction'
     def container_name = params.stage_images['EXTRACTION']
     container container_name
 
@@ -857,8 +892,8 @@ process extraction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=8
-    export CO_MEMORY=68719476736
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
     mkdir -p capsule/data
@@ -880,10 +915,9 @@ process extraction {
     """
 }
 
-// capsule - aind-ophys-dff
-process dff_capsule {
-    tag 'capsule-7970481'
-    // DEV pin: the registry hash goes stale on every capsule rebuild.
+// dff: aind-ophys-dff-library
+process dff {
+    tag 'dff'
     def container_name = params.stage_images['DFF']
     container container_name
 
@@ -905,8 +939,8 @@ process dff_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=4
-    export CO_MEMORY=34359738368
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
     mkdir -p capsule/data
@@ -918,16 +952,16 @@ process dff_capsule {
 
     echo "[${task.tag}] running dff..."
     cd capsule/code
-    echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
+    echo "dff parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
     run_library aind_ophys_dff_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
 
     echo "[${task.tag}] completed!"
     """
 }
 
-// capsule - aind-ophys-oasis-event-detection
+// oasis_event_detection: aind-ophys-oasis-event-detection-library
 process oasis_event_detection {
-    tag 'capsule-3856982'
+    tag 'oasis_event_detection'
     def container_name = params.stage_images['OASIS']
     container container_name
 
@@ -949,8 +983,8 @@ process oasis_event_detection {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=4
-    export CO_MEMORY=34359738368
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
     mkdir -p capsule/data
@@ -968,9 +1002,9 @@ process oasis_event_detection {
     """
 }
 
-// capsule - aind-ophys-classifier
+// classifier: aind-ophys-classifier-library
 process classifier {
-	tag 'capsule-2013356'
+	tag 'classifier'
     def container_name = params.stage_images['CLASSIFIER']
     container container_name
     cpus 16
@@ -1001,8 +1035,8 @@ process classifier {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CPUS=16
-	export CO_MEMORY=64424509440
+	export CO_CPUS=${task.cpus}
+	export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
 	mkdir -p capsule
 	mkdir -p capsule/data
@@ -1026,9 +1060,9 @@ process classifier {
 }
 
 
-// capsule - aind-ophys-nwb
+// ophys_nwb: aind-ophys-nwb-library
 process ophys_nwb {
-	tag 'capsule-8338960'
+	tag 'ophys_nwb'
     def container_name = params.stage_images['NWB']
     container container_name
 
@@ -1057,8 +1091,8 @@ process ophys_nwb {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CPUS=1
-	export CO_MEMORY=8589934592
+	export CO_CPUS=${task.cpus}
+	export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
     echo "I AM MAKING AN NWB"
 	mkdir -p capsule
 	mkdir -p capsule/data
@@ -1087,9 +1121,9 @@ process ophys_nwb {
 	"""
 }
 
-// capsule - aind-pipeline-processing-metadata-aggregator
+// pipeline_processing_metadata_aggregator: aind-metadata-manager
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-7054171'
+    tag 'pipeline_processing_metadata_aggregator'
     def container_name = params.stage_images['AGGREGATOR']
     container container_name
 
@@ -1114,8 +1148,8 @@ process pipeline_processing_metadata_aggregator {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CPUS=2
-    export CO_MEMORY=17179869184
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
     mkdir -p capsule/data

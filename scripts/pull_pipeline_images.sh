@@ -3,29 +3,34 @@
 # Optional: without it, Nextflow pulls each image the first time a step runs.
 #
 # Usage:
-#   pull_pipeline_images.sh [--engine ENGINE] [--cache CACHE_DIR] [--steps STEPS] [--save]
+#   pull_pipeline_images.sh [--engine ENGINE] [--cache CACHE_DIR] [--tag X.Y.Z] [--steps STEPS] [--save]
 #
 # Defaults:
 #   --engine : apptainer or singularity (auto-detected), or docker
 #   --cache  : $NXF_APPTAINER_CACHEDIR or $NXF_SINGULARITY_CACHEDIR (apptainer/singularity only)
+#   --tag    : $CONTAINER_TAG, else PIPELINE_VERSION in pipeline/nextflow.config (use dev for
+#              development images)
 #   --steps  : all, or a comma-separated list such as CONVERTER,MOTION_CORRECTION
 #   --save   : with docker, also write each image to CACHE_DIR/<name>.tar.zst for transfer to a
 #              machine without internet access; restore with
 #                for f in CACHE_DIR/*.tar.zst; do zstd -dc "$f" | docker load; done
 #
-# Images come from pipeline/images.env, with any step overridden in pipeline/images_custom.env.
+# Images are ghcr.io/allenneuraldynamics/<image_name>:<tag> for each step in environment/images.json,
+# with any step overridden in pipeline/images_custom.env.
 
 set -euo pipefail
 
 ENGINE=""
 CACHE_DIR="${NXF_APPTAINER_CACHEDIR:-${NXF_SINGULARITY_CACHEDIR:-}}"
 STEPS="all"
+TAG="${CONTAINER_TAG:-}"
 SAVE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --engine) ENGINE="$2"; shift 2;;
     --cache) CACHE_DIR="$2"; shift 2;;
+    --tag) TAG="$2"; shift 2;;
     --steps) STEPS="$2"; shift 2;;
     --save) SAVE=true; shift;;
     *) echo "Unknown arg: $1" >&2; exit 64;;
@@ -58,10 +63,17 @@ if [[ "$SAVE" == true ]] && ! command -v zstd >/dev/null 2>&1; then
 fi
 
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../pipeline" && pwd)"
-manifests=("$PIPELINE_DIR/images.env")
-[[ -f "$PIPELINE_DIR/images_custom.env" ]] && manifests+=("$PIPELINE_DIR/images_custom.env")
-# STEP=image lines, later files overriding earlier ones (portable to bash 3).
-MANIFEST="$(awk -F= '/^[[:space:]]*#/ || NF < 2 {next} {gsub(/[[:space:]]/, ""); v[$1]=substr($0, index($0, "=") + 1)} END {for (k in v) print k "=" v[k]}' "${manifests[@]}" | sort)"
+IMAGES_JSON="$PIPELINE_DIR/../environment/images.json"
+command -v jq >/dev/null 2>&1 || { echo "ERROR: jq not found in PATH" >&2; exit 127; }
+if [[ -z "$TAG" ]]; then
+  TAG="$(sed -n 's/^ *PIPELINE_VERSION = "\([^"]*\)".*/\1/p' "$PIPELINE_DIR/nextflow.config" | head -1)"
+fi
+[[ -n "$TAG" ]] || { echo "ERROR: could not resolve the container tag, use --tag" >&2; exit 64; }
+# STEP=image lines: defaults from images.json and the tag, overridden by images_custom.env.
+MANIFEST="$( {
+  jq -r --arg t "$TAG" 'to_entries[] | "\(.key)=ghcr.io/allenneuraldynamics/\(.value.image_name):\($t)"' "$IMAGES_JSON"
+  if [[ -f "$PIPELINE_DIR/images_custom.env" ]]; then cat "$PIPELINE_DIR/images_custom.env"; fi
+} | awk -F= '/^[[:space:]]*#/ || NF < 2 {next} {gsub(/[[:space:]]/, ""); v[$1]=substr($0, index($0, "=") + 1)} END {for (k in v) print k "=" v[k]}' | sort)"
 image_for() { printf '%s\n' "$MANIFEST" | awk -F= -v k="$1" '$1 == k {print substr($0, index($0, "=") + 1)}'; }
 
 if [[ "$STEPS" == "all" ]]; then
@@ -71,6 +83,7 @@ IFS=',' read -r -a SELECTED <<< "$STEPS"
 
 [[ -n "$CACHE_DIR" ]] && mkdir -p "$CACHE_DIR" && export APPTAINER_CACHEDIR="$CACHE_DIR" SINGULARITY_CACHEDIR="$CACHE_DIR"
 echo "Engine : $ENGINE"
+echo "Tag    : $TAG"
 [[ -n "$CACHE_DIR" ]] && echo "Cache  : $CACHE_DIR"
 
 failed=0

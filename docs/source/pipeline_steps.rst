@@ -14,7 +14,7 @@ The converter step
 (`aind-pophys-converter <https://github.com/AllenNeuralDynamics/aind-pophys-converter/>`_)
 reads the raw session and writes one HDF5 movie per imaging plane:
 
-* Runs once per session, and only when the input is an S3 URL (see :doc:`input_output`)
+* Runs once per session, for an S3 URL or a local directory (see :doc:`input_output`)
 * Selects a conversion path from the instrument id in the acquisition metadata:
    * Bergamo (single-plane): stitches the per-epoch TIFF files into one HDF5 movie, in acquisition
      order, with epoch and trial locations

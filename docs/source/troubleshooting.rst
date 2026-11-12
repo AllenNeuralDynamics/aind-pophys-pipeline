@@ -80,14 +80,14 @@ locking, such as NFS on many SLURM clusters. Set the environment variable
 Image or version manifest errors
 --------------------------------
 
-The pipeline checks ``pipeline/images.env`` (with ``images_custom.env``) and
+The pipeline checks ``environment/images.json``, the container tag, ``images_custom.env`` and
 ``pipeline/process_versions.env`` (or ``process_versions_custom.env``) before running any step:
 
-* ``Image manifest must contain exactly all 11 stages`` or
-  ``Image for <STAGE> must be GHCR digest-pinned``: ``images.env`` must list one
-  ``ghcr.io/allenneuraldynamics/pophys-*@sha256:<digest>`` image for every step. Put other
-  images, such as ones you built, in ``images_custom.env`` instead.
-* ``Unknown stages in images_custom.env``: use the step names from ``images.env``.
+* ``Cannot determine container tag`` or ``Invalid container tag``: set ``--container_tag``, the
+  ``CONTAINER_TAG`` environment variable, or ``PIPELINE_VERSION`` in ``pipeline/nextflow.config``.
+* ``environment/images.json must list exactly all 11 stages``: the image list was edited; restore
+  it.
+* ``Unknown stages in images_custom.env``: use the step names from ``environment/images.json``.
 * ``Missing process manifest keys`` or ``<STAGE>_LIBRARY_COMMIT must be a 40-character lowercase
   SHA``: the versions file must give every step a repository and a full commit hash. A
   ``process_versions_custom.env`` replaces the default file entirely, so it must list every step

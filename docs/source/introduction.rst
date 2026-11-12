@@ -17,9 +17,9 @@ extraction, dF/F and event detection; see :ref:`pipeline_steps` for more details
 Each step is a `Nextflow process <https://www.nextflow.io/docs/latest/process.html>`_ that runs
 independently in a containerized environment. A step's container image holds the dependencies
 of its processing library, and the library itself is cloned at a pinned commit and installed when
-the step starts. Images are pinned by digest in ``pipeline/images.env`` and library commits in
-``pipeline/process_versions.env``. The combination of pinned images and pinned code for each step
-**ensures full reproducibility**.
+the step starts. Images are tagged with the pipeline release version and library commits are
+pinned in ``pipeline/process_versions.env``. The combination of versioned
+images and pinned code for each step **ensures full reproducibility**.
 
 ``Nextflow`` orchestrates the pipeline, managing the flow of data between processes and ensuring
 that each step is executed in the correct order. It also runs the per-plane steps in parallel:

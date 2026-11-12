@@ -1,14 +1,14 @@
 # Reusable: build and push step images, skipping the ones that are up to date.
 #
 # An image is up to date when the tag exists in ghcr and its `org.aind.env-hash`
-# label matches the hash of its Dockerfile and dependency inputs.
+# label matches the hash of its build inputs (see .github/scripts/image_info.sh).
 name: Build Images
 
 on:
   workflow_call:
     inputs:
       tag:
-        description: Container tag to build and push (e.g. 3.1.0-dev)
+        description: Container tag to build and push (e.g. dev)
         required: true
         type: string
       images:
@@ -66,16 +66,12 @@ jobs:
         env:
           STEP: ${{ matrix.image }}
         run: |
-          stage_dir=$(echo "$STEP" | tr '[:upper:]' '[:lower:]')
-          dockerfile=$(jq -r --arg s "$STEP" '.[$s].dockerfile' environment/images.json)
-          hash=$(cat "environment/$dockerfile" environment/builder-requirements.txt environment/runtime-check.py \
-            environment/conda-overlay-check.py "environment/stages/$stage_dir"/* | sha256sum | cut -d' ' -f1)
           {
-            echo "name=ghcr.io/allenneuraldynamics/$(jq -r --arg s "$STEP" '.[$s].image_name' environment/images.json)"
-            echo "dockerfile=$dockerfile"
-            echo "python=$(jq -r --arg s "$STEP" '.[$s].python' environment/images.json)"
-            echo "stage_dir=$stage_dir"
-            echo "hash=$hash"
+            echo "name=$(.github/scripts/image_info.sh "$STEP" name)"
+            echo "dockerfile=$(.github/scripts/image_info.sh "$STEP" dockerfile)"
+            echo "python=$(.github/scripts/image_info.sh "$STEP" python)"
+            echo "stage_dir=$(.github/scripts/image_info.sh "$STEP" stage_dir)"
+            echo "hash=$(.github/scripts/image_info.sh "$STEP" hash)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Check existing image
@@ -123,7 +119,7 @@ jobs:
           file: environment/${{ steps.info.outputs.dockerfile }}
           platforms: linux/amd64
           push: true
-          # single-manifest images, so the digest is the one pipeline/images.env pins
+          # single-manifest images, so labels can be inspected and tags promoted as-is
           provenance: false
           sbom: false
           tags: ${{ steps.info.outputs.name }}:${{ inputs.tag }}
@@ -134,11 +130,3 @@ jobs:
             org.aind.env-hash=${{ steps.info.outputs.hash }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-
-      - name: Report digest
-        if: steps.check.outputs.build == 'true'
-        env:
-          STEP: ${{ matrix.image }}
-          NAME: ${{ steps.info.outputs.name }}
-          DIGEST: ${{ steps.build.outputs.digest }}
-        run: echo "$STEP=$NAME@$DIGEST" | tee -a "$GITHUB_STEP_SUMMARY"

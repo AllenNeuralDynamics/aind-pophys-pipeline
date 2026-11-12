@@ -16,7 +16,7 @@ The pipeline takes an imaging session from raw ScanImage TIFF movies to register
   - *4-5*. Pair splitting → Decrosstalk (multiplane only)
   - *6-9*. Extraction → dF/F and Classifier → Events
   - *10-11*. NWB packaging → Metadata merge
-- **Infrastructure**: 11 container images from [GHCR](https://github.com/orgs/AllenNeuralDynamics/packages), pinned by digest in [`images.env`](pipeline/images.env)
+- **Infrastructure**: 11 container images from [GHCR](https://github.com/orgs/AllenNeuralDynamics/packages), listed in [`images.json`](environment/images.json) and tagged with the release version (`dev` for development)
 - **Parallelization**: Steps run in parallel per imaging plane, and decrosstalk per coupled plane pair; each step's processing library is pinned by commit in [`process_versions.env`](pipeline/process_versions.env) and installed when the step starts
 
 

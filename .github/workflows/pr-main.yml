@@ -1,0 +1,90 @@
+# PRs from dev into main (release PRs):
+#   source check -> unit tests -> check the `dev` images match the PR head
+#
+# The release that follows the merge promotes these `dev` images to the new
+# version (promote-images.yml), so they must be built from the same environment/
+# files as the PR head (org.aind.env-hash label).
+#
+# The `ci-ok` job is meant to be the required status check in branch protection.
+name: PR to main
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  checks:
+    name: Release checks
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.images.outputs.images }}
+    steps:
+      - name: Check source branch
+        if: github.head_ref != 'dev'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          echo "::error::PRs into main must come from dev (got '$HEAD_REF')"
+          exit 1
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: List images
+        id: images
+        run: echo "images=$(jq -c 'keys' environment/images.json)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -t .
+
+  dev-images:
+    name: Check ${{ matrix.image }}:dev
+    needs: checks
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.checks.outputs.images) }}
+    env:
+      GHCR_CREDS: ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check the dev image is up to date
+        run: |
+          NAME=$(.github/scripts/image_info.sh ${{ matrix.image }} name)
+          HASH=$(.github/scripts/image_info.sh ${{ matrix.image }} hash)
+          REMOTE_HASH=$(skopeo inspect --creds "$GHCR_CREDS" "docker://$NAME:dev" 2>/dev/null \
+            | jq -r '.Labels["org.aind.env-hash"] // empty' || true)
+          echo "$NAME:dev env-hash: ${REMOTE_HASH:-<missing>} (expected $HASH)"
+          if [[ "$REMOTE_HASH" != "$HASH" ]]; then
+            echo "::error::$NAME:dev is missing or was not built from the current environment/. Push to dev to rebuild it (pr-dev.yml)."
+            exit 1
+          fi
+
+  ci-ok:
+    name: ci-ok
+    needs: [checks, dev-images]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs
+        run: |
+          echo "checks=${{ needs.checks.result }} dev-images=${{ needs.dev-images.result }}"
+          for result in "${{ needs.checks.result }}" "${{ needs.dev-images.result }}"; do
+            [[ "$result" == "success" ]] || { echo "::error::Required job did not succeed"; exit 1; }
+          done

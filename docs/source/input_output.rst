@@ -7,24 +7,29 @@ Input Data Types
 The pipeline reads one session at a time, given by the ``ophys_mount_url`` parameter as either an
 S3 URL or an absolute directory.
 
-AIND
-~~~~
-* Used for AIND data ingestion, from an S3 URL. The Converter step reads it.
-* Input folder structure:
-   * ``pophys/`` directory containing the raw ScanImage TIFF files
-   * JSON files following the `aind-data-schema <https://aind-data-schema.readthedocs.io/en/latest/>`_
-     specification at the top level. The acquisition metadata (``acquisition.json``, or
-     ``session.json`` for v1 metadata) is required. ``data_description.json``, ``subject.json``,
-     ``procedures.json`` and ``instrument.json`` (``rig.json`` for v1) are recommended; the
-     Metadata merge step builds on them.
-* The instrument id in the acquisition metadata selects the conversion path:
-   * Bergamo sessions are single-plane: ``pophys/`` holds per-epoch TIFF files, and the epochs come
-     from the stimulus epochs in the acquisition metadata. Run with
-     ``acquisition_data_type=single``.
-   * Mesoscope sessions are multiplane: ``pophys/`` holds the multiplexed
-     ``*timeseries.tiff``, the ``*averaged_depth.tiff`` and ``*averaged_surface.tiff`` images,
-     optional ``*local_z*.tiff`` z-stacks, ``*fullfield*.tiff`` and ``*_vasculature.tif``
-     images, and ``*platform.json``. Run with ``acquisition_data_type=multiplane``.
+Input folder
+~~~~~~~~~~~~
+* The same layout from an S3 URL or a local directory. The Converter step reads it in both cases.
+* ``pophys/`` holds the raw ScanImage TIFF files.
+* Session metadata at the top level, one of:
+
+  * `aind-data-schema <https://aind-data-schema.readthedocs.io/en/latest/>`_ files: the acquisition
+    metadata (``acquisition.json``, or ``session.json`` for v1 metadata) is required, and
+    ``data_description.json``, ``subject.json``, ``procedures.json`` and ``instrument.json``
+    (``rig.json`` for v1) are recommended, because the Metadata merge step builds on them.
+  * A minimal ``metadata.json`` for data recorded outside AIND, which states the frame rate, the
+    raw format, the imaging planes and the epochs directly (see the
+    `aind-pophys-metadata README <https://github.com/AllenNeuralDynamics/aind-pophys-metadata>`_).
+
+* The raw format selects the conversion path. For aind-data-schema files it comes from the
+  instrument id; a minimal ``metadata.json`` states it:
+
+  * ``tiff_stack``, for example Bergamo sessions: single-plane, with ``pophys/`` holding per-epoch
+    TIFF files and the epochs taken from the metadata. Run with ``acquisition_data_type=single``.
+  * ``mesoscope_aind``: multiplane, with ``pophys/`` holding the multiplexed
+    ``*timeseries.tiff``, the ``*averaged_depth.tiff`` and ``*averaged_surface.tiff`` images,
+    optional ``*local_z*.tiff`` z-stacks, ``*fullfield*.tiff`` and ``*_vasculature.tif`` images, and
+    ``*platform.json``. Run with ``acquisition_data_type=multiplane``.
 
 .. code-block:: text
 
@@ -35,11 +40,6 @@ AIND
    ├── instrument.json
    ├── procedures.json
    └── subject.json
-
-Local directory
-~~~~~~~~~~~~~~~
-* An absolute directory with the same top-level JSON files and ``pophys/`` directory
-* The Converter step does not run: the directory is passed to the Registration step as it is
 
 Pipeline Output
 ---------------

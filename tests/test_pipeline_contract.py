@@ -29,7 +29,7 @@ STAGES = (
     "AGGREGATOR",
 )
 PROCESSES = {  # process: (stage, library module it runs)
-    "converter_capsule": ("CONVERTER", "aind_pophys_converter.job"),
+    "converter": ("CONVERTER", "aind_pophys_converter.job"),
     "motion_correction": ("MOTION_CORRECTION", "aind_ophys_motion_correction_library.job"),
     "movie_qc": ("MOVIE_QC", "aind_ophys_movie_qc_library.job"),
     "decrosstalk_split_json": (
@@ -37,7 +37,7 @@ PROCESSES = {  # process: (stage, library module it runs)
     "decrosstalk_roi_images": (
         "DECROSSTALK_ROI_IMAGES", "aind_ophys_decrosstalk_roi_images_library.job"),
     "extraction": ("EXTRACTION", "aind_ophys_extraction_library.job"),
-    "dff_capsule": ("DFF", "aind_ophys_dff_library.job"),
+    "dff": ("DFF", "aind_ophys_dff_library.job"),
     "oasis_event_detection": ("OASIS", "aind_ophys_oasis_event_detection_library.job"),
     "classifier": ("CLASSIFIER", "aind_ophys_classifier_library.job"),
     "ophys_nwb": ("NWB", "aind_ophys_nwb_library.job"),
@@ -45,16 +45,23 @@ PROCESSES = {  # process: (stage, library module it runs)
         "AGGREGATOR", "aind_metadata_manager.metadata_manager"),
 }
 TEMP_DIR_FLAGS = {  # processes that also receive the task temp directory
-    "converter_capsule": "--temp_dir",
+    "converter": "--temp_dir",
     "motion_correction": "--tmp_dir",
     "decrosstalk_roi_images": "--tmp_dir",
     "extraction": "--tmp_dir",
     "classifier": "--tmp_dir",
 }
+RESOURCE_EXPORTS = (  # the only CO_* exports a process makes
+    "export CO_CPUS=${task.cpus}",
+    "export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}",
+)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 REPO_RE = re.compile(r"^https://github\.com/AllenNeuralDynamics/[A-Za-z0-9._-]+$")
-DIGEST_RE = re.compile(r"^ghcr\.io/allenneuraldynamics/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$")
 UUID_RE = re.compile(r"^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
+TEXT_SUFFIXES = {".nf", ".config", ".sh", ".py", ".yml", ".json", ".md", ".txt", ".env"}
+SKIPPED_DIRS = {
+    ".git", "docs", "tests", "data", "work", "results", ".nextflow", ".image-work", ".venv", "__pycache__",
+}
 
 
 def read_manifest(path: Path) -> dict[str, str]:
@@ -144,6 +151,14 @@ class PipelineContractTests(MainTestCase):
         processes = re.findall(r"^process (\w+) \{", self.main, re.MULTILINE)
         self.assertEqual(sorted(processes), sorted(PROCESSES))
         self.assertEqual(sorted(stage for stage, _ in PROCESSES.values()), sorted(STAGES))
+
+    def test_processes_are_tagged_with_their_name_and_comment_their_library(self):
+        for process, (stage, _) in PROCESSES.items():
+            with self.subTest(process=process):
+                library = self.manifest[f"{stage}_LIBRARY_REPO"].rsplit("/", 1)[1]
+                self.assertIn(f"// {process}: {library}\nprocess {process} {{\n", self.main)
+                self.assertRegex(process_block(self.main, process), rf"\A\s+tag '{process}'\n")
+        self.assertNotRegex(self.main, r"capsule-\d")
 
     def test_each_process_installs_its_own_library_and_runs_its_module_once(self):
         for process, (stage, module) in PROCESSES.items():
@@ -251,7 +266,7 @@ class PipelineContractTests(MainTestCase):
             self.main,
             "load_pipeline_parameters()\nvalidate_runtime_paths()",
             "params.versions = parse_process_versions()",
-            "params.stage_images = parse_stage_images(image_stages)",
+            "params.stage_images = parse_stage_images(",
         )
         workflow = self.main.split("workflow {", 1)[1]
         self.assertNotIn("JsonSlurper", workflow)
@@ -271,6 +286,69 @@ class PipelineContractTests(MainTestCase):
         self.assertIn("def use_s3_source = source.startsWith('s3://')", self.main)
         self.assertIn("Channel.fromPath(source, type: 'dir', checkIfExists: true)", self.main)
         self.assertNotIn("Channel.fromPath(\"${base_path}harvard-single\", type: 'dir')", self.main)
+
+    def test_converter_runs_for_every_source_and_feeds_motion_correction(self):
+        workflow = self.main.split("workflow {", 1)[1]
+        call = workflow.index("converter(ophys_data)")
+        self.assertEqual(workflow.count("converter("), 1)
+        # balanced braces before the call: it sits in the workflow body, outside every if block
+        self.assertEqual(workflow.count("{", 0, call), workflow.count("}", 0, call))
+        self.assertEqual(
+            re.findall(r"use_s3_source\b[^\n]*", self.main),
+            ["use_s3_source = source.startsWith('s3://')", "use_s3_source) {"],
+        )
+        self.assert_in_order(
+            workflow,
+            "converter(ophys_data)",
+            "converter.out.converter_results",
+            "motion_correction_input = converter_split.other",
+            "z_stacks = converter.out.local_stacks",
+        )
+        self.assertNotIn("motion_correction_input = ophys_data", workflow)
+
+    def test_workflow_calls_every_process_and_reads_only_defined_ones(self):
+        workflow = self.main.split("workflow {", 1)[1].split("\nprocess ", 1)[0]
+        self.assertEqual(set(re.findall(r"(?m)^\s+(\w+)\(", workflow)), set(PROCESSES))
+        self.assertLessEqual(set(re.findall(r"\b(\w+)\.out\.", workflow)), set(PROCESSES))
+
+    def test_decrosstalk_runs_per_pair_with_only_that_pairs_planes_staged(self):
+        inputs = section(r"^\s*input:\n(.*?)^\s*output:", process_block(self.main, "decrosstalk_roi_images"))
+        self.assertEqual(
+            [" ".join(line.split()) for line in inputs.splitlines() if line.strip()],
+            [
+                "tuple path(decrosstalk_split, stageAs: 'capsule/data/*'), "
+                "path(motion_results, stageAs: 'capsule/data/*'), "
+                "path(converter_files, stageAs: 'capsule/data/*')",
+                "path ophys_jsons, stageAs: 'capsule/data/*'",
+                "path pophys_dir, stageAs: 'capsule/data/*'",
+                "path cellpose_data",
+            ],
+        )
+        call = section(r"^ {8}(decrosstalk_roi_images\(.*?^ {8}\))", self.main)
+        self.assertEqual(
+            " ".join(call.split()),
+            "decrosstalk_roi_images( decrosstalk_inputs, ophys_mount_jsons.collect(), "
+            "ophys_mount_pophys_directory.collect(), cellpose_data.collect().ifEmpty([]) )",
+        )
+        channel = section(r"def decrosstalk_inputs = (.*?)^ {8}decrosstalk_roi_images\(", self.main)
+        channel = " ".join(channel.split())
+        self.assert_in_order(
+            channel,
+            "decrosstalk_split_json.out.capsule_results .flatten()",
+            r".filter { it.name ==~ /pair.*\.txt/ }",
+            ".combine(motion_correction.out.motion_results_all.flatten().collect().map { [it] })",
+            ".combine(converter.out.converter_results_all.flatten().collect().ifEmpty([]).map { [it] })",
+            ".map { pair_file, motion_dirs, converter_results ->",
+            "pair_file.readLines()*.trim().findAll { it }",
+            r"replaceFirst(/^\/data\//, '')",
+            "[ pair_file, motion_dirs.findAll { it.name in planes },",
+            "converter_results.findAll { it.parent.name in planes }",
+        )
+        pair_name = re.compile(section(r"\.filter \{ it\.name ==~ /(.*?)/ \}", channel))
+        for name in ("pair0.txt", "pair12.txt"):
+            self.assertIsNotNone(pair_name.fullmatch(name), name)
+        for name in ("pair0.json", "plane_0.txt", "xpair0.txt", "pair0.txt.bak"):
+            self.assertIsNone(pair_name.fullmatch(name), name)
 
     def test_tasks_do_not_create_container_root_links(self):
         self.assertNotIn("ln -s \\$PWD/capsule", self.main)
@@ -418,11 +496,19 @@ class PipelineContractTests(MainTestCase):
         for filename in CONFIGS:
             config = (PIPELINE / filename).read_text()
             self.assertIn('PIPELINE_NAME = "aind-pophys-pipeline"', config)
-            self.assertIn('PIPELINE_VERSION = "2.0.0"', config)
             self.assertIn(
                 'PIPELINE_URL = "https://github.com/AllenNeuralDynamics/aind-pophys-pipeline"',
                 config,
             )
+
+    def test_local_and_slurm_configs_read_the_version_from_the_code_ocean_config(self):
+        code_ocean = (PIPELINE / "nextflow.config").read_text()
+        self.assertRegex(code_ocean, r'PIPELINE_VERSION = "[^"]+"')
+        for filename in ("nextflow_local.config", "nextflow_slurm.config"):
+            with self.subTest(config=filename):
+                config = (PIPELINE / filename).read_text()
+                self.assertIn('new File("${projectDir}/nextflow.config").text.find(', config)
+                self.assertRegex(code_ocean, section(r"\.find\(/(.*?)/\)", config))
 
     def test_every_backend_configures_each_process_once(self):
         for filename in CONFIGS:
@@ -440,6 +526,22 @@ class PipelineContractTests(MainTestCase):
         )
         self.assertEqual(directives, [])
 
+    def test_every_process_takes_cpus_and_memory_from_its_task(self):
+        for process in PROCESSES:
+            with self.subTest(process=process):
+                lines = [line.strip() for line in process_block(self.main, process).splitlines()]
+                exports = [line for line in lines if line.startswith("export CO_")]
+                self.assertEqual(exports, list(RESOURCE_EXPORTS))
+
+    def test_every_backend_declares_cpus_and_memory_for_each_process_but_the_classifier(self):
+        for filename in CONFIGS:
+            config = (PIPELINE / filename).read_text()
+            for process in sorted(set(PROCESSES) - {"classifier"}):
+                with self.subTest(config=filename, process=process):
+                    resources = section(rf"withName: {process} \{{(.*?)\}}", config)
+                    self.assertRegex(resources, r"cpus = \d+")
+                    self.assertRegex(resources, r"memory = '\d+ GB'")
+
     def test_configs_avoid_functions_newer_than_pinned_nextflow(self):
         # The config env() function needs Nextflow 25; the pipeline pins 24.10.4.
         for filename in CONFIGS:
@@ -451,40 +553,55 @@ class ImageContractTests(MainTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.images = read_manifest(PIPELINE / "images.env")
         cls.recipes = json.loads((ENVIRONMENT / "images.json").read_text())
 
     def test_one_image_list_serves_every_backend(self):
         image_stages = re.findall(r"'([A-Z_]+)'", section(r"def image_stages = \[(.*?)\]", self.main))
         self.assertEqual(sorted(image_stages), sorted(STAGES))
-        self.assertIn("params.stage_images = parse_stage_images(image_stages)", self.main)
+        self.assertIn("params.stage_images = parse_stage_images(image_stages", self.main)
         self.assertNotIn("import groovy.json.JsonSlurper", self.main)
         for text in ("image_set", "IMAGE_CO", "IMAGE_OFFCO", "registry_host", "development_images"):
             self.assertNotIn(text, self.main)
 
-    def test_images_env_pins_every_stage_by_digest(self):
-        self.assertEqual(set(self.images), set(STAGES))
-        for stage, image in self.images.items():
-            with self.subTest(stage=stage):
-                self.assertRegex(image, DIGEST_RE)
-                self.assertTrue(
-                    image.startswith(f"ghcr.io/allenneuraldynamics/{self.recipes[stage]['image_name']}@")
-                )
-
-    def test_main_enforces_the_digest_rule_before_applying_custom_overrides(self):
-        self.assertIn(DIGEST_RE.pattern.replace("/", "\\/"), self.main)
-        self.assertIn("image ==~ /^[^\\s]+$/", self.main)
+    def test_stage_images_are_named_from_images_json_before_custom_overrides(self):
+        parse = section(r"^def parse_stage_images\(.*?\) \{(.*?)^\}", self.main)
         self.assert_in_order(
-            self.main,
-            'parse_key_value_file("${baseDir}/images.env")',
-            "images.keySet() != image_stages.toSet()",
-            "must be GHCR digest-pinned",
+            parse,
+            '"${baseDir}/../environment/images.json"',
+            "catalog.keySet() != image_stages.toSet()",
+            'images[stage] = "ghcr.io/allenneuraldynamics/${entry.image_name}:${',
             'file("${baseDir}/images_custom.env")',
             "Unknown stages in images_custom.env",
             "must be one reference",
             "images[stage] = image",
         )
+        self.assertNotIn("sha256", self.main)
         self.assertIn("pipeline/images_custom.env", (ROOT / ".gitignore").read_text().splitlines())
+
+    def test_custom_images_must_be_one_reference_without_whitespace(self):
+        parse = section(r"^def parse_stage_images\(.*?\) \{(.*?)^\}", self.main)
+        reference = re.compile(section(r"image ==~ /(.*?)/\)", parse))
+        digest_reference = f"ghcr.io/allenneuraldynamics/pophys-dff@sha256:{'0' * 64}"
+        for image in ("localhost/pophys-dff:dev", digest_reference):
+            self.assertIsNotNone(reference.fullmatch(image), image)
+        for image in ("", "two words", "tab\tseparated"):
+            self.assertIsNone(reference.fullmatch(image), image)
+
+    def test_no_file_outside_comments_mentions_images_env(self):
+        self.assertFalse((PIPELINE / "images.env").exists())
+        mentions = []
+        for folder, folders, files in os.walk(ROOT):
+            folders[:] = [name for name in folders if name not in SKIPPED_DIRS]
+            for name in files:
+                path = Path(folder) / name
+                if name == "CHANGELOG.md" or not (
+                    path.suffix in TEXT_SUFFIXES or name.startswith("Dockerfile") or name == ".gitignore"
+                ):
+                    continue
+                for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                    if "images.env" in line and not line.lstrip().startswith(("#", "//")):
+                        mentions.append(f"{path.relative_to(ROOT)}:{number}")
+        self.assertEqual(mentions, [])
 
     def test_images_json_covers_every_stage_with_its_build_inputs(self):
         self.assertEqual(sorted(self.recipes), sorted(STAGES))
@@ -503,11 +620,12 @@ class ImageContractTests(MainTestCase):
                     path = ENVIRONMENT / "stages" / stage.lower() / name
                     self.assertTrue(path.is_file() and path.stat().st_size > 0, str(path))
 
-    def test_image_and_pull_scripts_have_valid_shell_syntax(self):
+    def test_image_scripts_have_valid_shell_syntax(self):
         scripts = (
             ENVIRONMENT / "build_all.sh",
             ENVIRONMENT / "push_all.sh",
             ROOT / "scripts" / "pull_pipeline_images.sh",
+            ROOT / ".github" / "scripts" / "image_info.sh",
         )
         for script in scripts:
             with self.subTest(script=script.name):

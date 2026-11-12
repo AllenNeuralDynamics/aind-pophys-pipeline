@@ -180,7 +180,7 @@ Code Ocean Deployment (AIND)
 ----------------------------
 
 For AIND internal use, the pipeline is deployed on Code Ocean with the same ``main.nf``.
-``nextflow.config`` runs every step on AWS Batch, with the images in ``pipeline/images.env``.
+``nextflow.config`` runs every step on AWS Batch, with the same images as every other backend.
 
 Configuration
 ~~~~~~~~~~~~~
