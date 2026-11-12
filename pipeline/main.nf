@@ -269,8 +269,12 @@ stage_pair() {
     while read -r plane || [ -n "${plane}" ]; do
         [ -n "${plane}" ] || continue
         case "${plane}" in
-            /data/*) name="${plane#/data/}" ;;
-            /*) echo "ERROR: unsupported absolute plane path: ${plane}" >&2; exit 1 ;;
+            /*)
+                if [ "$(dirname "${plane}")" != "$(cd ../data && pwd -P)" ]; then
+                    echo "ERROR: plane path is not directly under the input directory: ${plane}" >&2
+                    exit 1
+                fi
+                name="$(basename "${plane}")" ;;
             *) name="${plane}" ;;
         esac
         if [ ! -d "../data/${name}" ]; then
@@ -458,7 +462,7 @@ workflow {
             .combine(motion_correction.out.motion_results_all.flatten().collect().map { [it] })
             .combine(converter.out.converter_results_all.flatten().collect().ifEmpty([]).map { [it] })
             .map { pair_file, motion_dirs, converter_results ->
-                def planes = pair_file.readLines()*.trim().findAll { it }.collect { it.replaceFirst(/^\/data\//, '') }
+                def planes = pair_file.readLines()*.trim().findAll { it }.collect { new File(it).name }
                 [
                     pair_file,
                     motion_dirs.findAll { it.name in planes },

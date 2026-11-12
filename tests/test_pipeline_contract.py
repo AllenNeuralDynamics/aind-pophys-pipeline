@@ -340,7 +340,7 @@ class PipelineContractTests(MainTestCase):
             ".combine(converter.out.converter_results_all.flatten().collect().ifEmpty([]).map { [it] })",
             ".map { pair_file, motion_dirs, converter_results ->",
             "pair_file.readLines()*.trim().findAll { it }",
-            r"replaceFirst(/^\/data\//, '')",
+            ".collect { new File(it).name }",
             "[ pair_file, motion_dirs.findAll { it.name in planes },",
             "converter_results.findAll { it.parent.name in planes }",
         )
@@ -677,13 +677,16 @@ class LibraryScriptTests(MainTestCase):
             code.mkdir(parents=True)
             for plane in ("plane_a", "plane_b"):
                 (data / plane).mkdir(parents=True)
-            (data / "pair0.txt").write_text("/data/plane_a\nplane_b")
+            (data / "pair0.txt").write_text(f"{data.resolve() / 'plane_a'}\nplane_b")
             self.assertEqual(run_bash(script, code).returncode, 0)
             self.assertEqual(
                 sorted(path.name for path in (data / "pair0").iterdir()), ["plane_a", "plane_b"]
             )
             for plane in ("plane_a", "plane_b"):
                 self.assertEqual((data / "pair0" / plane).resolve(), (data / plane).resolve())
+            (data / "pair0.txt").write_text("/elsewhere/plane_a\nplane_b")
+            self.assertNotEqual(run_bash(script, code).returncode, 0)
+            (data / "pair0.txt").write_text("plane_a\nplane_b")
             (data / "pair1.txt").write_text("plane_a\n")
             self.assertNotEqual(run_bash(script, code).returncode, 0)
             (data / "pair1.txt").unlink()
