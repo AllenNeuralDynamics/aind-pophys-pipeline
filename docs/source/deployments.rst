@@ -101,7 +101,15 @@ completed tasks with:
    sbatch <same options> "$PIPELINE_PATH/slurm_submit.sh" -resume
 
 Nextflow pulls each image from the GitHub Container Registry the first time it is used and caches
-it in ``NXF_APPTAINER_CACHEDIR``.
+it in ``NXF_APPTAINER_CACHEDIR``. Optionally, pull them before the first run, for example from a
+login node:
+
+.. code-block:: bash
+
+   NXF_APPTAINER_CACHEDIR=/path/to/cache ./scripts/pull_pipeline_images.sh
+
+``--steps CONVERTER,MOTION_CORRECTION`` limits it to some steps. Images already in the cache are
+skipped.
 
 Example: Allen Institute HPC
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -163,12 +171,16 @@ Running Locally
 ``preflight.sh``, and starts Nextflow with ``nextflow_local.config``. Arguments are passed to
 Nextflow. Containers run with ``--platform=linux/amd64``, and the classifier with ``--gpus all``.
 
+Docker pulls each image the first time a step uses it. To pull them all beforehand, run
+``./scripts/pull_pipeline_images.sh --engine docker`` from the repository root; ``--save`` also
+writes each image to a compressed archive for copying to a machine without internet access.
+
 
 Code Ocean Deployment (AIND)
 ----------------------------
 
 For AIND internal use, the pipeline is deployed on Code Ocean with the same ``main.nf``.
-``nextflow.config`` runs every step on AWS Batch, with the images in ``pipeline/images.env``.
+``nextflow.config`` runs every step on AWS Batch, with the same images as every other backend.
 
 Configuration
 ~~~~~~~~~~~~~

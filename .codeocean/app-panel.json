@@ -352,15 +352,6 @@
 			"default_value": "0"
 		},
 		{
-			"id": "Gp7L3T3olEJMj5Ga",
-			"category": "PeTDLWkOAq4846Yc",
-			"name": "upgrade_legacy_metadata",
-			"param_name": "upgrade_legacy_metadata",
-			"type": "text",
-			"value_type": "string",
-			"default_value": "True"
-		},
-		{
 			"id": "nUUF3L7CJ2uoKzTz",
 			"category": "PeTDLWkOAq4846Yc",
 			"name": "data_summary",
@@ -430,32 +421,6 @@
 			"type": "text",
 			"value_type": "string",
 			"default_value": "False"
-		},
-		{
-			"id": "GhcrSmokeOnly001",
-			"name": "ghcr_smoke_only",
-			"param_name": "ghcr_smoke_only",
-			"description": "Run only the GHCR image pull probe; skip all scientific processing.",
-			"type": "list",
-			"value_type": "string",
-			"default_value": "false",
-			"extra_data": [
-				"false",
-				"true"
-			]
-		},
-		{
-			"id": "GpuSmokeOnly0001",
-			"name": "gpu_smoke_only",
-			"param_name": "gpu_smoke_only",
-			"description": "Run only the classifier GHCR GPU placement and CUDA probe; skip all scientific processing.",
-			"type": "list",
-			"value_type": "string",
-			"default_value": "false",
-			"extra_data": [
-				"false",
-				"true"
-			]
 		},
 		{
 			"id": "OphysSource00001",

@@ -7,15 +7,15 @@ The pipeline is designed to be flexible and customizable, given its modular stru
 Customizing Pipeline Steps
 --------------------------
 
-Each step of the pipeline runs two pieces of code: a thin wrapper repository, cloned at a pinned
-commit when the step starts, and a processing library, installed in the step's container image.
+Each step runs a processing library. When a step starts, the pipeline clones the library at the
+commit pinned in ``pipeline/process_versions.env``, installs it without dependencies into the step's
+container image, which holds the library's dependencies, and runs it.
 
-Wrapper repositories
-~~~~~~~~~~~~~~~~~~~~
+Running a fork or branch of a library
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The wrapper's repository and commit for each step are pinned in ``pipeline/process_versions.env``.
-To run a modified wrapper, fork its repository, commit your change, and point the pipeline at your
-fork. Instead of changing the default ``process_versions.env`` file, we recommend creating a
+Fork the library, commit your change, and point the pipeline at your commit. Instead of changing
+the default ``process_versions.env`` file, we recommend creating a
 ``pipeline/process_versions_custom.env`` file, which git ignores.
 
 When ``process_versions_custom.env`` exists, the pipeline reads it **instead of**
@@ -25,75 +25,97 @@ When ``process_versions_custom.env`` exists, the pipeline reads it **instead of*
 
     cp pipeline/process_versions.env pipeline/process_versions_custom.env
 
-For example, to run your fork of the dF/F wrapper:
+For example, to run your fork of the dF/F library:
 
 .. code:: bash
 
-    DFF_CAPSULE_REPO=https://github.com/your_username/aind-ophys-dff
-    DFF_CAPSULE_COMMIT=full_40_character_commit_hash
+    DFF_LIBRARY_REPO=https://github.com/your_username/aind-ophys-dff-library
+    DFF_LIBRARY_COMMIT=full_40_character_commit_hash
 
-Every step needs both entries, and each commit must be a full 40-character hash. The pipeline
-clones the repository anonymously and runs its ``code/run`` script, so the repository must be
-public.
+Every step needs both entries, and each commit must be a full 40-character hash; for a branch, use
+its latest commit. The pipeline clones the repository anonymously, so it must be public. If your
+change keeps the library's dependencies, no image rebuild is needed. If it changes them, rebuild
+the step's image (see below); the step fails at start-up with a ``pip check`` error otherwise.
 
 The full list of steps is:
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 40 35
+   :widths: 25 45 30
 
    * - Prefix in ``process_versions.env``
-     - Default wrapper repository
+     - Default library repository
      - Step
    * - ``CONVERTER``
-     - ``aind-pophys-converter-capsule``
+     - ``aind-pophys-converter``
      - Converter
    * - ``MOTION_CORRECTION``
-     - ``aind-ophys-motion-correction``
+     - ``aind-ophys-motion-correction-library``
      - Registration
    * - ``MOVIE_QC``
-     - ``aind-ophys-movie-qc``
+     - ``aind-ophys-movie-qc-library``
      - Movie QC
    * - ``DECROSSTALK_SPLIT``
-     - ``aind-ophys-decrosstalk-split-session-json``
+     - ``aind-ophys-decrosstalk-split-session-json-library``
      - Pair splitting
    * - ``DECROSSTALK_ROI_IMAGES``
-     - ``aind-ophys-decrosstalk-roi-images``
+     - ``aind-ophys-decrosstalk-roi-images-library``
      - Decrosstalk
    * - ``EXTRACTION``
-     - ``aind-ophys-extraction``
+     - ``aind-ophys-extraction-library``
      - Extraction
    * - ``DFF``
-     - ``aind-ophys-dff``
+     - ``aind-ophys-dff-library``
      - dF/F
    * - ``OASIS``
-     - ``aind-ophys-oasis-event-detection``
+     - ``aind-ophys-oasis-event-detection-library``
      - Events
    * - ``CLASSIFIER``
-     - ``aind-ophys-classifier``
+     - ``aind-ophys-classifier-library``
      - Classifier
    * - ``NWB``
-     - ``aind-ophys-nwb``
+     - ``aind-ophys-nwb-library``
      - NWB packaging
    * - ``AGGREGATOR``
-     - ``aind-metadata-manager-capsule``
+     - ``aind-metadata-manager``
      - Metadata merge
 
-Processing libraries and images
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Building images
+~~~~~~~~~~~~~~~
 
-A step's processing library and its dependencies are part of the step's container image, so a
-library change needs a new image. ``pipeline/images.env`` pins one image per step, by digest:
+Every step runs ``ghcr.io/allenneuraldynamics/<image_name>:<tag>``, with image names from
+``environment/images.json``. The tag is ``--container_tag`` (CLI or config), then the
+``CONTAINER_TAG`` environment variable, then the release version (``PIPELINE_VERSION`` in
+``pipeline/nextflow.config``). To run the images built from the ``dev`` branch:
 
 .. code:: bash
 
-    DFF=ghcr.io/allenneuraldynamics/pophys-dff@sha256:<digest>
+    ./run_local.sh --container_tag dev
 
-The pipeline accepts only digest-pinned images in the ``ghcr.io/allenneuraldynamics/pophys-*``
-namespace and stops before running any step otherwise. The images are built from the
-``environment/`` directory: ``environment/stages/<stage>/source.json`` records each step's library
-repository and commit, and the lock files beside it pin the library's dependencies. See
-``environment/README.md`` for building, checking and publishing images.
+To use an image you built for only some steps, for example after changing a library's
+dependencies, list it in ``pipeline/images_custom.env``, which git ignores and which overrides only
+the steps it names:
+
+.. code:: bash
+
+    DFF=ghcr.io/allenneuraldynamics/pophys-dff:my-build
+
+The images are built from ``environment/``. ``environment/images.json`` gives each step's
+Dockerfile, image name and Python version, and ``environment/stages/<step>/requirements.lock``
+pins its dependencies. With Docker, ``jq`` and, for re-locking, ``uv``:
+
+.. code:: bash
+
+    # Re-resolve the lock from the library commit in process_versions(_custom).env
+    uv run --python 3.12 --no-project environment/lock.py DFF
+    # Build into the local Docker daemon as <registry>/pophys-dff:my-build
+    environment/build_all.sh my-build main DFF
+
+``IMAGE_REGISTRY`` (default ``ghcr.io/allenneuraldynamics``) sets the registry part of the image
+name. For SLURM, push the image to a registry the cluster can reach with
+``environment/push_all.sh my-build main DFF`` and name it in ``images_custom.env``. If you build
+every step with one tag, pass that tag as ``--container_tag`` instead. Review the lock diff before building: a re-lock keeps the versions already
+locked wherever the library's dependencies allow.
 
 
 Custom Parameters
@@ -102,6 +124,8 @@ Custom Parameters
 Copy ``pipeline_parameters.json`` and pass your copy with ``--params_file`` or ``PARAMS_FILE``
 (see :doc:`parameters`).
 
+
+.. _custom-classifier-models:
 
 Custom Classifier Models
 ------------------------

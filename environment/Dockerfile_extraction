@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 # Conda pre-pip builds and the reviewed pip overlay are locked separately.
+# The extraction library itself is installed by each task at run time, using
+# the conda environment's setuptools without build isolation.
 FROM mambaorg/micromamba:2.3.2@sha256:955819619f303e2aa1dc1ba89beefe7f326a378b3d0782a4a0d28b1cf11b68b6 AS runtime-base
 USER root
 ENV CAIMAN_TEMP=/scratch \
@@ -23,32 +25,14 @@ RUN --mount=type=cache,target=/var/lib/apt/lists \
     apt-get update && apt-get install -y --no-install-recommends build-essential
 COPY builder-requirements.txt /opt/builder-requirements.txt
 RUN python -m venv /opt/build && /opt/build/bin/pip install --no-cache-dir -r /opt/builder-requirements.txt
-COPY --chmod=0755 git-askpass.sh /opt/git-askpass.sh
 COPY stages/extraction/requirements.lock /opt/requirements.lock
 COPY stages/extraction/build.constraints /opt/build.constraints
 COPY stages/extraction/overlay-policy.json /opt/image/overlay-policy.json
 COPY conda-overlay-check.py /opt/image/conda-overlay-check.py
-COPY fetch_sources.py /opt/fetch_sources.py
 RUN python /opt/image/conda-overlay-check.py prepare \
     --policy /opt/image/overlay-policy.json --lock /opt/requirements.lock --output /opt/pip-overlay.lock
-RUN --mount=type=secret,id=github_token \
-    GIT_ASKPASS=/opt/git-askpass.sh GIT_TERMINAL_PROMPT=0 \
-    /opt/build/bin/python /opt/fetch_sources.py \
-    --requirements /opt/pip-overlay.lock \
-    --directory /sources \
-    --output /opt/pip-overlay.local.lock
 RUN /opt/build/bin/pip wheel --no-cache-dir --no-deps --build-constraint /opt/build.constraints \
-    -r /opt/pip-overlay.local.lock -w /wheels
-
-FROM dependencies AS library
-COPY build-library.py fetch_library.py /opt/
-COPY stages/extraction/source.json /opt/image/source.json
-RUN --mount=type=secret,id=github_token \
-    GIT_ASKPASS=/opt/git-askpass.sh GIT_TERMINAL_PROMPT=0 \
-    /opt/build/bin/python /opt/fetch_library.py \
-    --source-json /opt/image/source.json \
-    --directory /library-source
-RUN /opt/build/bin/python /opt/build-library.py --source /library-source
+    -r /opt/pip-overlay.lock -w /wheels
 
 FROM runtime-base AS runtime
 COPY runtime-check.py conda-overlay-check.py /opt/image/
@@ -56,14 +40,8 @@ COPY stages/extraction/overlay-policy.json /opt/image/overlay-policy.json
 RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
     python /opt/image/conda-overlay-check.py install --policy /opt/image/overlay-policy.json \
     && python /opt/image/conda-overlay-check.py verify --policy /opt/image/overlay-policy.json
-COPY --from=library /opt/image/source.json /opt/image/source.json
-COPY --from=library /opt/image/library-wheel.json /opt/image/library-wheel.json
-RUN --mount=type=bind,from=library,source=/library,target=/library \
-    python -m pip install --no-cache-dir --no-index --no-deps /library/*.whl \
-    && python -m pip check \
-    && mkdir -p /data /results /scratch \
-    && python /opt/image/runtime-check.py \
-    && python -m pip list --format=json > /opt/image/packages.json \
-    && rm -rf /data /results /scratch
+RUN python -m pip check \
+    && python /opt/image/runtime-check.py extraction \
+    && python -m pip list --format=json > /opt/image/packages.json
 ENTRYPOINT []
 CMD ["bash"]

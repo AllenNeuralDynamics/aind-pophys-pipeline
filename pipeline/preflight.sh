@@ -55,8 +55,8 @@ if [[ "$source_path" != s3://* ]] && [ ! -d "$source_path" ]; then
     echo "OPHYS_MOUNT_URL directory not found: ${source_path}" >&2
     exit 1
 fi
-if [ ! -f "${pipeline_path}/images.env" ]; then
-    echo "Image manifest not found: ${pipeline_path}/images.env" >&2
+if [ ! -f "${pipeline_path}/../environment/images.json" ]; then
+    echo "Image list not found: ${pipeline_path}/../environment/images.json" >&2
     exit 1
 fi
 

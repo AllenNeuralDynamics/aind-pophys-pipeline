@@ -1,7 +1,7 @@
 aind-data-schema==2.9.0
 aind-data-schema-models==6.2.0
 aind-ophys-utils==0.2.0
-aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@3f1ad1fd5c84e9b591d4cbdc5628fb4f1ace922c
+aind-pophys-metadata @ git+https://github.com/AllenNeuralDynamics/aind-pophys-metadata.git@24914e9448fc73cbeb3eda74c47f448d25a40ffd
 aind-qcportal-schema==0.6.4
 annotated-types==0.8.0
 boto3==1.43.109
@@ -57,7 +57,7 @@ pyparsing==3.3.2
 python-dateutil==2.8.2
 python-dotenv==1.2.4
 python-json-logger==4.2.0
-pytz==2023.3
+pytz==2026.3.post1
 pyyaml==6.0.3
 rastermap==1.0
 requests==2.31.0

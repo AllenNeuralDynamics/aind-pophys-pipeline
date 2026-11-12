@@ -1,0 +1,64 @@
+# PRs into dev (and pushes to dev):
+#   unit tests -> build the `dev` images
+#
+# PRs from forks cannot push to ghcr, so they run the tests only.
+# Pushes to dev rebuild `dev` from the dev HEAD, so the `dev` images always match
+# the dev branch before a release promotes them (promote-images.yml).
+#
+# The `ci-ok` job is meant to be the required status check in branch protection.
+name: PR to dev
+
+on:
+  pull_request:
+    branches: [dev, multi-backend-alignment]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [dev]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -t .
+
+  images:
+    name: Build images
+    needs: tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/_build-images.yml
+    with:
+      tag: dev
+
+  ci-ok:
+    name: ci-ok
+    needs: [tests, images]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs
+        env:
+          FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          echo "tests=${{ needs.tests.result }} images=${{ needs.images.result }}"
+          REQUIRED=("${{ needs.tests.result }}")
+          [[ "$FORK" == "true" ]] || REQUIRED+=("${{ needs.images.result }}")
+          for result in "${REQUIRED[@]}"; do
+            [[ "$result" == "success" ]] || { echo "::error::Required job did not succeed"; exit 1; }
+          done
