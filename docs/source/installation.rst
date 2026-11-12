@@ -115,6 +115,13 @@ On SLURM and local runs this folder is ``DATA_PATH`` (by default ``data/`` at th
 On Code Ocean the folders are the data assets in ``.codeocean/datasets.json``, attached under the
 same names.
 
+For SLURM and local runs, download them all from a public bucket into ``DATA_PATH``. No AWS
+account is needed:
+
+.. code-block:: bash
+
+   aws s3 sync --no-sign-request s3://aind-scratch-data/aind-pophys-pipeline/data/ "$DATA_PATH"
+
 .. code-block:: text
 
    data/
@@ -151,7 +158,3 @@ same names.
 Decrosstalk and Extraction record the Cellpose model files they loaded in their
 ``processing.json``.
 
-.. note::
-
-   The default soma and dendrite classifier models are not yet published outside Code Ocean.
-   Until they are, runs outside AIND need their own models (see :ref:`custom-classifier-models`).

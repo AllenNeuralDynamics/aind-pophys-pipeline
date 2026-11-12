@@ -369,7 +369,11 @@ workflow {
     }
     println "--- End Parameters ---\n"
     
-    def base_path = "${projectDir}/../data/"
+    // Model files: DATA_PATH when set (SLURM and local runs), else data/ at the
+    // repository root, which is where Code Ocean attaches the model assets. The
+    // backend configs bind the same folder into every task at /tmp/data.
+    def data_root = System.getenv('DATA_PATH') ?: "${projectDir}/../data"
+    def base_path = "${data_root}/"
     // Data source setup
     if (use_s3_source) {
         ophys_data = Channel.fromPath(source, type: 'any')

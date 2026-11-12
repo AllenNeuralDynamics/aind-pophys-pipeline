@@ -53,6 +53,17 @@ class ContainerTagTests(unittest.TestCase):
         self.assertIn('docker push "$REPO:latest"', script)
 
 
+class DataPathTests(unittest.TestCase):
+    def test_model_channels_and_task_binds_use_the_same_folder(self):
+        self.assertIn(
+            "def data_root = System.getenv('DATA_PATH') ?: \"${projectDir}/../data\"", MAIN
+        )
+        self.assertIn('def base_path = "${data_root}/"', MAIN)
+        for config in ("nextflow_local.config", "nextflow_slurm.config"):
+            text = (ROOT / "pipeline" / config).read_text()
+            self.assertIn("def data_path = System.getenv('DATA_PATH') ?: \"${baseDir}/../data\"", text, config)
+
+
 class WorkflowTests(unittest.TestCase):
     def read(self, name: str) -> str:
         return (WORKFLOWS / name).read_text()
