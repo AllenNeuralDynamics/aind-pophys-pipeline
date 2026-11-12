@@ -80,13 +80,23 @@ locking, such as NFS on many SLURM clusters. Set the environment variable
 Image or version manifest errors
 --------------------------------
 
-The pipeline checks ``pipeline/images.env`` and ``pipeline/process_versions.env`` (or
-``process_versions_custom.env``) before running any step:
+The pipeline checks ``pipeline/images.env`` (with ``images_custom.env``) and
+``pipeline/process_versions.env`` (or ``process_versions_custom.env``) before running any step:
 
 * ``Image manifest must contain exactly all 11 stages`` or
   ``Image for <STAGE> must be GHCR digest-pinned``: ``images.env`` must list one
-  ``ghcr.io/allenneuraldynamics/pophys-*@sha256:<digest>`` image for every step.
-* ``Missing process manifest keys`` or ``<STAGE>_CAPSULE_COMMIT must be a 40-character lowercase
+  ``ghcr.io/allenneuraldynamics/pophys-*@sha256:<digest>`` image for every step. Put other
+  images, such as ones you built, in ``images_custom.env`` instead.
+* ``Unknown stages in images_custom.env``: use the step names from ``images.env``.
+* ``Missing process manifest keys`` or ``<STAGE>_LIBRARY_COMMIT must be a 40-character lowercase
   SHA``: the versions file must give every step a repository and a full commit hash. A
   ``process_versions_custom.env`` replaces the default file entirely, so it must list every step
   (see :doc:`customization`).
+
+
+``pip check`` fails when a step starts
+--------------------------------------
+
+Each task installs its processing library without dependencies, then checks them against the
+step's image. A failure means the library commit in ``process_versions.env`` needs a dependency
+the image does not have. Re-lock and rebuild that step's image (see :doc:`customization`).

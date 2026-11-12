@@ -2,6 +2,7 @@
 
 # Local Nextflow state and backend overrides
 pipeline/process_versions_custom.env
+pipeline/images_custom.env
 pipeline/.nextflow/
 pipeline/.nextflow.log*
 pipeline/work/

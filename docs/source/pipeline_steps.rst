@@ -4,14 +4,14 @@ Pipeline Steps
 ==============
 
 The AIND Pophys Pipeline consists of several key processing steps that are executed in sequence.
-Each step has a wrapper repository, which the pipeline clones when the step starts, and a
-processing library that holds its logic. Here's a detailed look at each step:
+Each step runs a processing library, which the pipeline clones and installs when the step
+starts. Here's a detailed look at each step:
 
 Converter
 ---------
 
-The `converter <https://github.com/AllenNeuralDynamics/aind-pophys-converter-capsule/>`_ step
-(library: `aind-pophys-converter <https://github.com/AllenNeuralDynamics/aind-pophys-converter/>`_)
+The converter step
+(`aind-pophys-converter <https://github.com/AllenNeuralDynamics/aind-pophys-converter/>`_)
 reads the raw session and writes one HDF5 movie per imaging plane:
 
 * Runs once per session, and only when the input is an S3 URL (see :doc:`input_output`)
@@ -26,8 +26,8 @@ reads the raw session and writes one HDF5 movie per imaging plane:
 Registration
 ------------
 
-The `registration <https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction/>`_ step
-(library: `aind-ophys-motion-correction-library <https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction-library/>`_)
+The registration step
+(`aind-ophys-motion-correction-library <https://github.com/AllenNeuralDynamics/aind-ophys-motion-correction-library/>`_)
 corrects motion in each plane with `Suite2p <https://github.com/MouseLand/suite2p>`_:
 
 * Rigid registration, followed by non-rigid registration when enabled
@@ -38,8 +38,8 @@ corrects motion in each plane with `Suite2p <https://github.com/MouseLand/suite2
 Movie QC
 --------
 
-The `movie QC <https://github.com/AllenNeuralDynamics/aind-ophys-movie-qc/>`_ step
-(library: `aind-ophys-movie-qc-library <https://github.com/AllenNeuralDynamics/aind-ophys-movie-qc-library/>`_)
+The movie QC step
+(`aind-ophys-movie-qc-library <https://github.com/AllenNeuralDynamics/aind-ophys-movie-qc-library/>`_)
 computes quality metrics on each registered movie:
 
 * Pixel saturation and under-saturation
@@ -50,8 +50,9 @@ computes quality metrics on each registered movie:
 Pair Splitting
 --------------
 
-The `pair splitting <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json/>`_
-step runs only for multiplane sessions:
+The pair splitting step
+(`aind-ophys-decrosstalk-split-session-json-library <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json-library/>`_)
+runs only for multiplane sessions:
 
 * Reads the coupled plane pairs from the acquisition metadata
 * Writes one pair file per coupled pair, which routes each pair to its own decrosstalk task
@@ -59,8 +60,8 @@ step runs only for multiplane sessions:
 Decrosstalk
 -----------
 
-The `decrosstalk <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images/>`_ step
-(library: `aind-ophys-decrosstalk-roi-images-library <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images-library/>`_)
+The decrosstalk step
+(`aind-ophys-decrosstalk-roi-images-library <https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-roi-images-library/>`_)
 removes the ghosting of cells between planes that are scanned together. It runs only for
 multiplane sessions, as one task per coupled pair:
 
@@ -72,8 +73,8 @@ multiplane sessions, as one task per coupled pair:
 Extraction
 ----------
 
-The `extraction <https://github.com/AllenNeuralDynamics/aind-ophys-extraction/>`_ step
-(library: `aind-ophys-extraction-library <https://github.com/AllenNeuralDynamics/aind-ophys-extraction-library/>`_)
+The extraction step
+(`aind-ophys-extraction-library <https://github.com/AllenNeuralDynamics/aind-ophys-extraction-library/>`_)
 detects cells and extracts their signals in each plane:
 
 * Cell detection, selected with the ``init`` parameter:
@@ -87,8 +88,8 @@ detects cells and extracts their signals in each plane:
 dF/F
 ----
 
-The `dF/F <https://github.com/AllenNeuralDynamics/aind-ophys-dff/>`_ step
-(library: `aind-ophys-dff-library <https://github.com/AllenNeuralDynamics/aind-ophys-dff-library/>`_)
+The dF/F step
+(`aind-ophys-dff-library <https://github.com/AllenNeuralDynamics/aind-ophys-dff-library/>`_)
 computes dF/F for every ROI, using
 `aind-ophys-utils <https://github.com/AllenNeuralDynamics/aind-ophys-utils/>`_:
 
@@ -98,8 +99,8 @@ computes dF/F for every ROI, using
 Classifier
 ----------
 
-The `classifier <https://github.com/AllenNeuralDynamics/aind-ophys-classifier/>`_ step
-(library: `aind-ophys-classifier-library <https://github.com/AllenNeuralDynamics/aind-ophys-classifier-library/>`_)
+The classifier step
+(`aind-ophys-classifier-library <https://github.com/AllenNeuralDynamics/aind-ophys-classifier-library/>`_)
 labels each ROI in each plane. It is the only step that requires a GPU:
 
 * Embeds the ROI images with `ROICaT <https://github.com/RichieHakim/ROICaT>`_'s ROInet
@@ -109,8 +110,8 @@ labels each ROI in each plane. It is the only step that requires a GPU:
 Events
 ------
 
-The `event detection <https://github.com/AllenNeuralDynamics/aind-ophys-oasis-event-detection/>`_ step
-(library: `aind-ophys-oasis-event-detection-library <https://github.com/AllenNeuralDynamics/aind-ophys-oasis-event-detection-library/>`_)
+The event detection step
+(`aind-ophys-oasis-event-detection-library <https://github.com/AllenNeuralDynamics/aind-ophys-oasis-event-detection-library/>`_)
 infers neural events from each dF/F trace with
 `OASIS <https://github.com/j-friedrich/OASIS>`_:
 
@@ -120,8 +121,8 @@ infers neural events from each dF/F trace with
 NWB Packaging
 -------------
 
-The `NWB packaging <https://github.com/AllenNeuralDynamics/aind-ophys-nwb/>`_ step
-(library: `aind-ophys-nwb-library <https://github.com/AllenNeuralDynamics/aind-ophys-nwb-library/>`_)
+The NWB packaging step
+(`aind-ophys-nwb-library <https://github.com/AllenNeuralDynamics/aind-ophys-nwb-library/>`_)
 runs once per session and writes one NWB Zarr store containing, for each plane:
 
 * ROI and neuropil masks, with the classifier labels
@@ -131,8 +132,8 @@ runs once per session and writes one NWB Zarr store containing, for each plane:
 Metadata Merge
 --------------
 
-The final `metadata merge <https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule/>`_ step
-(library: `aind-metadata-manager <https://github.com/AllenNeuralDynamics/aind-metadata-manager/>`_):
+The final metadata merge step
+(`aind-metadata-manager <https://github.com/AllenNeuralDynamics/aind-metadata-manager/>`_):
 
 * Merges every step's ``processing.json`` into one run-level ``processing.json``
 * Merges every step's ``quality_control.json`` into one run-level ``quality_control.json``

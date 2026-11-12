@@ -2,8 +2,6 @@
 
 nextflow.enable.dsl = 2
 
-params.ghcr_smoke_only = false
-params.gpu_smoke_only = false
 params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
 params.input_dir = '/data'
 params.output_dir = '/results'
@@ -112,15 +110,15 @@ def validate_process_versions(versions) {
     def sha_pattern = ~/^[0-9a-f]{40}$/
     def required = []
     stages.each { stage ->
-        required << "${stage}_CAPSULE_REPO"
-        required << "${stage}_CAPSULE_COMMIT"
+        required << "${stage}_LIBRARY_REPO"
+        required << "${stage}_LIBRARY_COMMIT"
     }
     def missing = required.findAll { key -> !versions[key] }
     if (missing) {
         throw new IllegalArgumentException("Missing process manifest keys: ${missing.join(', ')}")
     }
     stages.each { stage ->
-        def key = "${stage}_CAPSULE_COMMIT"
+        def key = "${stage}_LIBRARY_COMMIT"
         if (!(versions[key] ==~ sha_pattern)) {
             throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
         }
@@ -160,30 +158,127 @@ def image_stages = [
     'NWB',
     'AGGREGATOR'
 ]
-params.stage_images = parse_key_value_file("${baseDir}/images.env")
-if (params.stage_images.keySet() != image_stages.toSet()) {
-    throw new IllegalArgumentException('Image manifest must contain exactly all 11 stages')
-}
-params.stage_images.each { stage, image ->
-    if (!(image ==~ /^ghcr\.io\/allenneuraldynamics\/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$/)) {
-        throw new IllegalArgumentException("Image for ${stage} must be GHCR digest-pinned")
+// images.env pins every step's published image by digest. images_custom.env,
+// which git ignores, overrides individual steps with any image reference, such
+// as a locally built image.
+def parse_stage_images(image_stages) {
+    def images = parse_key_value_file("${baseDir}/images.env")
+    if (images.keySet() != image_stages.toSet()) {
+        throw new IllegalArgumentException('Image manifest must contain exactly all 11 stages')
     }
+    images.each { stage, image ->
+        if (!(image ==~ /^ghcr\.io\/allenneuraldynamics\/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$/)) {
+            throw new IllegalArgumentException("Image for ${stage} must be GHCR digest-pinned")
+        }
+    }
+    def custom = file("${baseDir}/images_custom.env")
+    if (custom.exists()) {
+        def overrides = parse_key_value_file(custom)
+        def unknown = overrides.keySet() - image_stages.toSet()
+        if (unknown) {
+            throw new IllegalArgumentException("Unknown stages in images_custom.env: ${unknown.join(', ')}")
+        }
+        overrides.each { stage, image ->
+            if (!(image ==~ /^[^\s]+$/)) {
+                throw new IllegalArgumentException("Image for ${stage} in images_custom.env must be one reference")
+            }
+            println "Using custom image for ${stage}: ${image}"
+            images[stage] = image
+        }
+    }
+    images
 }
 
-def gitCloneFunction = '''
-clone_repo() {
+params.stage_images = parse_stage_images(image_stages)
+
+// Each task clones its processing library at the pinned commit, installs it
+// with --no-deps over the dependencies already in the step's image, and runs
+// <module>.run() from capsule/code so the ../data, ../results and ../scratch
+// task paths resolve.
+def libraryFunctions = '''
+install_library() {
     local repo_url="$1"
     local commit_hash="$2"
 
-    echo "cloning git repo: ${repo_url} (commit: ${commit_hash})..."
-    git clone "${repo_url}" capsule-repo
-    git -C capsule-repo -c core.fileMode=false checkout "${commit_hash}" --quiet
-    test -d capsule-repo/code || {
-        echo "capsule repository has no code/ directory: ${repo_url}" >&2
+    echo "installing processing library: ${repo_url} (commit: ${commit_hash})..."
+    git clone --quiet "${repo_url}" capsule/library-source
+    git -C capsule/library-source -c advice.detachedHead=false checkout --quiet "${commit_hash}"
+    python -m pip install --quiet --no-deps --no-build-isolation --no-cache-dir \
+        --target capsule/library capsule/library-source
+    export PYTHONPATH="${PWD}/capsule/library${PYTHONPATH:+:${PYTHONPATH}}"
+    python -m pip check
+    mkdir -p capsule/code
+}
+
+run_library() {
+    local module="$1"
+    shift
+    echo "running ${module}.run $*"
+    python -u -c 'import importlib, sys; importlib.import_module(sys.argv.pop(1)).run()' "${module}" "$@"
+}
+'''
+
+// Decrosstalk: turn the staged pair<k>.txt into a pair<k>/ directory of plane
+// links, which the library's pair discovery reads. Runs in capsule/code.
+def decrosstalkPairFunction = '''
+stage_pair() {
+    shopt -s nullglob
+    local pair_files=(../data/pair*.txt)
+    shopt -u nullglob
+    if [ "${#pair_files[@]}" -eq 0 ]; then
+        echo "no ../data/pair*.txt; expecting a pre-staged pair*/ directory"
+        return
+    fi
+    if [ "${#pair_files[@]}" -ne 1 ]; then
+        echo "ERROR: expected one ../data/pair*.txt, found ${#pair_files[@]}: ${pair_files[*]}" >&2
         exit 1
-    }
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    fi
+    local pair_file="${pair_files[0]}"
+    local pair_dir="${pair_file%.txt}"
+    mkdir -p "${pair_dir}"
+    local plane name
+    while read -r plane || [ -n "${plane}" ]; do
+        [ -n "${plane}" ] || continue
+        case "${plane}" in
+            /data/*) name="${plane#/data/}" ;;
+            /*) echo "ERROR: unsupported absolute plane path: ${plane}" >&2; exit 1 ;;
+            *) name="${plane}" ;;
+        esac
+        if [ ! -d "../data/${name}" ]; then
+            echo "ERROR: plane directory not found: ../data/${name}" >&2
+            exit 1
+        fi
+        ln -sfn "../${name}" "${pair_dir}/${name}"
+    done < "${pair_file}"
+    echo "pair planes: $(ls "${pair_dir}" | tr '\\n' ' ')"
+}
+'''
+
+// Classifier: copy a mounted ROInet.zip to writable scratch and point
+// TORCH_HOME at a mounted ConvNeXt checkpoint. Without them, the library
+// downloads both. Runs in capsule/code; sets ROINET_ARGS.
+def classifierModelFunction = '''
+stage_roinet() {
+    local work_dir="${PWD}/../scratch/roinet"
+    local convnext="torch/hub/checkpoints/convnext_tiny-983f1562.pth"
+    local candidate
+    ROINET_ARGS=()
+    for candidate in ../data/roinet ../data/2p_roi_classifier; do
+        if [ -f "${candidate}/ROInet.zip" ]; then
+            mkdir -p "${work_dir}"
+            cp "${candidate}/ROInet.zip" "${work_dir}/"
+            ROINET_ARGS=(--roinet_dir="${work_dir}")
+            if [ -f "${candidate}/${convnext}" ]; then
+                export TORCH_HOME="$(cd "${candidate}" && pwd)/torch"
+            else
+                export TORCH_HOME="${work_dir}/torch"
+            fi
+            echo "ROInet: ${candidate}/ROInet.zip, TORCH_HOME=${TORCH_HOME}"
+            return
+        fi
+    done
+    export TORCH_HOME="${work_dir}/torch"
+    echo "ROInet: no mounted ROInet.zip; it is downloaded, with ConvNeXt into ${TORCH_HOME}"
 }
 '''
 
@@ -216,26 +311,6 @@ publishRelativeSkipRunLevel = { String filename ->
 }
 
 workflow {
-    def smoke_mode = params.ghcr_smoke_only.toString().toLowerCase()
-    def gpu_smoke_mode = params.gpu_smoke_only.toString().toLowerCase()
-    if (!(smoke_mode in ['true', 'false', '1', '0'])) {
-        throw new IllegalArgumentException('ghcr_smoke_only must be true, false, 1, or 0')
-    }
-    if (!(gpu_smoke_mode in ['true', 'false', '1', '0'])) {
-        throw new IllegalArgumentException('gpu_smoke_only must be true, false, 1, or 0')
-    }
-    if (smoke_mode in ['true', '1'] && gpu_smoke_mode in ['true', '1']) {
-        throw new IllegalArgumentException('ghcr_smoke_only and gpu_smoke_only are mutually exclusive')
-    }
-    if (smoke_mode in ['true', '1']) {
-        ghcr_pull_smoke()
-        return
-    }
-    if (gpu_smoke_mode in ['true', '1']) {
-        gpu_smoke()
-        return
-    }
-
     if (!params.ophys_mount_url ||
             !(params.ophys_mount_url.toString() ==~ /^(s3:\/\/[^\/\s]+\/\S+|\/\S+)$/)) {
         throw new IllegalArgumentException('ophys_mount_url must be a nonempty S3 URL or absolute directory')
@@ -528,93 +603,6 @@ workflow {
 }
 
 
-process ghcr_pull_smoke {
-    container 'ghcr.io/allenneuraldynamics/pophys-decrosstalk-split@sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6'
-    cache false
-    publishDir "$RESULTS_PATH", mode: 'copy'
-
-    output:
-    path 'ghcr-smoke.json'
-
-    script:
-    '''
-    python - <<'PY'
-    import json
-    import platform
-    from pathlib import Path
-
-    result = {
-        "probe": "pophys-ghcr-pull-v1",
-        "image_digest": "sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6",
-        "python": platform.python_version(),
-        "machine": platform.machine(),
-        "scientific_processing": False,
-    }
-    Path("ghcr-smoke.json").write_text(json.dumps(result, indent=2) + "\\n")
-    print(json.dumps(result))
-    PY
-    '''
-}
-
-process gpu_smoke {
-    def container_name = params.stage_images['CLASSIFIER']
-    container container_name
-    cpus 16
-    memory '60 GB'
-    accelerator 1
-    label 'gpu'
-    cache false
-    publishDir "$RESULTS_PATH", mode: 'copy'
-
-    output:
-    path 'gpu-smoke.json'
-
-    script:
-    '''
-    python - <<'PY'
-    import json
-    import platform
-    import subprocess
-    from pathlib import Path
-
-    import torch
-
-    if not torch.cuda.is_available():
-        raise RuntimeError("torch.cuda.is_available() returned false")
-    # A kernel launch fails on GPUs the CUDA runtime does not support.
-    kernel_check = float((torch.arange(8, device="cuda", dtype=torch.float32) * 2).sum().item())
-
-    nvidia_smi = subprocess.run(
-        [
-            "nvidia-smi",
-            "--query-gpu=name,memory.total,driver_version",
-            "--format=csv,noheader,nounits",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip().splitlines()
-    result = {
-        "probe": "pophys-gpu-placement-v1",
-        "image": "classifier",
-        "python": platform.python_version(),
-        "machine": platform.machine(),
-        "torch": torch.__version__,
-        "cuda_runtime": torch.version.cuda,
-        "cuda_available": True,
-        "cuda_device_count": torch.cuda.device_count(),
-        "cuda_device_name": torch.cuda.get_device_name(0),
-        "cuda_capability": list(torch.cuda.get_device_capability(0)),
-        "cuda_kernel_check": kernel_check,
-        "nvidia_smi": nvidia_smi,
-        "scientific_processing": False,
-    }
-    Path("gpu-smoke.json").write_text(json.dumps(result, indent=2) + "\\n")
-    print(json.dumps(result))
-    PY
-    '''
-}
-
 // Process: aind-pophys-converter-capsule
 process converter_capsule {
     tag 'capsule-9191145'
@@ -646,16 +634,14 @@ process converter_capsule {
     mkdir -p capsule/results
     mkdir -p capsule/scratch
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['CONVERTER_CAPSULE_REPO']}" "${params.versions['CONVERTER_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['CONVERTER_LIBRARY_REPO']}" "${params.versions['CONVERTER_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running converter..."
     echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
-    chmod +x run
     echo "converter_capsule parameters: --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}"
-    ./run --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}
+    run_library aind_pophys_converter.job --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}
     echo "[${task.tag}] completed!"
     ls -a ${task_output_dir}
     """
@@ -695,15 +681,13 @@ process motion_correction {
     mkdir -p capsule/results
     mkdir -p capsule/scratch
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['MOTION_CORRECTION_CAPSULE_REPO']}" "${params.versions['MOTION_CORRECTION_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['MOTION_CORRECTION_LIBRARY_REPO']}" "${params.versions['MOTION_CORRECTION_LIBRARY_COMMIT']}"
     
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running motion_correction..."
     cd capsule/code
-    chmod +x run
     echo "motion_correction parameters: --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}"
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
+    run_library aind_ophys_motion_correction_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
     
     echo "[${task.tag}] completed!"
     """
@@ -743,14 +727,12 @@ process movie_qc {
 	mkdir -p capsule/results
 	mkdir -p capsule/scratch
 
-	echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['MOVIE_QC_CAPSULE_REPO']}" "${params.versions['MOVIE_QC_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['MOVIE_QC_LIBRARY_REPO']}" "${params.versions['MOVIE_QC_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running movie_qc..."
     cd capsule/code
-    chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
+    run_library aind_ophys_movie_qc_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
@@ -784,14 +766,12 @@ process decrosstalk_split_json {
     mkdir -p capsule/results
     mkdir -p capsule/scratch
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['DECROSSTALK_SPLIT_CAPSULE_REPO']}" "${params.versions['DECROSSTALK_SPLIT_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['DECROSSTALK_SPLIT_LIBRARY_REPO']}" "${params.versions['DECROSSTALK_SPLIT_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running decrosstalk_split..."
     cd capsule/code
-    chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
+    run_library aind_ophys_decrosstalk_split_session_json_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
@@ -835,14 +815,15 @@ process decrosstalk_roi_images {
 
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['DECROSSTALK_ROI_IMAGES_CAPSULE_REPO']}" "${params.versions['DECROSSTALK_ROI_IMAGES_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['DECROSSTALK_ROI_IMAGES_LIBRARY_REPO']}" "${params.versions['DECROSSTALK_ROI_IMAGES_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running decrosstalk_roi_images..."
     cd capsule/code
-    chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --debug ${params.debug}
+    export CELLPOSE_LOCAL_MODELS_PATH="\${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"
+    ${decrosstalkPairFunction}
+    stage_pair
+    run_library aind_ophys_decrosstalk_roi_images_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --debug ${params.debug}
 
     echo "[${task.tag}] completed!"
     """
@@ -886,15 +867,14 @@ process extraction {
 
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['EXTRACTION_CAPSULE_REPO']}" "${params.versions['EXTRACTION_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['EXTRACTION_LIBRARY_REPO']}" "${params.versions['EXTRACTION_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running extraction..."
     cd capsule/code
-    chmod +x run
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
+    export CELLPOSE_LOCAL_MODELS_PATH="\${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"
+    run_library aind_ophys_extraction_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
 
     echo "[${task.tag}] completed!"
     """
@@ -933,15 +913,13 @@ process dff_capsule {
     mkdir -p capsule/results
     mkdir -p capsule/scratch
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['DFF_CAPSULE_REPO']}" "${params.versions['DFF_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['DFF_LIBRARY_REPO']}" "${params.versions['DFF_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running dff..."
     cd capsule/code
-    chmod +x run
     echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
+    run_library aind_ophys_dff_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
 
     echo "[${task.tag}] completed!"
     """
@@ -979,14 +957,12 @@ process oasis_event_detection {
     mkdir -p capsule/results
     mkdir -p capsule/scratch
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['OASIS_CAPSULE_REPO']}" "${params.versions['OASIS_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['OASIS_LIBRARY_REPO']}" "${params.versions['OASIS_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running oasis..."
     cd capsule/code
-    chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
+    run_library aind_ophys_oasis_event_detection_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
@@ -1036,14 +1012,14 @@ process classifier {
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
 	ln -s "/tmp/data/roinet" "capsule/data/roinet"
 
-	echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['CLASSIFIER_CAPSULE_REPO']}" "${params.versions['CLASSIFIER_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['CLASSIFIER_LIBRARY_REPO']}" "${params.versions['CLASSIFIER_LIBRARY_COMMIT']}"
 
-	echo "[${task.tag}] running capsule..."
+	echo "[${task.tag}] running classifier..."
 	cd capsule/code
-	chmod +x run
-	./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} ${soma_classifier_arg} ${dendrite_classifier_arg} --border_size ${params['border-size']} ${model_name_arg}
+    ${classifierModelFunction}
+    stage_roinet
+	run_library aind_ophys_classifier_library.job "\${ROINET_ARGS[@]}" --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} ${soma_classifier_arg} ${dendrite_classifier_arg} --border_size ${params['border-size']} ${model_name_arg}
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -1096,15 +1072,16 @@ process ophys_nwb {
 
     echo "[${task.tag}] staged \$(find capsule/data/processed -name processing.json | wc -l) upstream processing.json"
 
-	echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['NWB_CAPSULE_REPO']}" "${params.versions['NWB_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['NWB_LIBRARY_REPO']}" "${params.versions['NWB_LIBRARY_COMMIT']}"
 
-	echo "[${task.tag}] running capsule..."
+	echo "[${task.tag}] running nwb..."
 	cd capsule/code
-	chmod +x run
 	ls -R ${task_input_dir}
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}
+    for schema in ndx-aibs-behavior-ophys.namespace.yaml ndx-aibs-behavior-ophys.extension.yaml; do
+        test -f "../data/schemas/\${schema}" || { echo "missing NWB extension schema: ../data/schemas/\${schema}" >&2; exit 1; }
+    done
+    run_library aind_ophys_nwb_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --extension_namespace=../data/schemas/ndx-aibs-behavior-ophys.namespace.yaml
 
 	echo "[${task.tag}] completed!"
 	"""
@@ -1148,14 +1125,12 @@ process pipeline_processing_metadata_aggregator {
     echo "[${task.tag}] using task-local staged inputs..."
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
-    echo "[${task.tag}] cloning git repo..."
-    ${gitCloneFunction}
-    clone_repo "${params.versions['AGGREGATOR_CAPSULE_REPO']}" "${params.versions['AGGREGATOR_CAPSULE_COMMIT']}"
+    ${libraryFunctions}
+    install_library "${params.versions['AGGREGATOR_LIBRARY_REPO']}" "${params.versions['AGGREGATOR_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running aggregator..."
     cd capsule/code
-    chmod +x run
-    ./run --input_dir ${task_input_dir} --output_dir ${task_output_dir} ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} ${params.containsKey('upgrade_legacy_metadata') ? '--upgrade_legacy_metadata ' + params.upgrade_legacy_metadata : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
+    run_library aind_metadata_manager.metadata_manager --input_dir ${task_input_dir} --output_dir ${task_output_dir} ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
     echo "[${task.tag}] completed!"
     """
 }

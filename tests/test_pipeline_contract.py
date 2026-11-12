@@ -1,13 +1,19 @@
 import json
+import os
 import re
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
 PIPELINE = ROOT / "pipeline"
+ENVIRONMENT = ROOT / "environment"
 MANIFEST = PIPELINE / "process_versions.env"
 MAIN = PIPELINE / "main.nf"
+CONFIGS = ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config")
 
 STAGES = (
     "CONVERTER",
@@ -22,7 +28,33 @@ STAGES = (
     "NWB",
     "AGGREGATOR",
 )
+PROCESSES = {  # process: (stage, library module it runs)
+    "converter_capsule": ("CONVERTER", "aind_pophys_converter.job"),
+    "motion_correction": ("MOTION_CORRECTION", "aind_ophys_motion_correction_library.job"),
+    "movie_qc": ("MOVIE_QC", "aind_ophys_movie_qc_library.job"),
+    "decrosstalk_split_json": (
+        "DECROSSTALK_SPLIT", "aind_ophys_decrosstalk_split_session_json_library.job"),
+    "decrosstalk_roi_images": (
+        "DECROSSTALK_ROI_IMAGES", "aind_ophys_decrosstalk_roi_images_library.job"),
+    "extraction": ("EXTRACTION", "aind_ophys_extraction_library.job"),
+    "dff_capsule": ("DFF", "aind_ophys_dff_library.job"),
+    "oasis_event_detection": ("OASIS", "aind_ophys_oasis_event_detection_library.job"),
+    "classifier": ("CLASSIFIER", "aind_ophys_classifier_library.job"),
+    "ophys_nwb": ("NWB", "aind_ophys_nwb_library.job"),
+    "pipeline_processing_metadata_aggregator": (
+        "AGGREGATOR", "aind_metadata_manager.metadata_manager"),
+}
+TEMP_DIR_FLAGS = {  # processes that also receive the task temp directory
+    "converter_capsule": "--temp_dir",
+    "motion_correction": "--tmp_dir",
+    "decrosstalk_roi_images": "--tmp_dir",
+    "extraction": "--tmp_dir",
+    "classifier": "--tmp_dir",
+}
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+REPO_RE = re.compile(r"^https://github\.com/AllenNeuralDynamics/[A-Za-z0-9._-]+$")
+DIGEST_RE = re.compile(r"^ghcr\.io/allenneuraldynamics/pophys-[a-z0-9-]+@sha256:[0-9a-f]{64}$")
+UUID_RE = re.compile(r"^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
 
 
 def read_manifest(path: Path) -> dict[str, str]:
@@ -40,66 +72,186 @@ def read_manifest(path: Path) -> dict[str, str]:
     return values
 
 
-class PipelineContractTests(unittest.TestCase):
+def section(pattern: str, text: str) -> str:
+    match = re.search(pattern, text, re.MULTILINE | re.DOTALL)
+    if match is None:
+        raise AssertionError(f"Pattern not found: {pattern}")
+    return match.group(1)
+
+
+def process_block(main: str, name: str) -> str:
+    return section(rf"^process {name} \{{(.*?)^\}}", main)
+
+
+def groovy_script(main: str, name: str) -> str:
+    """Return a Groovy ''' string as bash receives it: backslashes and line continuations resolved."""
+    body = section(rf"def {name} = '''(.*?)'''", main)
+    return re.sub(r"\\(\\|\n)", lambda match: "" if match.group(1) == "\n" else "\\", body)
+
+
+def run_bash(script: str, cwd: Path, **env: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", "-e", "-c", script],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PYTHON": sys.executable, **env},
+    )
+
+
+class MainTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.manifest = read_manifest(MANIFEST)
         cls.main = MAIN.read_text()
-        cls.baseline = json.loads((PIPELINE / "baseline.json").read_text())
 
-    def test_manifest_declares_every_stage(self):
+    def assert_in_order(self, text, *parts):
+        """Assert that each part appears in text after the previous one."""
+        position = -1
+        for part in parts:
+            index = text.find(part, position + 1)
+            self.assertGreater(index, position, f"{part!r} is missing or out of order")
+            position = index
+
+
+class PipelineContractTests(MainTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.manifest = read_manifest(MANIFEST)
+        cls.parameters = json.loads((ROOT / "pipeline_parameters.json").read_text())
+        cls.panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())["parameters"]
+        cls.panel_defaults = {p["param_name"]: p["default_value"] for p in cls.panel}
+
+    def test_manifest_declares_every_stage_library(self):
         for stage in STAGES:
-            self.assertTrue(self.manifest[f"{stage}_CAPSULE_REPO"].startswith("https://github.com/"))
-            self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
+            self.assertRegex(self.manifest[f"{stage}_LIBRARY_REPO"], REPO_RE)
+            self.assertRegex(self.manifest[f"{stage}_LIBRARY_COMMIT"], SHA_RE)
 
-    def test_manifest_holds_only_source_pins(self):
-        allowed = {f"{stage}_{suffix}" for stage in STAGES
-                   for suffix in ("CAPSULE_REPO", "CAPSULE_COMMIT")}
-        self.assertEqual(set(self.manifest) - allowed, set())
+    def test_manifest_holds_only_library_pins(self):
+        expected = {f"{stage}_{suffix}" for stage in STAGES
+                    for suffix in ("LIBRARY_REPO", "LIBRARY_COMMIT")}
+        self.assertEqual(set(self.manifest), expected)
 
-    def test_main_uses_manifest_image_map(self):
-        self.assertNotIn("import groovy.json.JsonSlurper", self.main)
-        for stage in STAGES:
-            self.assertIn(f"params.stage_images['{stage}']", self.main)
-        self.assertNotIn("CO_CAPSULE_ID", self.main)
+    def test_main_validates_exactly_the_manifest_keys(self):
+        validate = section(r"^def validate_process_versions\(versions\) \{(.*?)^\}", self.main)
+        stages = re.findall(r"'([A-Z_]+)'", section(r"def stages = \[(.*?)\]", validate))
+        self.assertEqual(sorted(stages), sorted(STAGES))
+        for text in ('"${stage}_LIBRARY_REPO"', '"${stage}_LIBRARY_COMMIT"', SHA_RE.pattern):
+            self.assertIn(text, validate)
+        self.assertNotIn("CAPSULE", validate)
 
-    def test_images_match_complete_published_inventory(self):
-        images = read_manifest(PIPELINE / "images.env")
-        inventory = json.loads((ROOT / "environment/v2-pathfix-inventory.json").read_text())
-        expected = {
-            row["stage"]: row["image"].rsplit(":", 1)[0] + "@" + row["platform_manifest_digest"]
-            for row in inventory["images"]
-        }
-        self.assertEqual(len(expected), 11)
-        self.assertEqual(set(images), set(STAGES))
-        self.assertEqual(images, expected)
-        for image in images.values():
-            self.assertRegex(image, r"^ghcr\.io/allenneuraldynamics/pophys-[a-z-]+@sha256:[0-9a-f]{64}$")
+    def test_main_defines_one_process_per_stage(self):
+        processes = re.findall(r"^process (\w+) \{", self.main, re.MULTILINE)
+        self.assertEqual(sorted(processes), sorted(PROCESSES))
+        self.assertEqual(sorted(stage for stage, _ in PROCESSES.values()), sorted(STAGES))
 
-    def test_one_image_list_serves_every_backend(self):
-        self.assertIn('params.stage_images = parse_key_value_file("${baseDir}/images.env")', self.main)
-        self.assertIn("params.stage_images.keySet() != image_stages.toSet()", self.main)
-        for text in ("image_set", "IMAGE_CO", "IMAGE_OFFCO", "registry_host", "development_images"):
+    def test_each_process_installs_its_own_library_and_runs_its_module_once(self):
+        for process, (stage, module) in PROCESSES.items():
+            with self.subTest(process=process):
+                block = process_block(self.main, process)
+                repo, commit = (f"${{params.versions['{stage}_LIBRARY_{kind}']}}"
+                                for kind in ("REPO", "COMMIT"))
+                self.assertEqual(block.count("install_library"), 1)
+                self.assertIn(f'install_library "{repo}" "{commit}"', block)
+                self.assertIn(f"def container_name = params.stage_images['{stage}']", block)
+                for other in set(STAGES) - {stage}:
+                    self.assertNotIn(f"'{other}_LIBRARY", block)
+                    self.assertNotIn(f"params.stage_images['{other}']", block)
+                self.assertEqual(re.findall(r"^\s*run_library (\S+)", block, re.MULTILINE), [module])
+                self.assertEqual(block.count("${libraryFunctions}"), 1)
+                self.assertEqual(block.count("cd capsule/code"), 1)
+                self.assert_in_order(
+                    block, "${libraryFunctions}", "install_library", "cd capsule/code", "run_library"
+                )
+                repo_name = self.manifest[f"{stage}_LIBRARY_REPO"].rsplit("/", 1)[1]
+                self.assertEqual(module.split(".")[0], repo_name.replace("-", "_"))
+
+    def test_library_helpers_install_the_pinned_commit_without_dependencies(self):
+        helpers = " ".join(groovy_script(self.main, "libraryFunctions").split())
+        self.assert_in_order(
+            helpers,
+            "install_library() {",
+            'git clone --quiet "${repo_url}" capsule/library-source',
+            'git -C capsule/library-source -c advice.detachedHead=false '
+            'checkout --quiet "${commit_hash}"',
+            "python -m pip install --quiet --no-deps --no-build-isolation --no-cache-dir "
+            "--target capsule/library capsule/library-source",
+            'export PYTHONPATH="${PWD}/capsule/library${PYTHONPATH:+:${PYTHONPATH}}"',
+            "python -m pip check",
+            "mkdir -p capsule/code",
+            "run_library() {",
+            "python -u -c 'import importlib, sys; importlib.import_module(sys.argv.pop(1)).run()' "
+            '"${module}" "$@"',
+        )
+
+    def test_no_wrapper_repository_remnants(self):
+        for text in ("clone_repo", "gitCloneFunction", "./run", "chmod +x run", "_CAPSULE_",
+                     "capsule-repo", "CO_CAPSULE_ID", "GIT_ACCESS_TOKEN", "GIT_HOST"):
             self.assertNotIn(text, self.main)
-        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
-        parameters = {p["param_name"]: p for p in panel["parameters"]}
-        self.assertEqual(len(parameters), len(panel["parameters"]))
-        self.assertNotIn("image_set", parameters)
-        self.assertEqual(parameters["ophys_mount_url"]["default_value"],
-                         re.search(r"params.ophys_mount_url = '([^']+)'", self.main).group(1))
-        self.assertIn("ophys_mount_url must be a nonempty S3 URL or absolute directory", self.main)
+
+    def test_cellpose_models_path_is_exported_for_the_stages_that_load_models(self):
+        export = 'export CELLPOSE_LOCAL_MODELS_PATH="\\${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"'
+        self.assertEqual(self.main.count(export), 2)
+        for process in ("decrosstalk_roi_images", "extraction"):
+            with self.subTest(process=process):
+                self.assert_in_order(
+                    process_block(self.main, process),
+                    'ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"',
+                    "cd capsule/code",
+                    export,
+                    "run_library",
+                )
+
+    def test_decrosstalk_stages_pair_directories_before_running(self):
+        block = process_block(self.main, "decrosstalk_roi_images")
+        self.assertEqual(self.main.count("${decrosstalkPairFunction}"), 1)
+        self.assertEqual(block.count("stage_pair"), 1)
+        self.assert_in_order(
+            block, "cd capsule/code", "${decrosstalkPairFunction}", "stage_pair", "run_library"
+        )
+        pair = " ".join(groovy_script(self.main, "decrosstalkPairFunction").split())
+        for text in ("stage_pair() {", "../data/pair*.txt",
+                     'ln -sfn "../${name}" "${pair_dir}/${name}"'):
+            self.assertIn(text, pair)
+
+    def test_classifier_stages_roinet_before_running(self):
+        block = process_block(self.main, "classifier")
+        self.assertEqual(self.main.count("${classifierModelFunction}"), 1)
+        self.assertEqual(block.count("stage_roinet"), 1)
+        self.assert_in_order(
+            block,
+            "cd capsule/code",
+            "${classifierModelFunction}",
+            "stage_roinet",
+            'run_library aind_ophys_classifier_library.job "\\${ROINET_ARGS[@]}"',
+        )
+        roinet = " ".join(groovy_script(self.main, "classifierModelFunction").split())
+        for text in ("stage_roinet() {", 'ROINET_ARGS=(--roinet_dir="${work_dir}")',
+                     "export TORCH_HOME="):
+            self.assertIn(text, roinet)
+
+    def test_nwb_checks_extension_schemas_before_running(self):
+        block = process_block(self.main, "ophys_nwb")
+        self.assertIn("stageAs: 'capsule/data/schemas/*'", block)
+        self.assert_in_order(
+            block,
+            "cd capsule/code",
+            "ndx-aibs-behavior-ophys.namespace.yaml",
+            "ndx-aibs-behavior-ophys.extension.yaml",
+            'test -f "../data/schemas/\\${schema}"',
+            "exit 1",
+            "run_library aind_ophys_nwb_library.job",
+            "--extension_namespace=../data/schemas/ndx-aibs-behavior-ophys.namespace.yaml",
+        )
 
     def test_runtime_parameters_load_before_source_and_image_resolution(self):
         self.assertIn("params.params_file = params.params_file ?: System.getenv('PARAMS_FILE') ?: null",
                       self.main)
-        self.assertIn("load_pipeline_parameters()\nvalidate_runtime_paths()", self.main)
-        self.assertLess(
-            self.main.index("load_pipeline_parameters()"),
-            self.main.index("params.versions = parse_process_versions()"),
-        )
-        self.assertLess(
-            self.main.index("load_pipeline_parameters()"),
-            self.main.index("params.stage_images = parse_key_value_file"),
+        self.assert_in_order(
+            self.main,
+            "load_pipeline_parameters()\nvalidate_runtime_paths()",
+            "params.versions = parse_process_versions()",
+            "params.stage_images = parse_stage_images(image_stages)",
         )
         workflow = self.main.split("workflow {", 1)[1]
         self.assertNotIn("JsonSlurper", workflow)
@@ -120,114 +272,61 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("Channel.fromPath(source, type: 'dir', checkIfExists: true)", self.main)
         self.assertNotIn("Channel.fromPath(\"${base_path}harvard-single\", type: 'dir')", self.main)
 
-    def test_git_source_stages_use_sha_checkout_helper(self):
-        self.assertIn("def gitCloneFunction", self.main)
-        self.assertIn("git -C capsule-repo -c core.fileMode=false checkout", self.main)
-        for stage in STAGES:
-            self.assertIn(f"{stage}_CAPSULE_REPO", self.main)
-            self.assertIn(f"{stage}_CAPSULE_COMMIT", self.main)
-
-    def test_splitter_uses_github_source_pin(self):
-        stage = "DECROSSTALK_SPLIT"
-        self.assertEqual(
-            self.manifest[f"{stage}_CAPSULE_REPO"],
-            "https://github.com/AllenNeuralDynamics/aind-ophys-decrosstalk-split-session-json",
-        )
-        self.assertRegex(self.manifest[f"{stage}_CAPSULE_COMMIT"], SHA_RE)
-        split_process = re.search(
-            r"^process decrosstalk_split_json \{(.*?)^\}",
-            self.main,
-            re.MULTILINE | re.DOTALL,
-        )
-        self.assertIsNotNone(split_process)
-        split_process_text = split_process.group(1)
-        self.assertNotIn(f"params.versions['{stage}_REF']", split_process_text)
-        self.assertNotIn("GIT_ACCESS_TOKEN", split_process_text)
-        self.assertIn(
-            f"clone_repo \"${{params.versions['{stage}_CAPSULE_REPO']}}\" \"${{params.versions['{stage}_CAPSULE_COMMIT']}}\"",
-            split_process_text,
-        )
-        self.assertIn("./run --input_dir ${task_input_dir} --output_dir ${task_output_dir}",
-                      split_process_text)
-
     def test_tasks_do_not_create_container_root_links(self):
         self.assertNotIn("ln -s \\$PWD/capsule", self.main)
         self.assertNotIn("ls -R /data", self.main)
         self.assertNotIn("ls -a /results", self.main)
 
     def test_classifier_model_paths_default_to_the_library(self):
-        parameters = json.loads((ROOT / "pipeline_parameters.json").read_text())
-        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
-        defaults = {p["param_name"]: p["default_value"] for p in panel["parameters"]}
         for name in ("soma-classifier-path", "dendrite-classifier-path"):
-            self.assertEqual(parameters[name], "")
-            self.assertEqual(defaults[name], "")
+            self.assertEqual(self.parameters[name], "")
+            self.assertEqual(self.panel_defaults[name], "")
         self.assertIn("${soma_classifier_arg} ${dendrite_classifier_arg}", self.main)
 
-    def test_no_stage_clones_code_ocean_git(self):
-        self.assertNotIn("GIT_ACCESS_TOKEN", self.main)
-        self.assertNotIn("GIT_HOST", self.main)
-
-    def test_aggregator_uses_github_wrapper_and_upgrader_library(self):
-        self.assertEqual(
-            self.manifest["AGGREGATOR_CAPSULE_REPO"],
-            "https://github.com/AllenNeuralDynamics/aind-metadata-manager-capsule",
-        )
-        source = json.loads((ROOT / "environment/stages/aggregator/source.json").read_text())
-        self.assertEqual(source["library_commit"], "06ae8790b1ecf106ea376ddc52785a027877a3d3")
-        aggregator = re.search(
-            r"^process pipeline_processing_metadata_aggregator \{(.*?)^\}",
-            self.main,
-            re.MULTILINE | re.DOTALL,
-        )
-        self.assertIsNotNone(aggregator)
-        self.assertIn(
-            "clone_repo \"${params.versions['AGGREGATOR_CAPSULE_REPO']}\" "
-            "\"${params.versions['AGGREGATOR_CAPSULE_COMMIT']}\"",
-            aggregator.group(1),
-        )
-        self.assertIn("--upgrade_legacy_metadata", aggregator.group(1))
-
-    def test_source_pins_match_selected_baseline(self):
-        pins = self.baseline["stage_source_pins"]
-        selection = self.baseline["source_selection"]
-        self.assertEqual(set(pins), set(selection))
-        for stage, (validated_capsule, validated_library) in pins.items():
-            entry = selection[stage]
-            self.assertEqual(entry["validated_capsule_commit"], validated_capsule)
-            self.assertEqual(entry["validated_library_commit"], validated_library)
-            self.assertEqual(self.manifest[f"{stage}_CAPSULE_COMMIT"], entry["capsule_commit"])
-            source = json.loads(
-                (ROOT / "environment/stages" / stage.lower() / "source.json").read_text()
-            )
-            self.assertEqual(source["library_commit"], entry["library_commit"])
-            self.assertEqual(
-                entry["validated_in_pipeline"],
-                (entry["capsule_commit"], entry["library_commit"])
-                == (validated_capsule, validated_library),
-            )
-
-    def test_baseline_records_full_length_evidence(self):
-        self.assertEqual(self.baseline["parameters"]["debug"], "False")
-        self.assertEqual(self.baseline["parameters"]["aggregate_quality_control"], "1")
-        self.assertTrue(self.baseline["evidence_scope"]["full_length"])
-        self.assertTrue(self.baseline["evidence_scope"]["root_quality_control_present"])
+    def test_defaults_run_the_full_pipeline_with_run_level_quality_control(self):
         self.assertNotIn("STOP_AFTER_CONVERTER", self.main)
-        parameters = json.loads((ROOT / "pipeline_parameters.json").read_text())
-        self.assertEqual(parameters["debug"], "0")
-        self.assertEqual(parameters["aggregate_quality_control"], "1")
-        self.assertEqual(parameters["upgrade_legacy_metadata"], "True")
-        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
-        defaults = {p["param_name"]: p["default_value"] for p in panel["parameters"]}
-        self.assertEqual(defaults["upgrade_legacy_metadata"], "True")
-        self.assertEqual(defaults["aggregate_quality_control"], "1")
+        self.assertEqual(self.parameters["debug"], "0")
+        self.assertEqual(self.parameters["aggregate_quality_control"], "1")
+        self.assertEqual(self.panel_defaults["aggregate_quality_control"], "1")
+
+    def test_app_panel_and_parameter_file_list_only_parameters_main_reads(self):
+        names = [p["param_name"] for p in self.panel]
+        self.assertEqual(len(set(names)), len(names))
+        self.assertEqual(set(names), set(self.parameters) | {"ophys_mount_url"})
+        for name in names:
+            reference = re.escape(name)
+            self.assertRegex(
+                self.main,
+                rf"params\.{reference}\b|params\['{reference}'\]|containsKey\('{reference}'\)",
+                name,
+            )
+        self.assertEqual(self.panel_defaults["ophys_mount_url"],
+                         re.search(r"params.ophys_mount_url = '([^']+)'", self.main).group(1))
+        self.assertIn("ophys_mount_url must be a nonempty S3 URL or absolute directory", self.main)
+
+    def test_removed_options_are_absent_everywhere(self):
+        texts = {
+            "main.nf": self.main,
+            "pipeline_parameters.json": (ROOT / "pipeline_parameters.json").read_text(),
+            "app-panel.json": (ROOT / ".codeocean/app-panel.json").read_text(),
+        }
+        texts.update({name: (PIPELINE / name).read_text() for name in CONFIGS})
+        for option in ("ghcr_pull_smoke", "ghcr_smoke_only", "gpu_smoke", "upgrade_legacy_metadata"):
+            for source, text in texts.items():
+                self.assertNotIn(option, text, source)
 
     def test_model_mounts_and_process_inputs_match(self):
-        datasets = json.loads((ROOT / ".codeocean/datasets.json").read_text())
-        actual = {d["mount"]: d["id"] for d in datasets["attached_datasets"]}
-        for asset in self.baseline["data_assets"]:
-            if asset["mount"] != "ophys_mount":
-                self.assertEqual(actual[asset["mount"]], asset["id"])
+        datasets = json.loads((ROOT / ".codeocean/datasets.json").read_text())["attached_datasets"]
+        mounts = [d["mount"] for d in datasets]
+        self.assertEqual(
+            sorted(mounts),
+            ["2p_roi_classifier", "cellpose_models", "ophys_mount", "roinet", "schemas"],
+        )
+        self.assertEqual(len({d["id"] for d in datasets}), len(datasets))
+        for dataset in datasets:
+            self.assertRegex(dataset["id"], UUID_RE)
+        for mount in set(mounts) - {"ophys_mount"}:
+            self.assertIn(f'Channel.fromPath("${{base_path}}{mount}/*"', self.main)
         self.assertEqual(self.main.count('ln -s "/tmp/data/cellpose_models"'), 2)
         self.assertIn('ln -s "/tmp/data/roinet"', self.main)
         self.assertEqual(self.main.count("cellpose_data.collect().ifEmpty([])"), 3)
@@ -253,7 +352,6 @@ class PipelineContractTests(unittest.TestCase):
         for stage_as in (
             "capsule/data/processing_??/*",
             "capsule/data/processed/processing_??/*",
-            "capsule/data/processing_??/*",
             "capsule/data/quality_control_??/*",
         ):
             with self.subTest(stage_as=stage_as):
@@ -261,51 +359,14 @@ class PipelineContractTests(unittest.TestCase):
         self.assertNotIn("stage_nested()", self.main)
 
     def test_scientific_processes_forward_resolved_task_paths(self):
-        processes_with_paths = {
-            "converter_capsule": ("--input_dir", "--output_dir", "--temp_dir"),
-            "motion_correction": ("--input_dir", "--output_dir", "--tmp_dir"),
-            "movie_qc": ("--input_dir", "--output_dir"),
-            "decrosstalk_roi_images": ("--input_dir", "--output_dir", "--tmp_dir"),
-            "extraction": ("--input_dir", "--output_dir", "--tmp_dir"),
-            "dff_capsule": ("--input_dir", "--output_dir"),
-            "oasis_event_detection": ("--input_dir", "--output_dir"),
-            "classifier": ("--input_dir", "--output_dir", "--tmp_dir"),
-            "ophys_nwb": ("--input_dir", "--output_dir"),
-            "pipeline_processing_metadata_aggregator": ("--input_dir", "--output_dir"),
-            "decrosstalk_split_json": ("--input_dir", "--output_dir"),
-        }
-        for process, flags in processes_with_paths.items():
-            block = re.search(
-                rf"^process {process} \{{(.*?)^\}}",
-                self.main,
-                re.MULTILINE | re.DOTALL,
-            ).group(1)
-            for flag in flags:
-                self.assertIn(flag, block, process)
-            self.assertIn("${task_input_dir}", block, process)
-            self.assertIn("${task_output_dir}", block, process)
-
-    def test_active_image_recipe_matches_manifest(self):
-        environment = ROOT / "environment"
-        active = [
-            row.split("\t") for row in (environment / "images.tsv").read_text().splitlines()
-            if row and not row.startswith("#")
-        ]
-        self.assertEqual(len(active), len(STAGES))
-        self.assertEqual({row[0] for row in active}, set(STAGES))
-        self.assertEqual(len({row[2] for row in active}), len(STAGES))
-        for stage, dockerfile, image, visibility in active:
-            self.assertTrue((environment / dockerfile).is_file())
-            self.assertTrue(image.startswith("ghcr.io/allenneuraldynamics/pophys-"))
-            self.assertEqual(visibility, "private")
-            source = json.loads(
-                (environment / "stages" / stage.lower() / "source.json").read_text()
-            )
-            self.assertEqual(source["stage"], stage)
-            self.assertNotIn("capsule_source_mode", source)
-            self.assertEqual(source["capsule_ref"], self.manifest[f"{stage}_CAPSULE_COMMIT"])
-            self.assertRegex(source["library_commit"], SHA_RE)
-            self.assertEqual(len(source["pyproject_sha256"]), 64)
+        for process in PROCESSES:
+            with self.subTest(process=process):
+                run = section(r"^(\s*run_library [^\n]*)$", process_block(self.main, process))
+                forwarded = {"--input_dir": "${task_input_dir}", "--output_dir": "${task_output_dir}"}
+                if process in TEMP_DIR_FLAGS:
+                    forwarded[TEMP_DIR_FLAGS[process]] = "${task_temp_dir}"
+                for flag, value in forwarded.items():
+                    self.assertIn(f"{flag} {value}", run)
 
     def test_v2_fan_in_contract_remains_present(self):
         self.assertIn("stageAs: 'capsule/data/processing_??/*'", self.main)
@@ -318,35 +379,18 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("publishRelativeSkipRunLevel", self.main)
 
     def test_scientific_publication_is_durable_and_relative(self):
-        for process in (
-            "converter_capsule",
-            "motion_correction",
-            "movie_qc",
-            "decrosstalk_split_json",
-            "decrosstalk_roi_images",
-            "extraction",
-            "dff_capsule",
-            "oasis_event_detection",
-            "classifier",
-            "ophys_nwb",
-            "pipeline_processing_metadata_aggregator",
-        ):
-            block = re.search(
-                rf"^process {process} \{{(.*?)^\}}",
-                self.main,
-                re.MULTILINE | re.DOTALL,
-            ).group(1)
-            self.assertIn("mode: 'copy'", block, process)
-            self.assertIn("saveAs: publishRelative", block, process)
+        for process in PROCESSES:
+            with self.subTest(process=process):
+                block = process_block(self.main, process)
+                self.assertIn("mode: 'copy'", block)
+                self.assertIn("saveAs: publishRelative", block)
 
     def test_backend_configs_declare_expected_executor_and_gpu(self):
         code_ocean = (PIPELINE / "nextflow.config").read_text()
         local = (PIPELINE / "nextflow_local.config").read_text()
         slurm = (PIPELINE / "nextflow_slurm.config").read_text()
         self.assertIn("params.backend = 'codeocean'", code_ocean)
-        classifier = re.search(
-            r"^process classifier \{(.*?)^\}", self.main, re.MULTILINE | re.DOTALL
-        ).group(1)
+        classifier = process_block(self.main, "classifier")
         for directive in ("cpus 16", "memory '60 GB'", "accelerator 1", "label 'gpu'"):
             self.assertIn(directive, classifier)
         self.assertIn("params.backend = 'local'", local)
@@ -354,7 +398,7 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn("params.backend = 'slurm'", slurm)
         self.assertIn("executor = 'slurm'", slurm)
         self.assertIn("System.getenv('GPU_CLUSTER_OPTIONS') ?: '--gres=gpu:1'", slurm)
-        self.assertEqual(slurm.count("clusterOptions = gpu_cluster_options"), 2)
+        self.assertEqual(slurm.count("clusterOptions = gpu_cluster_options"), 1)
         self.assertIn("def writable_tmpfs = '--writable-tmpfs'", slurm)
         self.assertIn('containerOptions = "${writable_tmpfs} ${data_bind}"', slurm)
         self.assertIn('containerOptions = "${writable_tmpfs} --nv ${data_bind}"', slurm)
@@ -362,8 +406,16 @@ class PipelineContractTests(unittest.TestCase):
         self.assertIn('--volume ${data_path}:/tmp/data', local)
         self.assertIn('--bind ${data_path}:/tmp/data', slurm)
 
+    def test_code_ocean_config_retries_once_and_limits_the_classifier(self):
+        config = (PIPELINE / "nextflow.config").read_text()
+        self.assertIn("errorStrategy = 'retry'", config)
+        self.assertIn("maxRetries = 1", config)
+        classifier = section(r"withName: classifier \{(.*?)\}", config)
+        for directive in ("containerOptions = '--shm-size 4g'", "maxForks = 2"):
+            self.assertIn(directive, classifier)
+
     def test_all_backend_configs_provide_pipeline_identity(self):
-        for filename in ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config"):
+        for filename in CONFIGS:
             config = (PIPELINE / filename).read_text()
             self.assertIn('PIPELINE_NAME = "aind-pophys-pipeline"', config)
             self.assertIn('PIPELINE_VERSION = "2.0.0"', config)
@@ -372,96 +424,186 @@ class PipelineContractTests(unittest.TestCase):
                 config,
             )
 
+    def test_every_backend_configures_each_process_once(self):
+        for filename in CONFIGS:
+            config = (PIPELINE / filename).read_text()
+            self.assertEqual(sorted(re.findall(r"withName: (\w+)", config)), sorted(PROCESSES), filename)
+
     def test_process_resources_are_configured_outside_main(self):
-        main_without_gpu_processes = self.main
-        for process in ("gpu_smoke", "classifier"):
-            main_without_gpu_processes = re.sub(
-                rf"^process {process} \{{.*?^\}}",
-                "",
-                main_without_gpu_processes,
-                flags=re.MULTILINE | re.DOTALL,
-            )
+        main_without_classifier = re.sub(
+            r"^process classifier \{.*?^\}", "", self.main, flags=re.MULTILINE | re.DOTALL
+        )
         directives = re.findall(
             r"^\s*(?:cpus|memory|accelerator|label)\b",
-            main_without_gpu_processes,
+            main_without_classifier,
             re.MULTILINE,
         )
         self.assertEqual(directives, [])
 
-    def test_registry_probe_returns_before_scientific_inputs(self):
-        workflow = self.main.split("workflow {", 1)[1]
-        self.assertIn("params.ghcr_smoke_only = false", self.main)
-        self.assertIn("ghcr_pull_smoke()\n        return", workflow)
-        self.assertLess(workflow.index("ghcr_pull_smoke()"), workflow.index("Channel.fromPath"))
-        digest = "sha256:c6ab7e57139ad47074aa15599f3a6d1aee41db05e1c2bdf8da21aebaf3e111b6"
-        block = re.search(
-            r"^process ghcr_pull_smoke \{(.*?)^\}", self.main, re.MULTILINE | re.DOTALL
-        ).group(1)
-        self.assertIn(f"pophys-decrosstalk-split@{digest}'", block)
-        self.assertIn(f'"image_digest": "{digest}"', block)
-        recipe = (ROOT / "environment/Dockerfile.splitter").read_text()
-        self.assertIn("procps", recipe)
-        self.assertIn("ps --version", recipe)
-        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
-        smoke = [p for p in panel["parameters"] if p["param_name"] == "ghcr_smoke_only"]
-        self.assertEqual(len(smoke), 1)
-        self.assertEqual(smoke[0]["default_value"], "false")
-        self.assertEqual(smoke[0]["extra_data"], ["false", "true"])
-        for filename in ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config"):
-            config = (PIPELINE / filename).read_text()
-            block = re.search(r"withName: ghcr_pull_smoke \{(.*?)\}", config, re.DOTALL).group(1)
-            for directive in ("cpus = 1", "memory = '1 GB'", "time = '10m'",
-                              "errorStrategy = 'terminate'", "maxRetries = 0"):
-                self.assertIn(directive, block)
-
     def test_configs_avoid_functions_newer_than_pinned_nextflow(self):
         # The config env() function needs Nextflow 25; the pipeline pins 24.10.4.
-        for filename in ("nextflow.config", "nextflow_local.config", "nextflow_slurm.config"):
+        for filename in CONFIGS:
             config = (PIPELINE / filename).read_text()
             self.assertIsNone(re.search(r"(?<![.\w])env\(", config), filename)
 
-    def test_gpu_probe_matches_production_resources_and_returns_before_science(self):
-        workflow = self.main.split("workflow {", 1)[1]
-        self.assertIn("params.gpu_smoke_only = false", self.main)
-        self.assertIn("gpu_smoke()\n        return", workflow)
-        self.assertLess(workflow.index("gpu_smoke()"), workflow.index("Channel.fromPath"))
-        self.assertIn(
-            "ghcr_smoke_only and gpu_smoke_only are mutually exclusive",
+
+class ImageContractTests(MainTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.images = read_manifest(PIPELINE / "images.env")
+        cls.recipes = json.loads((ENVIRONMENT / "images.json").read_text())
+
+    def test_one_image_list_serves_every_backend(self):
+        image_stages = re.findall(r"'([A-Z_]+)'", section(r"def image_stages = \[(.*?)\]", self.main))
+        self.assertEqual(sorted(image_stages), sorted(STAGES))
+        self.assertIn("params.stage_images = parse_stage_images(image_stages)", self.main)
+        self.assertNotIn("import groovy.json.JsonSlurper", self.main)
+        for text in ("image_set", "IMAGE_CO", "IMAGE_OFFCO", "registry_host", "development_images"):
+            self.assertNotIn(text, self.main)
+
+    def test_images_env_pins_every_stage_by_digest(self):
+        self.assertEqual(set(self.images), set(STAGES))
+        for stage, image in self.images.items():
+            with self.subTest(stage=stage):
+                self.assertRegex(image, DIGEST_RE)
+                self.assertTrue(
+                    image.startswith(f"ghcr.io/allenneuraldynamics/{self.recipes[stage]['image_name']}@")
+                )
+
+    def test_main_enforces_the_digest_rule_before_applying_custom_overrides(self):
+        self.assertIn(DIGEST_RE.pattern.replace("/", "\\/"), self.main)
+        self.assertIn("image ==~ /^[^\\s]+$/", self.main)
+        self.assert_in_order(
             self.main,
+            'parse_key_value_file("${baseDir}/images.env")',
+            "images.keySet() != image_stages.toSet()",
+            "must be GHCR digest-pinned",
+            'file("${baseDir}/images_custom.env")',
+            "Unknown stages in images_custom.env",
+            "must be one reference",
+            "images[stage] = image",
         )
-        block = re.search(
-            r"^process gpu_smoke \{(.*?)^\}", self.main, re.MULTILINE | re.DOTALL
-        ).group(1)
-        self.assertIn("params.stage_images['CLASSIFIER']", block)
-        for directive in ("cpus 16", "memory '60 GB'", "accelerator 1", "label 'gpu'"):
-            self.assertIn(directive, block)
-        self.assertIn('"probe": "pophys-gpu-placement-v1"', block)
-        self.assertIn("torch.cuda.is_available()", block)
-        self.assertIn("nvidia-smi", block)
+        self.assertIn("pipeline/images_custom.env", (ROOT / ".gitignore").read_text().splitlines())
 
-        panel = json.loads((ROOT / ".codeocean/app-panel.json").read_text())
-        smoke = [p for p in panel["parameters"] if p["param_name"] == "gpu_smoke_only"]
-        self.assertEqual(len(smoke), 1)
-        self.assertEqual(smoke[0]["default_value"], "false")
-        self.assertEqual(smoke[0]["extra_data"], ["false", "true"])
+    def test_images_json_covers_every_stage_with_its_build_inputs(self):
+        self.assertEqual(sorted(self.recipes), sorted(STAGES))
+        self.assertEqual(len({r["image_name"] for r in self.recipes.values()}), len(STAGES))
+        extraction = {stage for stage, recipe in self.recipes.items()
+                      if recipe["dockerfile"] == "Dockerfile_extraction"}
+        self.assertEqual(extraction, {"EXTRACTION"})
+        for stage, recipe in self.recipes.items():
+            with self.subTest(stage=stage):
+                self.assertLessEqual({"dockerfile", "image_name", "python"}, set(recipe))
+                self.assertIn(recipe["dockerfile"], ("Dockerfile_python", "Dockerfile_extraction"))
+                self.assertTrue((ENVIRONMENT / recipe["dockerfile"]).is_file())
+                self.assertRegex(recipe["image_name"], r"^pophys-[a-z0-9-]+$")
+                self.assertRegex(recipe["python"], r"^3\.\d+$")
+                for name in ("requirements.lock", "build.constraints"):
+                    path = ENVIRONMENT / "stages" / stage.lower() / name
+                    self.assertTrue(path.is_file() and path.stat().st_size > 0, str(path))
 
-        code_ocean = (PIPELINE / "nextflow.config").read_text()
-        config_block = re.search(
-            r"withName: gpu_smoke \{(.*?)\}", code_ocean, re.DOTALL
-        ).group(1)
-        for directive in (
-            "containerOptions = '--shm-size 4g'",
-            "time = '15m'",
-            "errorStrategy = 'terminate'",
-            "maxRetries = 0",
+    def test_image_and_pull_scripts_have_valid_shell_syntax(self):
+        scripts = (
+            ENVIRONMENT / "build_all.sh",
+            ENVIRONMENT / "push_all.sh",
+            ROOT / "scripts" / "pull_pipeline_images.sh",
+        )
+        for script in scripts:
+            with self.subTest(script=script.name):
+                result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_environment_scripts_have_valid_python_syntax(self):
+        for script in sorted(ENVIRONMENT.glob("*.py")):
+            with self.subTest(script=script.name):
+                compile(script.read_text(), str(script), "exec")
+
+
+class LibraryScriptTests(MainTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.scripts = {
+            name: groovy_script(cls.main, name)
+            for name in ("libraryFunctions", "decrosstalkPairFunction", "classifierModelFunction")
+        }
+
+    def test_rendered_helper_scripts_have_valid_bash_syntax(self):
+        for name, script in self.scripts.items():
+            with self.subTest(script=name):
+                result = subprocess.run(["bash", "-n"], input=script, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_run_library_hands_the_module_only_its_own_arguments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "stub_module.py").write_text(
+                "import json\nimport sys\n\n\ndef run():\n    print(json.dumps(sys.argv[1:]))\n"
+            )
+            script = (
+                'python() { "$PYTHON" "$@"; }\n'
+                f"{self.scripts['libraryFunctions']}\n"
+                'run_library stub_module --input_dir ../data --flag "two words"'
+            )
+            result = run_bash(script, Path(tmp), PYTHONPATH=tmp)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            json.loads(result.stdout.splitlines()[-1]),
+            ["--input_dir", "../data", "--flag", "two words"],
+        )
+
+    def test_stage_pair_links_the_planes_listed_in_the_pair_file(self):
+        script = f"{self.scripts['decrosstalkPairFunction']}\nstage_pair"
+        with tempfile.TemporaryDirectory() as tmp:
+            code, data = Path(tmp) / "capsule/code", Path(tmp) / "capsule/data"
+            code.mkdir(parents=True)
+            for plane in ("plane_a", "plane_b"):
+                (data / plane).mkdir(parents=True)
+            (data / "pair0.txt").write_text("/data/plane_a\nplane_b")
+            self.assertEqual(run_bash(script, code).returncode, 0)
+            self.assertEqual(
+                sorted(path.name for path in (data / "pair0").iterdir()), ["plane_a", "plane_b"]
+            )
+            for plane in ("plane_a", "plane_b"):
+                self.assertEqual((data / "pair0" / plane).resolve(), (data / plane).resolve())
+            (data / "pair1.txt").write_text("plane_a\n")
+            self.assertNotEqual(run_bash(script, code).returncode, 0)
+            (data / "pair1.txt").unlink()
+            (data / "pair0.txt").write_text("plane_missing\n")
+            self.assertNotEqual(run_bash(script, code).returncode, 0)
+            (data / "pair0.txt").unlink()
+            self.assertEqual(run_bash(script, code).returncode, 0)
+
+    def test_stage_roinet_copies_a_mounted_model_and_points_torch_home(self):
+        script = (
+            f"{self.scripts['classifierModelFunction']}\n"
+            'stage_roinet\necho "${ROINET_ARGS[*]}"\necho "${TORCH_HOME}"'
+        )
+        checkpoint = "roinet/torch/hub/checkpoints/convnext_tiny-983f1562.pth"
+        for mounted, copied, torch_home in (
+            ((), False, "capsule/scratch/roinet/torch"),
+            (("roinet/ROInet.zip",), True, "capsule/scratch/roinet/torch"),
+            (("2p_roi_classifier/ROInet.zip",), True, "capsule/scratch/roinet/torch"),
+            (("roinet/ROInet.zip", checkpoint), True, "capsule/data/roinet/torch"),
         ):
-            self.assertIn(directive, config_block)
-        self.assertIn("maxRetries = 1", code_ocean)
-
-        classifier_config = re.search(
-            r"withName: classifier \{(.*?)\}", code_ocean, re.DOTALL
-        ).group(1)
-        self.assertIn("maxForks = 2", classifier_config)
+            with self.subTest(mounted=mounted), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp).resolve()
+                (root / "capsule/code").mkdir(parents=True)
+                for relative in mounted:
+                    path = root / "capsule/data" / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.touch()
+                result = run_bash(script, root / "capsule/code")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                args, home = result.stdout.splitlines()[-2:]
+                self.assertEqual((root / "capsule/scratch/roinet/ROInet.zip").is_file(), copied)
+                if copied:
+                    flag, _, value = args.partition("=")
+                    self.assertEqual(flag, "--roinet_dir")
+                    self.assertEqual(Path(value).resolve(), root / "capsule/scratch/roinet")
+                else:
+                    self.assertEqual(args, "")
+                self.assertEqual(Path(home).resolve(), root / torch_home)
 
 
 if __name__ == "__main__":

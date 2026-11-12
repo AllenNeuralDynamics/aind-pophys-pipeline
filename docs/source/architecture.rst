@@ -29,14 +29,14 @@ Infrastructure Components
 
 **Container Registry**
    Eleven container images from the GitHub Container Registry (ghcr.io), one per step, named
-   ``ghcr.io/allenneuraldynamics/pophys-<step>``. Each image holds its step's processing library
-   and dependencies for ``linux/amd64``. The classifier image includes a CUDA-enabled PyTorch;
+   ``ghcr.io/allenneuraldynamics/pophys-<step>``. Each image holds the dependencies of its step's
+   processing library for ``linux/amd64``. The classifier image includes a CUDA-enabled PyTorch;
    the other images are CPU-only. The images are public, so every backend pulls them without
    credentials.
 
-**Wrapper Repositories**
-   Each step clones its wrapper repository from GitHub at a pinned commit and runs its
-   ``code/run`` script, which calls the processing library.
+**Processing Libraries**
+   Each task clones its step's processing library from GitHub at a pinned commit, installs it into
+   the image's environment without dependencies, and runs the library's ``run`` entry point.
 
 **Model Files**
    The Classifier's ONNX soma and dendrite models and ROInet weights, the Cellpose weights used by
@@ -63,12 +63,12 @@ to the Metadata merge step, which writes the run-level documents.
 Version Control
 ~~~~~~~~~~~~~~~
 
-Three files pin every piece of code a run uses, ensuring reproducibility across pipeline runs:
+Three sets of files pin every piece of code a run uses, ensuring reproducibility across pipeline
+runs:
 
+* ``pipeline/process_versions.env``: the processing library repository and commit of each step
 * ``pipeline/images.env``: the image digest of each step
-* ``pipeline/process_versions.env``: the wrapper repository and commit of each step
-* ``environment/stages/<stage>/source.json``: the processing library repository and commit built
-  into each step's image
+* ``environment/stages/<step>/requirements.lock``: the dependency versions built into each image
 
 Pipeline releases are tagged from Conventional Commit messages (see :ref:`releases`).
 

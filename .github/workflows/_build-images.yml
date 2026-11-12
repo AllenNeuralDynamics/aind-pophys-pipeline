@@ -1,0 +1,144 @@
+# Reusable: build and push step images, skipping the ones that are up to date.
+#
+# An image is up to date when the tag exists in ghcr and its `org.aind.env-hash`
+# label matches the hash of its Dockerfile and dependency inputs.
+name: Build Images
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Container tag to build and push (e.g. 3.1.0-dev)
+        required: true
+        type: string
+      images:
+        description: JSON list of steps to build (default - every step in environment/images.json)
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  list:
+    name: List images
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: List images
+        id: list
+        env:
+          INPUT_IMAGES: ${{ inputs.images }}
+        run: |
+          if [[ -n "$INPUT_IMAGES" ]]; then
+            IMAGES="$INPUT_IMAGES"
+          else
+            IMAGES=$(jq -c 'keys_unsorted' environment/images.json)
+          fi
+          echo "Images: $IMAGES"
+          echo "images=$IMAGES" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.image }}:${{ inputs.tag }}
+    needs: list
+    runs-on: ubuntu-latest
+    concurrency:
+      group: images-${{ matrix.image }}-${{ inputs.tag }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        image: ${{ fromJSON(needs.list.outputs.images) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve image info
+        id: info
+        env:
+          STEP: ${{ matrix.image }}
+        run: |
+          stage_dir=$(echo "$STEP" | tr '[:upper:]' '[:lower:]')
+          dockerfile=$(jq -r --arg s "$STEP" '.[$s].dockerfile' environment/images.json)
+          hash=$(cat "environment/$dockerfile" environment/builder-requirements.txt environment/runtime-check.py \
+            environment/conda-overlay-check.py "environment/stages/$stage_dir"/* | sha256sum | cut -d' ' -f1)
+          {
+            echo "name=ghcr.io/allenneuraldynamics/$(jq -r --arg s "$STEP" '.[$s].image_name' environment/images.json)"
+            echo "dockerfile=$dockerfile"
+            echo "python=$(jq -r --arg s "$STEP" '.[$s].python' environment/images.json)"
+            echo "stage_dir=$stage_dir"
+            echo "hash=$hash"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check existing image
+        id: check
+        env:
+          GHCR_CREDS: ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ steps.info.outputs.name }}:${{ inputs.tag }}
+          HASH: ${{ steps.info.outputs.hash }}
+        run: |
+          REMOTE_HASH=$(skopeo inspect --creds "$GHCR_CREDS" "docker://$IMAGE" 2>/dev/null \
+            | jq -r '.Labels["org.aind.env-hash"] // empty' || true)
+          echo "Remote env-hash: ${REMOTE_HASH:-<none>}"
+          if [[ "$REMOTE_HASH" == "$HASH" ]]; then
+            echo "Image is up to date, skipping build"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Free up disk space
+        if: steps.check.outputs.build == 'true'
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet /opt/hostedtoolcache
+          docker system prune -af
+          df -h
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr
+        if: steps.check.outputs.build == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        if: steps.check.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: environment
+          file: environment/${{ steps.info.outputs.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          # single-manifest images, so the digest is the one pipeline/images.env pins
+          provenance: false
+          sbom: false
+          tags: ${{ steps.info.outputs.name }}:${{ inputs.tag }}
+          build-args: |
+            STAGE_DIR=${{ steps.info.outputs.stage_dir }}
+            PYTHON_VERSION=${{ steps.info.outputs.python }}
+          labels: |
+            org.aind.env-hash=${{ steps.info.outputs.hash }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Report digest
+        if: steps.check.outputs.build == 'true'
+        env:
+          STEP: ${{ matrix.image }}
+          NAME: ${{ steps.info.outputs.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "$STEP=$NAME@$DIGEST" | tee -a "$GITHUB_STEP_SUMMARY"

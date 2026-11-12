@@ -137,7 +137,9 @@ same names.
      - Classifier: the soma and dendrite ONNX classifiers
    * - ``schemas/``
      - Yes
-     - Staged into NWB packaging
+     - NWB packaging: ``ndx-aibs-behavior-ophys.namespace.yaml`` and
+       ``ndx-aibs-behavior-ophys.extension.yaml``, from
+       `aind-ophys-nwb <https://github.com/AllenNeuralDynamics/aind-ophys-nwb/tree/main/code>`_
    * - ``cellpose_models/``
      - No
      - Decrosstalk and Extraction: Cellpose weights. When absent, Cellpose downloads them.
@@ -148,3 +150,8 @@ same names.
 
 Decrosstalk and Extraction record the Cellpose model files they loaded in their
 ``processing.json``.
+
+.. note::
+
+   The default soma and dendrite classifier models are not yet published outside Code Ocean.
+   Until they are, runs outside AIND need their own models (see :ref:`custom-classifier-models`).

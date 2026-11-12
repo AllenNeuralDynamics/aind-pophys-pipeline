@@ -1,0 +1,26 @@
+# Manually build and push step images. Copy the reported digests into pipeline/images.env.
+name: Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Container tag to build and push (e.g. 3.1.0-dev)
+        required: true
+        type: string
+      images:
+        description: JSON list of steps, e.g. ["DFF","OASIS"] (empty for every step)
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/_build-images.yml
+    with:
+      tag: ${{ inputs.tag }}
+      images: ${{ inputs.images }}
