@@ -34,7 +34,8 @@ COPY builder-requirements.txt /opt/image/builder-requirements.txt
 COPY runtime-check.py /opt/image/runtime-check.py
 # setuptools and setuptools-scm stay in the image so tasks can install the
 # processing library without build isolation (no download at run time).
-RUN python -m pip install --no-cache-dir -r /opt/image/builder-requirements.txt
+RUN grep -E '^(setuptools|setuptools-scm)==' /opt/image/builder-requirements.txt \
+    | xargs python -m pip install --no-cache-dir
 RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
     python -m pip install --no-cache-dir --no-index --no-deps /wheels/*.whl \
     && python -m pip check \
