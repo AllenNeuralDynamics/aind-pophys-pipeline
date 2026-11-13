@@ -84,7 +84,7 @@ jobs:
             git clone --quiet "$REPO" library-source
             git -C library-source -c advice.detachedHead=false checkout --quiet "$COMMIT"
             PYTHONPATH=/opt/build-tools python -m pip install --quiet --no-deps --no-build-isolation \
-              --no-cache-dir --target library library-source
+              --no-cache-dir --target /tmp/library ./library-source
             PYTHONPATH=/tmp/library python -m pip check'
 
   ci-ok:
