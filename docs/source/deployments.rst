@@ -162,7 +162,8 @@ On the Allen Institute cluster, submit from the login node with the ``aind`` par
 an A100 GPU for the classifier and a node-local ``APPTAINER_TMPDIR``. ``$SLURM_JOB_ID`` only exists
 inside the job, so the temporary directory is set in the ``--wrap`` command. Do not use
 ``aind_debug``, which runs one job per user at a time. New files under ``/allen/aind/scratch`` get
-no permission bits, so the example gives the run's folder an inherited owner entry first. The
+no permission bits, so the example gives the run's folder, and the repository clone when it is
+under ``/allen``, an inherited owner entry first. The
 ``aind`` partition allows 21 days, and the head job gets three:
 
 .. code-block:: bash
@@ -180,6 +181,7 @@ no permission bits, so the example gives the run's folder an inherited owner ent
 
    mkdir -p /allen/aind/scratch/$USER/pophys
    nfs4_setfacl -R -a 'A:fd:OWNER@:rwaDdxtTnNcCoy' /allen/aind/scratch/$USER/pophys
+   nfs4_setfacl -R -a 'A:fd:OWNER@:rwaDdxtTnNcCoy' "$PIPELINE_PATH/.."   # the repository clone
 
    sbatch --partition=aind --cpus-per-task=4 --mem=8G --time=3-00:00:00 \
        --output=/allen/aind/scratch/$USER/pophys/head-%j.log \

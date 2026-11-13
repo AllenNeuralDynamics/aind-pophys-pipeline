@@ -48,6 +48,16 @@ resubmit:
 
 Do the same for ``RESULTS_PATH`` to give published files normal permissions.
 
+A repository clone on such storage needs the same entry. Without it, files that git rewrites
+lose their permission bits, and ``git pull`` stops with ``Your local changes to the following files
+would be overwritten by merge`` although ``git diff`` shows only mode changes. From the clone:
+
+.. code-block:: bash
+
+    nfs4_setfacl -R -a 'A:fd:OWNER@:rwaDdxtTnNcCoy' .
+    git config core.fileMode false
+    git pull --ff-only
+
 
 Steps stay pending with ``QOSMaxJobsPerUserLimit``
 --------------------------------------------------
