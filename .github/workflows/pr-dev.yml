@@ -1,0 +1,105 @@
+# PRs into dev (and pushes to dev):
+#   unit tests -> build the `dev` images -> install each step's pinned library in its image
+#
+# PRs from forks cannot push to ghcr, so they run the tests only.
+# Pushes to dev rebuild `dev` from the dev HEAD, so the `dev` images always match
+# the dev branch before a release promotes them (promote-images.yml).
+#
+# The `ci-ok` job is meant to be the required status check in branch protection.
+name: PR to dev
+
+on:
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [dev]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.images.outputs.images }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: List images
+        id: images
+        run: echo "images=$(jq -c 'keys' environment/images.json)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -t .
+
+  images:
+    name: Build images
+    needs: tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/_build-images.yml
+    with:
+      tag: dev
+
+  library-install:
+    name: Install ${{ matrix.image }} library
+    needs: [tests, images]
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.tests.outputs.images) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet /opt/hostedtoolcache
+          docker system prune -af
+
+      - name: Install the pinned library in the dev image
+        env:
+          STEP: ${{ matrix.image }}
+        run: |
+          NAME=$(.github/scripts/image_info.sh "$STEP" name)
+          REPO=$(sed -n "s/^${STEP}_LIBRARY_REPO=//p" pipeline/process_versions.env)
+          COMMIT=$(sed -n "s/^${STEP}_LIBRARY_COMMIT=//p" pipeline/process_versions.env)
+          [[ -n "$REPO" && -n "$COMMIT" ]] || { echo "::error::No pin for $STEP in pipeline/process_versions.env"; exit 1; }
+          docker run --rm --platform linux/amd64 -e REPO="$REPO" -e COMMIT="$COMMIT" "$NAME:dev" bash -c '
+            set -e
+            cd /tmp
+            git clone --quiet "$REPO" library-source
+            git -C library-source -c advice.detachedHead=false checkout --quiet "$COMMIT"
+            PYTHONPATH=/opt/build-tools python -m pip install --quiet --no-deps --no-build-isolation \
+              --no-cache-dir --target /tmp/library ./library-source
+            PYTHONPATH=/tmp/library python -m pip check'
+
+  ci-ok:
+    name: ci-ok
+    needs: [tests, images, library-install]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs
+        env:
+          FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+        run: |
+          echo "tests=${{ needs.tests.result }} images=${{ needs.images.result }} library-install=${{ needs.library-install.result }}"
+          REQUIRED=("${{ needs.tests.result }}")
+          [[ "$FORK" == "true" ]] || REQUIRED+=("${{ needs.images.result }}" "${{ needs.library-install.result }}")
+          for result in "${REQUIRED[@]}"; do
+            [[ "$result" == "success" ]] || { echo "::error::Required job did not succeed"; exit 1; }
+          done

@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+# Dependency image for one pipeline step. The step's processing library is not
+# installed here: each task clones it at the commit pinned in
+# pipeline/process_versions.env and installs it with --no-deps at run time.
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim-bookworm AS runtime-base
+ARG STAGE_DIR
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MPLBACKEND=Agg
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
+    bash ca-certificates git time procps libgomp1 libglib2.0-0 \
+    $(if [ "$STAGE_DIR" = "classifier" ]; then printf 'libtk8.6 '; fi) \
+    && ps --version
+
+FROM runtime-base AS dependencies
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache/apt \
+    apt-get update && apt-get install -y --no-install-recommends build-essential
+COPY builder-requirements.txt /opt/builder-requirements.txt
+RUN python -m venv /opt/build && /opt/build/bin/pip install --no-cache-dir -r /opt/builder-requirements.txt
+ARG STAGE_DIR
+COPY stages/${STAGE_DIR}/requirements.lock /opt/requirements.lock
+COPY stages/${STAGE_DIR}/build.constraints /opt/build.constraints
+RUN /opt/build/bin/pip wheel --no-cache-dir --no-deps --build-constraint /opt/build.constraints \
+    -r /opt/requirements.lock -w /wheels
+
+FROM runtime-base AS runtime
+ARG STAGE_DIR
+COPY builder-requirements.txt /opt/image/builder-requirements.txt
+COPY runtime-check.py /opt/image/runtime-check.py
+# Older Python base images ship wheel, which the step locks do not need.
+RUN python -m pip uninstall --yes wheel \
+    && grep -E '^(setuptools|setuptools-scm)==' /opt/image/builder-requirements.txt \
+    | xargs python -m pip install --no-cache-dir
+RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
+    python -m pip install --no-cache-dir --no-index --no-deps /wheels/*.whl \
+    && python -m pip check \
+    && python /opt/image/runtime-check.py "${STAGE_DIR}" \
+    && python -m pip list --format=json > /opt/image/packages.json
+# Build tools for installing the processing library at run time, kept apart from the
+# step's dependencies, whose locks may pin older setuptools or packaging.
+RUN grep -E '^(packaging|setuptools|setuptools-scm|tomli)==' /opt/image/builder-requirements.txt > /tmp/build-tools.txt \
+    && python -m pip install --no-cache-dir --no-deps --target /opt/build-tools -r /tmp/build-tools.txt \
+    && rm /tmp/build-tools.txt \
+    && PYTHONPATH=/opt/build-tools python -c "import packaging.licenses, setuptools, setuptools_scm"
+CMD ["bash"]

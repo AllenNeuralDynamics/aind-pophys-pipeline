@@ -1,0 +1,57 @@
+{
+    "CONVERTER": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-converter",
+        "python": "3.12"
+    },
+    "MOTION_CORRECTION": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-motion-correction",
+        "python": "3.10"
+    },
+    "MOVIE_QC": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-movie-qc",
+        "python": "3.12"
+    },
+    "DECROSSTALK_SPLIT": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-decrosstalk-split",
+        "python": "3.12"
+    },
+    "DECROSSTALK_ROI_IMAGES": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-decrosstalk-roi-images",
+        "python": "3.10"
+    },
+    "EXTRACTION": {
+        "dockerfile": "Dockerfile_extraction",
+        "image_name": "pophys-extraction",
+        "python": "3.10"
+    },
+    "DFF": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-dff",
+        "python": "3.12"
+    },
+    "OASIS": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-oasis",
+        "python": "3.12"
+    },
+    "CLASSIFIER": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-classifier",
+        "python": "3.12"
+    },
+    "NWB": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-nwb",
+        "python": "3.12"
+    },
+    "AGGREGATOR": {
+        "dockerfile": "Dockerfile_python",
+        "image_name": "pophys-aggregator",
+        "python": "3.12"
+    }
+}

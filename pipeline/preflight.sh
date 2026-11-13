@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -e
+
+mode="${1:-local}"
+pipeline_path="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+nextflow_bin="${NEXTFLOW_BIN:-nextflow}"
+data_path="${DATA_PATH:-${pipeline_path}/../data}"
+results_path="${RESULTS_PATH:-${pipeline_path}/../results}"
+workdir="${WORKDIR:-${pipeline_path}/../work}"
+params_file="${PARAMS_FILE:-${pipeline_path}/../pipeline_parameters.json}"
+
+if [ "$mode" != "local" ] && [ "$mode" != "slurm" ]; then
+    echo "usage: $0 local|slurm" >&2
+    exit 2
+fi
+
+if ! command -v "$nextflow_bin" >/dev/null 2>&1; then
+    echo "Nextflow executable not found: ${nextflow_bin}" >&2
+    exit 1
+fi
+
+java_major="$(java -version 2>&1 | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+if [ -z "$java_major" ] || [ "$java_major" -lt 17 ]; then
+    echo "Java 17 or newer is required by Nextflow" >&2
+    exit 1
+fi
+
+if [ "$mode" = "local" ]; then
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "Docker executable not found" >&2
+        exit 1
+    fi
+else
+    if ! command -v apptainer >/dev/null 2>&1 &&
+        ! command -v singularity >/dev/null 2>&1; then
+        echo "Apptainer or Singularity executable not found" >&2
+        exit 1
+    fi
+    if [ "${DEFAULT_QUEUE:-CHANGE_ME}" = "CHANGE_ME" ]; then
+        echo "Set DEFAULT_QUEUE before a SLURM run" >&2
+        exit 1
+    fi
+fi
+
+if [ ! -d "$data_path" ]; then
+    echo "DATA_PATH directory not found: ${data_path}" >&2
+    exit 1
+fi
+if [ ! -f "$params_file" ]; then
+    echo "Parameter file not found: ${params_file}" >&2
+    exit 1
+fi
+if [ ! -f "${pipeline_path}/../environment/images.json" ]; then
+    echo "Image list not found: ${pipeline_path}/../environment/images.json" >&2
+    exit 1
+fi
+
+mkdir -p "${results_path}/nextflow" "$workdir"
+
+# Storage that grants access only through an ACL can give new files mode 000.
+# Copies of those files to local disk keep the mode and become unreadable.
+probe="${workdir}/.preflight-mode-$$"
+: > "$probe"
+if [ -z "$(find "$probe" -perm -0400)" ]; then
+    rm -f "$probe"
+    echo "New files in WORKDIR (${workdir}) get no permission bits; access comes only from an ACL." >&2
+    echo "Give WORKDIR an inherited owner entry, for example" >&2
+    echo "  nfs4_setfacl -R -a 'A:fd:OWNER@:rwaDdxtTnNcCoy' ${workdir}" >&2
+    echo "or use a directory where new files get normal permissions." >&2
+    exit 1
+fi
+rm -f "$probe"
