@@ -2,10 +2,6 @@
 
 nextflow.enable.dsl = 2
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
-params.input_dir = '/data'
-params.output_dir = '/results'
-params.temp_dir = '/scratch'
 params.params_file = params.params_file ?: System.getenv('PARAMS_FILE') ?: null
 
 def parse_key_value_file(path) {
@@ -62,6 +58,26 @@ def load_pipeline_parameters() {
     println "Using pipeline parameter file: ${selected}"
 }
 
+// Applied after the parameter file, so the command line and the file can both set them.
+def apply_runtime_path_defaults() {
+    [input_dir: '/data', output_dir: '/results', temp_dir: '/scratch'].each { name, value ->
+        if (!params.containsKey(name)) {
+            params[name] = value
+        }
+    }
+}
+
+// Quote a value as one bash word.
+def shell_quote(value) {
+    "'" + value.toString().replace("'", "'\"'\"'") + "'"
+}
+
+// The Code Ocean panel can wrap a free-text value in double quotes.
+def strip_double_quotes(value) {
+    def text = value.toString()
+    text.size() >= 2 && text.startsWith('"') && text.endsWith('"') ? text[1..-2] : text
+}
+
 def validate_runtime_paths() {
     [
         input_dir: params.input_dir,
@@ -79,6 +95,7 @@ def validate_runtime_paths() {
 }
 
 load_pipeline_parameters()
+apply_runtime_path_defaults()
 validate_runtime_paths()
 
 def task_runtime_path(configured_path, task_relative_path) {
@@ -232,7 +249,8 @@ install_library() {
     echo "installing processing library: ${repo_url} (commit: ${commit_hash})..."
     git clone --quiet "${repo_url}" capsule/library-source
     git -C capsule/library-source -c advice.detachedHead=false checkout --quiet "${commit_hash}"
-    python -m pip install --quiet --no-deps --no-build-isolation --no-cache-dir \
+    PYTHONPATH="/opt/build-tools${PYTHONPATH:+:${PYTHONPATH}}" \
+        python -m pip install --quiet --no-deps --no-build-isolation --no-cache-dir \
         --target capsule/library capsule/library-source
     export PYTHONPATH="${PWD}/capsule/library${PYTHONPATH:+:${PYTHONPATH}}"
     python -m pip check
@@ -342,7 +360,7 @@ publishRelativeSkipRunLevel = { String filename ->
 workflow {
     if (!params.ophys_mount_url ||
             !(params.ophys_mount_url.toString() ==~ /^(s3:\/\/[^\/\s]+\/\S+|\/\S+)$/)) {
-        throw new IllegalArgumentException('ophys_mount_url must be a nonempty S3 URL or absolute directory')
+        throw new IllegalArgumentException('Set the session with --ophys_mount_url: an S3 URL or an absolute directory')
     }
 
     // The session comes from an S3 URL or a local absolute directory; the
@@ -872,8 +890,8 @@ process extraction {
 
 
     script:
-    def suite2p_params_arg = params.containsKey('suite2p_params') && params.suite2p_params ? "--suite2p_params '${params.suite2p_params}'" : ""
-    def suite2p_ops_arg = params.containsKey('suite2p_ops') && params.suite2p_ops ? "--suite2p_ops ${params.suite2p_ops}" : ""
+    def suite2p_params_arg = params.containsKey('suite2p_params') && params.suite2p_params ? "--suite2p_params ${shell_quote(params.suite2p_params)}" : ""
+    def suite2p_ops_arg = params.containsKey('suite2p_ops') && params.suite2p_ops ? "--suite2p_ops ${shell_quote(params.suite2p_ops)}" : ""
     """
     #!/usr/bin/env bash
     set -e
@@ -1129,6 +1147,8 @@ process pipeline_processing_metadata_aggregator {
     path 'capsule/results/*'
 
     script:
+    def processor_arg = params.containsKey('processor_full_name') ? "--processor_full_name ${shell_quote(strip_double_quotes(params.processor_full_name))}" : ''
+    def data_summary_arg = params.containsKey('data_summary') && params.data_summary ? "--data_summary ${shell_quote(strip_double_quotes(params.data_summary))}" : ''
     """
     #!/usr/bin/env bash
     set -e
@@ -1149,7 +1169,7 @@ process pipeline_processing_metadata_aggregator {
 
     echo "[${task.tag}] running aggregator..."
     cd capsule/code
-    run_library aind_metadata_manager.metadata_manager --input_dir ${task_input_dir} --output_dir ${task_output_dir} ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
+    run_library aind_metadata_manager.metadata_manager --input_dir ${task_input_dir} --output_dir ${task_output_dir} ${processor_arg} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${data_summary_arg} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
     echo "[${task.tag}] completed!"
     """
 }

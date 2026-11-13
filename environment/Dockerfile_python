@@ -32,8 +32,6 @@ FROM runtime-base AS runtime
 ARG STAGE_DIR
 COPY builder-requirements.txt /opt/image/builder-requirements.txt
 COPY runtime-check.py /opt/image/runtime-check.py
-# setuptools and setuptools-scm stay in the image so tasks can install the
-# processing library without build isolation (no download at run time).
 # Older Python base images ship wheel, which the step locks do not need.
 RUN python -m pip uninstall --yes wheel \
     && grep -E '^(setuptools|setuptools-scm)==' /opt/image/builder-requirements.txt \
@@ -43,4 +41,10 @@ RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
     && python -m pip check \
     && python /opt/image/runtime-check.py "${STAGE_DIR}" \
     && python -m pip list --format=json > /opt/image/packages.json
+# Build tools for installing the processing library at run time, kept apart from the
+# step's dependencies, whose locks may pin older setuptools or packaging.
+RUN grep -E '^(packaging|setuptools|setuptools-scm|tomli)==' /opt/image/builder-requirements.txt > /tmp/build-tools.txt \
+    && python -m pip install --no-cache-dir --no-deps --target /opt/build-tools -r /tmp/build-tools.txt \
+    && rm /tmp/build-tools.txt \
+    && PYTHONPATH=/opt/build-tools python -c "import packaging.licenses, setuptools, setuptools_scm"
 CMD ["bash"]

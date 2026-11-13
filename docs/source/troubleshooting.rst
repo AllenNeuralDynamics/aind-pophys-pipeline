@@ -33,6 +33,30 @@ Nextflow 24.10.4 runs on Java 17 to 23. Install it, or load it with your cluster
 example ``module load java/jdk-21.0.3`` on the Allen Institute cluster.
 
 
+``New files in WORKDIR ... get no permission bits``
+---------------------------------------------------
+
+Some network storage, such as ``/allen``, grants access only through an NFS4 ACL and gives new
+files mode 000 (``ls -l`` shows ``----------+``). Such files are readable in place, but a copy on
+local disk keeps the mode and loses the ACL, so a step that copies one, such as the library
+install, fails with ``Permission denied``. Give the work directory an inherited owner entry, then
+resubmit:
+
+.. code-block:: bash
+
+    nfs4_setfacl -R -a 'A:fd:OWNER@:rwaDdxtTnNcCoy' "$WORKDIR"
+
+Do the same for ``RESULTS_PATH`` to give published files normal permissions.
+
+
+Steps stay pending with ``QOSMaxJobsPerUserLimit``
+--------------------------------------------------
+
+The partition's QOS limits how many jobs a user can run, and the head job already uses that
+allowance. Cancel the head job and resubmit, with ``-resume``, on a partition without the limit
+(see :doc:`deployments`).
+
+
 ``Unable to load AWS credentials from any provider in the chain``
 -----------------------------------------------------------------
 

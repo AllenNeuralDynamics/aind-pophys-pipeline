@@ -11,7 +11,7 @@
     "data_type": "h5",
     "diameter": "0",
     "cellprob_threshold": "0.0",
-    "init": "sparsery",
+    "init": "mean",
     "functional_chan": "1",
     "threshold_scaling": "1",
     "max_overlap" : "0.75",

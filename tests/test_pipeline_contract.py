@@ -183,6 +183,7 @@ class PipelineContractTests(MainTestCase):
             'git clone --quiet "${repo_url}" capsule/library-source',
             'git -C capsule/library-source -c advice.detachedHead=false '
             'checkout --quiet "${commit_hash}"',
+            'PYTHONPATH="/opt/build-tools${PYTHONPATH:+:${PYTHONPATH}}" '
             "python -m pip install --quiet --no-deps --no-build-isolation --no-cache-dir "
             "--target capsule/library capsule/library-source",
             'export PYTHONPATH="${PWD}/capsule/library${PYTHONPATH:+:${PYTHONPATH}}"',
@@ -253,7 +254,7 @@ class PipelineContractTests(MainTestCase):
                       self.main)
         self.assert_in_order(
             self.main,
-            "load_pipeline_parameters()\nvalidate_runtime_paths()",
+            "load_pipeline_parameters()\napply_runtime_path_defaults()\nvalidate_runtime_paths()",
             "params.versions = parse_process_versions()",
             "params.stage_images = parse_stage_images(",
         )
@@ -265,7 +266,7 @@ class PipelineContractTests(MainTestCase):
             ("output_dir", "/results"),
             ("temp_dir", "/scratch"),
         ):
-            self.assertIn(f"params.{name} = '{default}'", self.main)
+            self.assertIn(f"{name}: '{default}'", self.main)
             self.assertIn(f"params.{name}", self.main)
         self.assertIn("must be an absolute container path without whitespace", self.main)
         self.assertIn("params.params_file", self.main)
@@ -358,9 +359,7 @@ class PipelineContractTests(MainTestCase):
                 rf"params\.{reference}\b|params\['{reference}'\]|containsKey\('{reference}'\)",
                 name,
             )
-        self.assertEqual(self.panel_defaults["ophys_mount_url"],
-                         re.search(r"params.ophys_mount_url = '([^']+)'", self.main).group(1))
-        self.assertIn("ophys_mount_url must be a nonempty S3 URL or absolute directory", self.main)
+        self.assertIn("Set the session with --ophys_mount_url", self.main)
 
     def test_model_mounts_and_process_inputs_match(self):
         datasets = json.loads((ROOT / ".codeocean/datasets.json").read_text())["attached_datasets"]

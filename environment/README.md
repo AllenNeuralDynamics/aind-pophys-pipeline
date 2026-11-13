@@ -14,7 +14,7 @@ its dependencies needs no rebuild.
 | `stages/<step>/requirements.lock` | Resolved dependency versions built into the image |
 | `stages/<step>/build.constraints` | Build tool and NumPy versions used to build wheels |
 | `stages/extraction/conda-*`, `overlay-policy.json`, `overrides.in` | The extraction conda lock and the pip packages allowed to replace conda ones |
-| `builder-requirements.txt` | pip, setuptools, setuptools-scm and wheel, used to build wheels and to install libraries at run time |
+| `builder-requirements.txt` | pip, setuptools, setuptools-scm, packaging, tomli and wheel, used to build wheels; the setuptools, setuptools-scm, packaging and tomli pins are also installed in `/opt/build-tools`, which tasks use to install the processing library |
 | `runtime-check.py` | Import checks run while building each image |
 | `lock.py` | Writes `requirements.in` and resolves `requirements.lock` for one or more steps |
 | `build_all.sh`, `push_all.sh` | Build images into the local Docker daemon, and push them |

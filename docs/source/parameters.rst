@@ -8,7 +8,8 @@ The pipeline accepts several global parameters that control its overall behavior
 
 .. code-block:: bash
 
-   --ophys_mount_url URL_OR_DIR        Session to process: an S3 URL or an absolute directory
+   --ophys_mount_url URL_OR_DIR        Session to process (required): an S3 URL or an absolute
+                                       directory
    --acquisition_data_type {single,multiplane}
                                        single runs the single-plane steps; multiplane adds
                                        pair splitting and decrosstalk
@@ -52,10 +53,8 @@ starting Nextflow when it does not exist.
 .. note::
 
    A value from the parameter file applies only when the parameter is not already set on the
-   command line, in a Nextflow configuration file, or at the top of ``main.nf``. Command line
-   arguments therefore override the parameter file. ``ophys_mount_url``, ``input_dir``,
-   ``output_dir`` and ``temp_dir`` are set at the top of ``main.nf``, so set them on the command
-   line.
+   command line or in a Nextflow configuration file. Command line arguments therefore override
+   the parameter file.
 
 The pipeline log names the parameter file it used and prints every resolved parameter as
 ``PARAM: <name> = <value>``.
@@ -153,7 +152,7 @@ Extraction Parameters
      - Default
      - Description
    * - ``init``
-     - ``sparsery``
+     - ``mean``
      - Cell detection method: ``max/mean`` (Cellpose on the maximum projection divided by the
        mean image), ``mean``, ``enhanced_mean`` or ``max`` (Cellpose on that image),
        ``sourcery`` and ``sparsery`` (Suite2p functional detection without and with sparse
@@ -304,6 +303,5 @@ The excerpt shows only the changed values; keep the rest of the template's entri
 
 .. code-block:: bash
 
-   PARAMS_FILE=$PWD/../my_parameters.json \
-   OPHYS_MOUNT_URL=s3://aind-open-data/<session> S3_ANONYMOUS=true \
-       ./run_local.sh --debug 1
+   PARAMS_FILE=$PWD/../my_parameters.json S3_ANONYMOUS=true \
+       ./run_local.sh --ophys_mount_url s3://aind-open-data/<session> --debug 1

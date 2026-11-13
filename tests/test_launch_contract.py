@@ -22,7 +22,6 @@ class LaunchContractTests(unittest.TestCase):
         script = (PIPELINE / "run_local.sh").read_text()
         self.assertIn("nextflow_local.config", script)
         self.assertIn("--params_file", script)
-        self.assertIn("--ophys_mount_url", script)
         self.assertIn("-work-dir", script)
         self.assertIn("preflight.sh\" local", script)
 
@@ -43,6 +42,7 @@ class LaunchContractTests(unittest.TestCase):
             "Parameter file not found",
             "Image list not found",
             "../environment/images.json",
+            "get no permission bits",
         ):
             self.assertIn(text, script)
 

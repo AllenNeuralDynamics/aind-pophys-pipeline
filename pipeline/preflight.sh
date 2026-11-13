@@ -8,7 +8,6 @@ data_path="${DATA_PATH:-${pipeline_path}/../data}"
 results_path="${RESULTS_PATH:-${pipeline_path}/../results}"
 workdir="${WORKDIR:-${pipeline_path}/../work}"
 params_file="${PARAMS_FILE:-${pipeline_path}/../pipeline_parameters.json}"
-source_path="${OPHYS_MOUNT_URL:-${data_path}}"
 
 if [ "$mode" != "local" ] && [ "$mode" != "slurm" ]; then
     echo "usage: $0 local|slurm" >&2
@@ -51,13 +50,23 @@ if [ ! -f "$params_file" ]; then
     echo "Parameter file not found: ${params_file}" >&2
     exit 1
 fi
-if [[ "$source_path" != s3://* ]] && [ ! -d "$source_path" ]; then
-    echo "OPHYS_MOUNT_URL directory not found: ${source_path}" >&2
-    exit 1
-fi
 if [ ! -f "${pipeline_path}/../environment/images.json" ]; then
     echo "Image list not found: ${pipeline_path}/../environment/images.json" >&2
     exit 1
 fi
 
 mkdir -p "${results_path}/nextflow" "$workdir"
+
+# Storage that grants access only through an ACL can give new files mode 000.
+# Copies of those files to local disk keep the mode and become unreadable.
+probe="${workdir}/.preflight-mode-$$"
+: > "$probe"
+if [ -z "$(find "$probe" -perm -0400)" ]; then
+    rm -f "$probe"
+    echo "New files in WORKDIR (${workdir}) get no permission bits; access comes only from an ACL." >&2
+    echo "Give WORKDIR an inherited owner entry, for example" >&2
+    echo "  nfs4_setfacl -R -a 'A:fd:OWNER@:rwaDdxtTnNcCoy' ${workdir}" >&2
+    echo "or use a directory where new files get normal permissions." >&2
+    exit 1
+fi
+rm -f "$probe"

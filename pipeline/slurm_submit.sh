@@ -18,14 +18,12 @@ data_path="${DATA_PATH:-${pipeline_path}/../data}"
 results_path="${RESULTS_PATH:-${pipeline_path}/../results}"
 workdir="${WORKDIR:-${pipeline_path}/../work}"
 params_file="${PARAMS_FILE:-${pipeline_path}/../pipeline_parameters.json}"
-source_path="${OPHYS_MOUNT_URL:-${data_path}}"
 default_queue="${DEFAULT_QUEUE:-CHANGE_ME}"
 
 export DATA_PATH="$data_path"
 export RESULTS_PATH="$results_path"
 export WORKDIR="$workdir"
 export PARAMS_FILE="$params_file"
-export OPHYS_MOUNT_URL="$source_path"
 
 "${pipeline_path}/preflight.sh" slurm
 
@@ -35,7 +33,6 @@ nextflow_args=(
     run "${pipeline_path}/main.nf"
     -work-dir "$workdir"
     --params_file "$params_file"
-    --ophys_mount_url "$source_path"
     --default_queue "$default_queue"
 )
 if [ -n "${GPU_QUEUE:-}" ]; then

@@ -1,11 +1,12 @@
-# After the Release workflow sets the new version in pipeline/nextflow.config:
-#   promote each step's `dev` image to {version} and `latest`.
+# After the Release workflow sets the new version in pipeline/nextflow.config, or when run
+# by hand from the Actions tab: promote each step's `dev` image to {version} and `latest`.
 #
 # Promotion only happens if the `dev` image was built from the same environment/
 # files as main (org.aind.env-hash label). No-op for steps already at {version}.
 name: Promote images
 
 on:
+  workflow_dispatch:
   workflow_run:
     workflows: [Release]
     types: [completed]
@@ -22,7 +23,7 @@ permissions:
 jobs:
   meta:
     name: Resolve version
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}

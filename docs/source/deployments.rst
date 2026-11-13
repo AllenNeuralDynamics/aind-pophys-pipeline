@@ -55,10 +55,6 @@ Configuration
      - ``--gres=gpu:1``
      - SLURM options for the classifier job. Request a GPU model of the Turing generation or
        newer, for example ``--gres=gpu:a100:1``.
-   * - ``OPHYS_MOUNT_URL``
-     - none (required)
-     - The session to process: an S3 URL or an absolute directory (see :doc:`input_output`).
-       Nextflow copies an S3 session in full into ``WORKDIR`` before the first step starts.
    * - ``PARAMS_FILE``
      - ``pipeline_parameters.json`` at the repository root
      - The parameter file (see :doc:`parameters`).
@@ -70,7 +66,9 @@ Configuration
      - Where results and the Nextflow reports are published.
    * - ``WORKDIR``
      - ``work/`` at the repository root
-     - Nextflow's work directory. It must be on storage that every node can reach, and is kept
+     - Nextflow's work directory. It must be on storage that every node can reach, and new files
+       there must get normal permission bits, which ``preflight.sh`` checks (see
+       :ref:`troubleshooting`). It holds the copied session and every step's output, and is kept
        for ``-resume``.
    * - ``S3_ANONYMOUS``
      - ``false``
@@ -93,30 +91,62 @@ Configuration
 .. code-block:: bash
 
    sbatch --partition="$DEFAULT_QUEUE" --cpus-per-task=4 --mem=8G --time=24:00:00 \
-       --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh" --acquisition_data_type multiplane
+       --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh" \
+       --ophys_mount_url s3://aind-open-data/<session> --acquisition_data_type multiplane
 
-``slurm_submit.sh`` runs ``preflight.sh``, which checks Java, Nextflow, Apptainer, the parameter
-file, the image list and the input paths, then starts Nextflow with ``nextflow_slurm.config``.
-Arguments after the script name are passed to Nextflow; here ``--acquisition_data_type`` selects a
-multiplane session (the default is ``single``). Each step may run for up to a day, so give the head
+``slurm_submit.sh`` runs ``preflight.sh``, which checks Java, Nextflow, Apptainer,
+``DEFAULT_QUEUE``, the model folder, the parameter file, the image list and the permissions of new
+files in ``WORKDIR``, then starts Nextflow with ``nextflow_slurm.config``.
+Arguments after the script name are passed to Nextflow. ``--ophys_mount_url`` gives the session,
+an S3 URL or an absolute directory (see :doc:`input_output`), and ``--acquisition_data_type``
+selects a multiplane session (the default is ``single``). Nextflow copies an S3 session into
+``WORKDIR`` before the Converter step, and its ``pophys/`` folder a second time for the later
+steps. Each step may run for up to a day, so give the head
 job more time for large sessions.
+
+The head job counts toward per-user job limits while it waits for its steps. On a partition whose
+QOS allows a user only one running job, the steps stay pending with ``QOSMaxJobsPerUserLimit``
+and the run never progresses. Use a partition without such a limit for the head job and the steps.
 
 Nextflow's progress goes to the ``--output`` file, one line per submitted or finished task, and
 each task runs as its own ``nf-<step>`` job in ``squeue``. The full log is
 ``RESULTS_PATH/nextflow/nextflow.log``, and a failed task's output is ``.command.log`` in the work
 directory that the error names.
 
-A failed run continues from its last completed tasks when resubmitted from the same directory,
-which holds Nextflow's run history:
+A failed or cancelled run continues from its last completed tasks when resubmitted with
+``-resume`` from the same launch directory, which holds Nextflow's run history, and the same
+``WORKDIR``:
 
 .. code-block:: bash
 
    sbatch --partition="$DEFAULT_QUEUE" --cpus-per-task=4 --mem=8G --time=24:00:00 \
-       --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh" --acquisition_data_type multiplane -resume
+       --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh" \
+       --ophys_mount_url s3://aind-open-data/<session> --acquisition_data_type multiplane -resume
 
-Nextflow pulls each image from the GitHub Container Registry the first time it is used and caches
-it in ``NXF_APPTAINER_CACHEDIR``. Optionally, pull them before the first run, for example from a
-login node:
+Always resume a run whose session comes from S3. Nextflow keeps its copies of the session in
+``WORKDIR``, and ``-resume`` reuses them. Without ``-resume``, or with a different launch directory
+or ``WORKDIR``, the session is copied again. Delete ``WORKDIR`` once the results are checked; it
+holds the session copies and every intermediate file.
+
+Run assets
+~~~~~~~~~~
+
+Besides the session, a run needs these, all on storage that the compute nodes can read:
+
+* **Step images.** Nextflow pulls each image from the GitHub Container Registry the first time it
+  is used, converts it to a SIF file and caches it in ``NXF_APPTAINER_CACHEDIR``. The 11 images
+  take several GB; the classifier image alone is about 3.4 GB and can take over 20 minutes to
+  convert. Keep the cache on shared storage, so each image is pulled once per tag, and pull the
+  images before starting several runs that share it: runs that pull the same image at the same
+  time can fail with ``Stale file handle``.
+* **Model files.** ``DATA_PATH`` is mounted in every task at ``/tmp/data``. ``preflight.sh``
+  checks only that the folder exists; download and verify its contents as described in
+  :ref:`model-files`.
+* **Processing libraries.** Each task clones its library from GitHub at the commit in
+  ``pipeline/process_versions.env`` and installs it into the image, so the compute nodes need
+  outbound HTTPS to ``github.com``.
+
+Optionally, pull the images before the first run, for example from a login node:
 
 .. code-block:: bash
 
@@ -130,7 +160,10 @@ Example: Allen Institute HPC
 
 On the Allen Institute cluster, submit from the login node with the ``aind`` partition,
 an A100 GPU for the classifier and a node-local ``APPTAINER_TMPDIR``. ``$SLURM_JOB_ID`` only exists
-inside the job, so the temporary directory is set in the ``--wrap`` command:
+inside the job, so the temporary directory is set in the ``--wrap`` command. Do not use
+``aind_debug``, which runs one job per user at a time. New files under ``/allen/aind/scratch`` get
+no permission bits, so the example gives the run's folder an inherited owner entry first. The
+``aind`` partition allows 21 days, and the head job gets three:
 
 .. code-block:: bash
 
@@ -139,16 +172,18 @@ inside the job, so the temporary directory is set in the ``--wrap`` command:
    export PIPELINE_PATH=/path/to/aind-pophys-pipeline/pipeline
    export DEFAULT_QUEUE=aind
    export GPU_CLUSTER_OPTIONS='--gres=gpu:a100:1'
-   export OPHYS_MOUNT_URL=s3://aind-open-data/multiplane-ophys_851711_2026-08-19_11-13-08
    export S3_ANONYMOUS=true
    export RESULTS_PATH=/allen/aind/scratch/$USER/pophys/results
    export WORKDIR=/allen/aind/scratch/$USER/pophys/work
    export NXF_APPTAINER_CACHEDIR=/allen/aind/scratch/$USER/pophys/apptainer-cache
    export APPTAINER_CACHEDIR=$NXF_APPTAINER_CACHEDIR
 
-   sbatch --partition=aind --cpus-per-task=4 --mem=8G --time=24:00:00 \
+   mkdir -p /allen/aind/scratch/$USER/pophys
+   nfs4_setfacl -R -a 'A:fd:OWNER@:rwaDdxtTnNcCoy' /allen/aind/scratch/$USER/pophys
+
+   sbatch --partition=aind --cpus-per-task=4 --mem=8G --time=3-00:00:00 \
        --output=/allen/aind/scratch/$USER/pophys/head-%j.log \
-       --wrap 'export APPTAINER_TMPDIR=/scratch/fast/$SLURM_JOB_ID && mkdir -p "$APPTAINER_TMPDIR" && exec bash "$PIPELINE_PATH/slurm_submit.sh" --acquisition_data_type multiplane'
+       --wrap 'export APPTAINER_TMPDIR=/scratch/fast/$SLURM_JOB_ID && mkdir -p "$APPTAINER_TMPDIR" && exec bash "$PIPELINE_PATH/slurm_submit.sh" --ophys_mount_url s3://aind-open-data/multiplane-ophys_851711_2026-08-19_11-13-08 --acquisition_data_type multiplane'
 
 
 Local Deployment
@@ -178,15 +213,15 @@ Running Locally
 
 .. code-block:: bash
 
-   OPHYS_MOUNT_URL=s3://aind-open-data/single-plane-ophys_869385_2026-11-07_12-33-14 \
-       S3_ANONYMOUS=true ./run_local.sh -resume
+   S3_ANONYMOUS=true ./run_local.sh \
+       --ophys_mount_url s3://aind-open-data/single-plane-ophys_869385_2026-11-07_12-33-14 -resume
 
 For a multiplane session, add ``--acquisition_data_type multiplane``. See :doc:`input_output` for
 example sessions.
 
-``run_local.sh`` reads ``OPHYS_MOUNT_URL``, ``PARAMS_FILE``, ``DATA_PATH``, ``RESULTS_PATH``,
-``WORKDIR`` and ``NEXTFLOW_BIN`` with the same defaults as the SLURM launcher, runs
-``preflight.sh``, and starts Nextflow with ``nextflow_local.config``. Arguments are passed to
+``run_local.sh`` reads ``PARAMS_FILE``, ``DATA_PATH``, ``RESULTS_PATH``, ``WORKDIR`` and
+``NEXTFLOW_BIN`` with the same defaults as the SLURM launcher, runs ``preflight.sh``, and starts
+Nextflow with ``nextflow_local.config``. Arguments are passed to
 Nextflow. Containers run with ``--platform=linux/amd64``, and the classifier with ``--gpus all``.
 
 Docker pulls each image the first time a step uses it. To pull them all beforehand, run
