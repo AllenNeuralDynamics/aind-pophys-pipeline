@@ -29,7 +29,7 @@ and ``GPU_QUEUE`` when the GPUs are in a different partition (see :doc:`deployme
 ``Java 17 or newer is required by Nextflow``
 --------------------------------------------
 
-Nextflow needs Java 17 or newer. Install it, or load it with your cluster's module system, for
+Nextflow 24.10.4 runs on Java 17 to 23. Install it, or load it with your cluster's module system, for
 example ``module load java/jdk-21.0.3`` on the Allen Institute cluster.
 
 

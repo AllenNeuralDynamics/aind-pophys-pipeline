@@ -25,14 +25,14 @@ Configuration
 
 1. Clone the repository:
 
-.. code-block:: bash
+   .. code-block:: bash
 
-   git clone https://github.com/AllenNeuralDynamics/aind-pophys-pipeline.git
-   cd aind-pophys-pipeline
-   cd pipeline
+      git clone https://github.com/AllenNeuralDynamics/aind-pophys-pipeline.git
+      cd aind-pophys-pipeline
+      cd pipeline
 
 2. Set the run's environment variables in your shell. ``sbatch`` passes them to the head job, where
-   ``slurm_submit.sh`` and ``nextflow_slurm.config`` read them:
+   ``slurm_submit.sh`` and ``nextflow_slurm.config`` read them. Paths must be absolute:
 
 .. list-table::
    :header-rows: 1
@@ -56,8 +56,9 @@ Configuration
      - SLURM options for the classifier job. Request a GPU model of the Turing generation or
        newer, for example ``--gres=gpu:a100:1``.
    * - ``OPHYS_MOUNT_URL``
-     - ``DATA_PATH``
+     - none (required)
      - The session to process: an S3 URL or an absolute directory (see :doc:`input_output`).
+       Nextflow copies an S3 session in full into ``WORKDIR`` before the first step starts.
    * - ``PARAMS_FILE``
      - ``pipeline_parameters.json`` at the repository root
      - The parameter file (see :doc:`parameters`).
@@ -75,6 +76,9 @@ Configuration
      - ``false``
      - Set to ``true`` to read a public bucket, such as ``s3://aind-open-data``, without AWS
        credentials.
+   * - ``CONTAINER_TAG``
+     - ``PIPELINE_VERSION`` in ``nextflow.config``
+     - The tag of every step image. ``dev`` selects the development images.
    * - ``NEXTFLOW_BIN``
      - ``nextflow``
      - The Nextflow executable.
@@ -88,17 +92,27 @@ Configuration
 
 .. code-block:: bash
 
-   sbatch --partition=<your-partition> --cpus-per-task=4 --mem=8G --time=24:00:00 \
-       --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh"
+   sbatch --partition="$DEFAULT_QUEUE" --cpus-per-task=4 --mem=8G --time=24:00:00 \
+       --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh" --acquisition_data_type multiplane
 
 ``slurm_submit.sh`` runs ``preflight.sh``, which checks Java, Nextflow, Apptainer, the parameter
 file, the image list and the input paths, then starts Nextflow with ``nextflow_slurm.config``.
-Arguments after the script name are passed to Nextflow, so a failed run continues from its last
-completed tasks with:
+Arguments after the script name are passed to Nextflow; here ``--acquisition_data_type`` selects a
+multiplane session (the default is ``single``). Each step may run for up to a day, so give the head
+job more time for large sessions.
+
+Nextflow's progress goes to the ``--output`` file, one line per submitted or finished task, and
+each task runs as its own ``nf-<step>`` job in ``squeue``. The full log is
+``RESULTS_PATH/nextflow/nextflow.log``, and a failed task's output is ``.command.log`` in the work
+directory that the error names.
+
+A failed run continues from its last completed tasks when resubmitted from the same directory,
+which holds Nextflow's run history:
 
 .. code-block:: bash
 
-   sbatch <same options> "$PIPELINE_PATH/slurm_submit.sh" -resume
+   sbatch --partition="$DEFAULT_QUEUE" --cpus-per-task=4 --mem=8G --time=24:00:00 \
+       --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh" --acquisition_data_type multiplane -resume
 
 Nextflow pulls each image from the GitHub Container Registry the first time it is used and caches
 it in ``NXF_APPTAINER_CACHEDIR``. Optionally, pull them before the first run, for example from a
@@ -106,10 +120,10 @@ login node:
 
 .. code-block:: bash
 
-   NXF_APPTAINER_CACHEDIR=/path/to/cache ./scripts/pull_pipeline_images.sh
+   NXF_APPTAINER_CACHEDIR=/path/to/cache "$PIPELINE_PATH/../scripts/pull_pipeline_images.sh"
 
 ``--steps CONVERTER,MOTION_CORRECTION`` limits it to some steps. Images already in the cache are
-skipped.
+skipped. The script needs ``jq``.
 
 Example: Allen Institute HPC
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -125,7 +139,7 @@ inside the job, so the temporary directory is set in the ``--wrap`` command:
    export PIPELINE_PATH=/path/to/aind-pophys-pipeline/pipeline
    export DEFAULT_QUEUE=aind
    export GPU_CLUSTER_OPTIONS='--gres=gpu:a100:1'
-   export OPHYS_MOUNT_URL=s3://aind-open-data/<session>
+   export OPHYS_MOUNT_URL=s3://aind-open-data/multiplane-ophys_851711_2026-08-19_11-13-08
    export S3_ANONYMOUS=true
    export RESULTS_PATH=/allen/aind/scratch/$USER/pophys/results
    export WORKDIR=/allen/aind/scratch/$USER/pophys/work
@@ -134,7 +148,7 @@ inside the job, so the temporary directory is set in the ``--wrap`` command:
 
    sbatch --partition=aind --cpus-per-task=4 --mem=8G --time=24:00:00 \
        --output=/allen/aind/scratch/$USER/pophys/head-%j.log \
-       --wrap 'export APPTAINER_TMPDIR=/scratch/fast/$SLURM_JOB_ID && mkdir -p "$APPTAINER_TMPDIR" && exec bash "$PIPELINE_PATH/slurm_submit.sh"'
+       --wrap 'export APPTAINER_TMPDIR=/scratch/fast/$SLURM_JOB_ID && mkdir -p "$APPTAINER_TMPDIR" && exec bash "$PIPELINE_PATH/slurm_submit.sh" --acquisition_data_type multiplane'
 
 
 Local Deployment
@@ -154,17 +168,21 @@ Running Locally
 
 1. Clone the repository:
 
-.. code-block:: bash
+   .. code-block:: bash
 
-   git clone https://github.com/AllenNeuralDynamics/aind-pophys-pipeline.git
-   cd aind-pophys-pipeline
-   cd pipeline
+      git clone https://github.com/AllenNeuralDynamics/aind-pophys-pipeline.git
+      cd aind-pophys-pipeline
+      cd pipeline
 
 2. Run the pipeline:
 
 .. code-block:: bash
 
-   OPHYS_MOUNT_URL=s3://aind-open-data/<session> S3_ANONYMOUS=true ./run_local.sh -resume
+   OPHYS_MOUNT_URL=s3://aind-open-data/single-plane-ophys_869385_2026-11-07_12-33-14 \
+       S3_ANONYMOUS=true ./run_local.sh -resume
+
+For a multiplane session, add ``--acquisition_data_type multiplane``. See :doc:`input_output` for
+example sessions.
 
 ``run_local.sh`` reads ``OPHYS_MOUNT_URL``, ``PARAMS_FILE``, ``DATA_PATH``, ``RESULTS_PATH``,
 ``WORKDIR`` and ``NEXTFLOW_BIN`` with the same defaults as the SLURM launcher, runs
@@ -172,8 +190,9 @@ Running Locally
 Nextflow. Containers run with ``--platform=linux/amd64``, and the classifier with ``--gpus all``.
 
 Docker pulls each image the first time a step uses it. To pull them all beforehand, run
-``./scripts/pull_pipeline_images.sh --engine docker`` from the repository root; ``--save`` also
-writes each image to a compressed archive for copying to a machine without internet access.
+``./scripts/pull_pipeline_images.sh --engine docker`` from the repository root; ``--save`` with
+``--cache`` also writes each image to a ``zstd`` archive, for copying to a machine that cannot
+reach ``ghcr.io``. Runs still install each step's library from GitHub.
 
 
 Code Ocean Deployment (AIND)

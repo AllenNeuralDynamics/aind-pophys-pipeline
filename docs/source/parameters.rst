@@ -45,9 +45,9 @@ environment variable:
    # Example: --params_file pipeline_parameters.json
 
 Without either, the pipeline looks for ``data/pipeline_parameters.json`` at the repository root,
-then ``/data/pipeline_parameters.json``. A named file that does not exist stops the run. The
-launchers ``slurm_submit.sh`` and ``run_local.sh`` always pass a file, by default
-``pipeline_parameters.json`` at the repository root.
+then ``/data/pipeline_parameters.json``. The launchers ``slurm_submit.sh`` and ``run_local.sh``
+always pass a file, by default ``pipeline_parameters.json`` at the repository root, and stop before
+starting Nextflow when it does not exist.
 
 .. note::
 

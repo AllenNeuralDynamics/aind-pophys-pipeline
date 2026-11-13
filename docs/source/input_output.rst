@@ -7,6 +7,16 @@ Input Data Types
 The pipeline reads one session at a time, given by the ``ophys_mount_url`` parameter as either an
 S3 URL or an absolute directory.
 
+Public sessions in ``s3://aind-open-data`` can be read without AWS credentials by setting
+``S3_ANONYMOUS=true``. For example:
+
+* ``single-plane-ophys_869385_2026-11-07_12-33-14``: a single-plane session, about 39 GB
+* ``multiplane-ophys_851711_2026-08-19_11-13-08``: an 8-plane mesoscope session, about 163 GB;
+  run it with ``acquisition_data_type=multiplane``
+
+Nextflow copies an S3 session in full into the work directory before the first step starts. For a
+large session read more than once, download it first and pass the directory instead.
+
 Input folder
 ~~~~~~~~~~~~
 * The same layout from an S3 URL or a local directory. The Converter step reads it in both cases.
