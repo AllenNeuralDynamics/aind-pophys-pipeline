@@ -2,11 +2,342 @@
 
 nextflow.enable.dsl = 2
 
-import groovy.json.JsonSlurper
+params.params_file = params.params_file ?: System.getenv('PARAMS_FILE') ?: null
 
-params.ophys_mount_url = 's3://aind-open-data/multiplane-ophys_839909_2026-02-26_15-11-01'
+def parse_key_value_file(path) {
+    def values = [:]
+    file(path).eachLine { raw_line ->
+        def line = raw_line.trim()
+        if (!line || line.startsWith('#')) {
+            return
+        }
+        def separator = line.indexOf('=')
+        if (separator <= 0) {
+            throw new IllegalArgumentException("Invalid manifest line: ${raw_line}")
+        }
+        def key = line.substring(0, separator).trim()
+        def value = line.substring(separator + 1).trim()
+        if (value.size() >= 2 && ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'")))) {
+            value = value.substring(1, value.size() - 1)
+        }
+        if (values.containsKey(key)) {
+            throw new IllegalArgumentException("Duplicate manifest key: ${key}")
+        }
+        values[key] = value
+    }
+    values
+}
 
-// saveAs runs once per published file; keep its path relative to capsule/results.
+def load_pipeline_parameters() {
+    def candidates = []
+    if (params.params_file) {
+        candidates << params.params_file.toString()
+    }
+    candidates << "${baseDir}/../data/pipeline_parameters.json"
+    candidates << "/data/pipeline_parameters.json"
+
+    def selected = candidates.find { candidate -> file(candidate).exists() }
+    if (!selected) {
+        if (params.params_file) {
+            throw new IllegalArgumentException(
+                "Parameter file not found: ${params.params_file}"
+            )
+        }
+        return
+    }
+
+    def parsed = new groovy.json.JsonSlurper().parse(file(selected).toFile())
+    if (!(parsed instanceof Map)) {
+        throw new IllegalArgumentException(
+            "Parameter file must contain a JSON object: ${selected}"
+        )
+    }
+    parsed.each { key, value -> params[key] = value }
+    params.params_file = selected
+    println "Using pipeline parameter file: ${selected}"
+}
+
+// Applied after the parameter file, so the command line and the file can both set them.
+def apply_runtime_path_defaults() {
+    [input_dir: '/data', output_dir: '/results', temp_dir: '/scratch'].each { name, value ->
+        if (!params.containsKey(name)) {
+            params[name] = value
+        }
+    }
+}
+
+// Quote a value as one bash word.
+def shell_quote(value) {
+    "'" + value.toString().replace("'", "'\"'\"'") + "'"
+}
+
+// The Code Ocean panel can wrap a free-text value in double quotes.
+def strip_double_quotes(value) {
+    def text = value.toString()
+    text.size() >= 2 && text.startsWith('"') && text.endsWith('"') ? text[1..-2] : text
+}
+
+def validate_runtime_paths() {
+    [
+        input_dir: params.input_dir,
+        output_dir: params.output_dir,
+        temp_dir: params.temp_dir,
+    ].each { name, value ->
+        def path = value?.toString()?.trim()
+        if (!path || !path.startsWith('/') || path.contains('\u0000') ||
+                path ==~ /.*[\r\n\t ].*/) {
+            throw new IllegalArgumentException(
+                "params.${name} must be an absolute container path without whitespace"
+            )
+        }
+    }
+}
+
+load_pipeline_parameters()
+apply_runtime_path_defaults()
+validate_runtime_paths()
+
+def task_runtime_path(configured_path, task_relative_path) {
+    // The default /data, /results and /scratch become task-relative paths, which
+    // resolve once the task changes into capsule/code; other paths pass through.
+    configured_path.toString() in ['/data', '/results', '/scratch']
+        ? task_relative_path
+        : configured_path.toString()
+}
+
+def task_input_dir = task_runtime_path(params.input_dir, '../data')
+def task_output_dir = task_runtime_path(params.output_dir, '../results')
+def task_temp_dir = task_runtime_path(params.temp_dir, '../scratch')
+
+def validate_process_versions(versions) {
+    def stages = [
+        'CONVERTER',
+        'MOTION_CORRECTION',
+        'MOVIE_QC',
+        'DECROSSTALK_SPLIT',
+        'DECROSSTALK_ROI_IMAGES',
+        'EXTRACTION',
+        'DFF',
+        'OASIS',
+        'CLASSIFIER',
+        'NWB',
+        'AGGREGATOR'
+    ]
+    def sha_pattern = ~/^[0-9a-f]{40}$/
+    def required = []
+    stages.each { stage ->
+        required << "${stage}_LIBRARY_REPO"
+        required << "${stage}_LIBRARY_COMMIT"
+    }
+    def missing = required.findAll { key -> !versions[key] }
+    if (missing) {
+        throw new IllegalArgumentException("Missing process manifest keys: ${missing.join(', ')}")
+    }
+    stages.each { stage ->
+        def key = "${stage}_LIBRARY_COMMIT"
+        if (!(versions[key] ==~ sha_pattern)) {
+            throw new IllegalArgumentException("${key} must be a 40-character lowercase SHA")
+        }
+    }
+    versions
+}
+
+def parse_process_versions() {
+    def custom = file("${baseDir}/process_versions_custom.env")
+    def defaults = file("${baseDir}/process_versions.env")
+    def manifest = custom.exists() ? custom : defaults
+    if (!manifest.exists()) {
+        throw new IllegalArgumentException("Process manifest not found: ${manifest}")
+    }
+    println "Using process manifest: ${manifest}"
+    validate_process_versions(parse_key_value_file(manifest))
+}
+
+params.versions = parse_process_versions()
+
+def backend = params.backend ?: 'codeocean'
+if (!(backend in ['codeocean', 'local', 'slurm'])) {
+    throw new IllegalArgumentException(
+        "Unsupported backend: ${backend}; expected codeocean, local, or slurm"
+    )
+}
+def image_stages = [
+    'CONVERTER',
+    'MOTION_CORRECTION',
+    'MOVIE_QC',
+    'DECROSSTALK_SPLIT',
+    'DECROSSTALK_ROI_IMAGES',
+    'EXTRACTION',
+    'DFF',
+    'OASIS',
+    'CLASSIFIER',
+    'NWB',
+    'AGGREGATOR'
+]
+// Every step runs ghcr.io/allenneuraldynamics/<image_name>:<container_tag>,
+// with image names from environment/images.json. The tag comes from
+// --container_tag (CLI or config), then the CONTAINER_TAG environment variable,
+// then PIPELINE_VERSION in nextflow.config, which each release sets, so a
+// released pipeline runs its released images. Development runs use the `dev`
+// tag. images_custom.env, which git ignores, overrides individual steps with
+// any image reference, such as a locally built image.
+def resolve_container_tag() {
+    if (params.containsKey('container_tag') && params.container_tag) {
+        println "CONTAINER TAG (from CLI/config): ${params.container_tag}"
+        return params.container_tag.toString()
+    }
+    def env_tag = System.getenv('CONTAINER_TAG')
+    if (env_tag) {
+        println "CONTAINER TAG (from ENV): ${env_tag}"
+        return env_tag
+    }
+    def config_file = file("${baseDir}/nextflow.config")
+    def matcher = config_file.exists() ? (config_file.text =~ /PIPELINE_VERSION = "([^"]+)"/) : null
+    if (!matcher || !matcher.find()) {
+        throw new IllegalArgumentException(
+            'Cannot determine container tag: set --container_tag, CONTAINER_TAG or PIPELINE_VERSION in nextflow.config'
+        )
+    }
+    def version = matcher.group(1)
+    println "CONTAINER TAG (from nextflow.config PIPELINE_VERSION): ${version}"
+    version
+}
+
+def parse_stage_images(image_stages, container_tag) {
+    def catalog = new groovy.json.JsonSlurper().parse(file("${baseDir}/../environment/images.json").toFile())
+    if (catalog.keySet() != image_stages.toSet()) {
+        throw new IllegalArgumentException('environment/images.json must list exactly all 11 stages')
+    }
+    if (!(container_tag ==~ /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/)) {
+        throw new IllegalArgumentException("Invalid container tag: ${container_tag}")
+    }
+    def images = [:]
+    catalog.each { stage, entry ->
+        images[stage] = "ghcr.io/allenneuraldynamics/${entry.image_name}:${container_tag}"
+    }
+    def custom = file("${baseDir}/images_custom.env")
+    if (custom.exists()) {
+        def overrides = parse_key_value_file(custom)
+        def unknown = overrides.keySet() - image_stages.toSet()
+        if (unknown) {
+            throw new IllegalArgumentException("Unknown stages in images_custom.env: ${unknown.join(', ')}")
+        }
+        overrides.each { stage, image ->
+            if (!(image ==~ /^[^\s]+$/)) {
+                throw new IllegalArgumentException("Image for ${stage} in images_custom.env must be one reference")
+            }
+            println "Using custom image for ${stage}: ${image}"
+            images[stage] = image
+        }
+    }
+    images
+}
+
+params.container_tag = resolve_container_tag()
+params.stage_images = parse_stage_images(image_stages, params.container_tag)
+
+// Each task clones its processing library at the pinned commit, installs it
+// with --no-deps over the dependencies already in the step's image, and runs
+// <module>.run() from capsule/code so the ../data, ../results and ../scratch
+// task paths resolve.
+def libraryFunctions = '''
+install_library() {
+    local repo_url="$1"
+    local commit_hash="$2"
+
+    echo "installing processing library: ${repo_url} (commit: ${commit_hash})..."
+    git clone --quiet "${repo_url}" capsule/library-source
+    git -C capsule/library-source -c advice.detachedHead=false checkout --quiet "${commit_hash}"
+    PYTHONPATH="/opt/build-tools${PYTHONPATH:+:${PYTHONPATH}}" \
+        python -m pip install --quiet --no-deps --no-build-isolation --no-cache-dir \
+        --target capsule/library capsule/library-source
+    export PYTHONPATH="${PWD}/capsule/library${PYTHONPATH:+:${PYTHONPATH}}"
+    python -m pip check
+    mkdir -p capsule/code
+}
+
+run_library() {
+    local module="$1"
+    shift
+    echo "running ${module}.run $*"
+    python -u -c 'import importlib, sys; importlib.import_module(sys.argv.pop(1)).run()' "${module}" "$@"
+}
+'''
+
+// Decrosstalk: turn the staged pair<k>.txt into a pair<k>/ directory of plane
+// links, which the library's pair discovery reads. Runs in capsule/code.
+def decrosstalkPairFunction = '''
+stage_pair() {
+    shopt -s nullglob
+    local pair_files=(../data/pair*.txt)
+    shopt -u nullglob
+    if [ "${#pair_files[@]}" -eq 0 ]; then
+        echo "no ../data/pair*.txt; expecting a pre-staged pair*/ directory"
+        return
+    fi
+    if [ "${#pair_files[@]}" -ne 1 ]; then
+        echo "ERROR: expected one ../data/pair*.txt, found ${#pair_files[@]}: ${pair_files[*]}" >&2
+        exit 1
+    fi
+    local pair_file="${pair_files[0]}"
+    local pair_dir="${pair_file%.txt}"
+    mkdir -p "${pair_dir}"
+    local plane name
+    while read -r plane || [ -n "${plane}" ]; do
+        [ -n "${plane}" ] || continue
+        case "${plane}" in
+            /*)
+                if [ "$(dirname "${plane}")" != "$(cd ../data && pwd -P)" ]; then
+                    echo "ERROR: plane path is not directly under the input directory: ${plane}" >&2
+                    exit 1
+                fi
+                name="$(basename "${plane}")" ;;
+            *) name="${plane}" ;;
+        esac
+        if [ ! -d "../data/${name}" ]; then
+            echo "ERROR: plane directory not found: ../data/${name}" >&2
+            exit 1
+        fi
+        ln -sfn "../${name}" "${pair_dir}/${name}"
+    done < "${pair_file}"
+    echo "pair planes: $(ls "${pair_dir}" | tr '\\n' ' ')"
+}
+'''
+
+// Classifier: copy a mounted ROInet.zip to writable scratch and point
+// TORCH_HOME at a mounted ConvNeXt checkpoint. Without them, the library
+// downloads both. Runs in capsule/code; sets ROINET_ARGS.
+def classifierModelFunction = '''
+stage_roinet() {
+    local work_dir="${PWD}/../scratch/roinet"
+    local convnext="torch/hub/checkpoints/convnext_tiny-983f1562.pth"
+    local candidate
+    ROINET_ARGS=()
+    for candidate in ../data/roinet ../data/2p_roi_classifier; do
+        if [ -f "${candidate}/ROInet.zip" ]; then
+            mkdir -p "${work_dir}"
+            cp "${candidate}/ROInet.zip" "${work_dir}/"
+            ROINET_ARGS=(--roinet_dir="${work_dir}")
+            if [ -f "${candidate}/${convnext}" ]; then
+                export TORCH_HOME="$(cd "${candidate}" && pwd)/torch"
+            else
+                export TORCH_HOME="${work_dir}/torch"
+            fi
+            echo "ROInet: ${candidate}/ROInet.zip, TORCH_HOME=${TORCH_HOME}"
+            return
+        fi
+    done
+    export TORCH_HOME="${work_dir}/torch"
+    echo "ROInet: no mounted ROInet.zip; it is downloaded, with ConvNeXt into ${TORCH_HOME}"
+}
+'''
+
+// saveAs is invoked once per MATCH of each output glob, so a process declaring
+// 'capsule/results/*' gets one call per plane directory AND one per file sitting
+// at that level. Keeping the relative path means an artifact published from a
+// nested glob lands at <plane>/<step>/..., and a directory match publishes its
+// subtree there.
 CAPSULE_RESULTS = 'capsule/results/'
 RUN_LEVEL_DOCS = ['processing.json', 'quality_control.json']
 
@@ -16,15 +347,26 @@ publishRelative = { String filename ->
         : filename
 }
 
-// Skips a step's own root-level processing.json / quality_control.json; the run-level pair is published there.
+// For a step that writes its own processing.json / quality_control.json at
+// the top of capsule/results/ rather than under <plane>/<step>/ (the converter).
+// Those would publish to the results root, where the aggregator writes the
+// run-level pair. The documents still reach the aggregator on their emit
+// channels, so they are not published.
 publishRelativeSkipRunLevel = { String filename ->
     def rel = publishRelative(filename)
     rel in RUN_LEVEL_DOCS ? null : rel
 }
 
 workflow {
-    // Parameterized data source selection
-    def use_s3_source = params.containsKey('ophys_mount_url')
+    if (!params.ophys_mount_url ||
+            !(params.ophys_mount_url.toString() ==~ /^(s3:\/\/[^\/\s]+\/\S+|\/\S+)$/)) {
+        throw new IllegalArgumentException('Set the session with --ophys_mount_url: an S3 URL or an absolute directory')
+    }
+
+    // The session comes from an S3 URL or a local absolute directory; the
+    // converter reads either.
+    def source = params.ophys_mount_url.toString()
+    def use_s3_source = source.startsWith('s3://')
     
     // Declare all variables outside conditional blocks
     def ophys_data = Channel.empty()
@@ -34,41 +376,31 @@ workflow {
     def vasculature_dir = Channel.empty()
     def matched_tiff_vals_dir = Channel.empty()
     
-    // Print all parameters at startup
+    // Print the resolved parameter set after parameter-file loading.
     println "\n--- Pipeline Parameters ---"
     params.keySet().sort().each { key ->
         println "PARAM: ${key} = ${params[key]}"
     }
     println "--- End Parameters ---\n"
     
-    def base_path = "${projectDir}/../data/"
-    def parameter_json = file("${base_path}pipeline_parameters.json")
-
-    if (parameter_json.exists()) {
-        def jsonSlurper = new JsonSlurper()
-        def configData = jsonSlurper.parse(parameter_json)
-        
-        // Add each key-value pair from JSON to params
-        configData.each { key, value ->
-            params[key] = value
-            println "Added params.${key} = ${value}"
-        }
-    }
+    // Model files: DATA_PATH when set (SLURM and local runs), else data/ at the
+    // repository root, which is where Code Ocean attaches the model assets. The
+    // backend configs bind the same folder into every task at /tmp/data.
+    def data_root = System.getenv('DATA_PATH') ?: "${projectDir}/../data"
+    def base_path = "${data_root}/"
     // Data source setup
     if (use_s3_source) {
-        ophys_data = Channel.fromPath(params.ophys_mount_url, type: 'any')
-        ophys_mount_jsons = Channel.fromPath("${params.ophys_mount_url}/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${params.ophys_mount_url}/pophys", type: 'dir')
+        ophys_data = Channel.fromPath(source, type: 'any')
+        ophys_mount_jsons = Channel.fromPath("${source}/*.json", type: 'any')
+        ophys_mount_pophys_directory = Channel.fromPath("${source}/pophys", type: 'dir')
     } else {
-        
-        ophys_data = Channel.fromPath("${base_path}harvard-single", type: 'dir')
-        ophys_mount_jsons = Channel.fromPath("${base_path}harvard-single/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${base_path}harvard-single/pophys", type: 'dir')
+        ophys_data = Channel.fromPath(source, type: 'dir', checkIfExists: true)
+        ophys_mount_jsons = Channel.fromPath("${source}/*.json", type: 'any', checkIfExists: true)
+        ophys_mount_pophys_directory = Channel.fromPath("${source}/pophys", type: 'dir', checkIfExists: true)
     }
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
     def classifier_data = Channel.fromPath("${base_path}2p_roi_classifier/*", type: 'any', checkIfExists: true)
-    // Model assets: no checkIfExists, so the capsule reports a missing file by name.
     def cellpose_data = Channel.fromPath("${base_path}cellpose_models/*", type: 'any', checkIfExists: false)
     def roinet_data = Channel.fromPath("${base_path}roinet/*", type: 'any', checkIfExists: false)
     
@@ -87,36 +419,31 @@ workflow {
     def decrosstalk_qc_json = Channel.empty()
     def decrosstalk_results_all = Channel.empty()
 
-    // Only produced when the converter runs (S3 sources only).
     def converter_processing_json = Channel.empty()
     def converter_qc_json = Channel.empty()
     
-    // Conditional converter execution - only run for S3 sources
+    // The converter writes one HDF5 movie per plane from the raw session, S3 or local.
     def motion_correction_input
-    if (use_s3_source) {
-        converter_capsule(ophys_data)
+    converter(ophys_data)
 
-        converter_processing_json = converter_capsule.out.converter_processing_json
-        converter_qc_json = converter_capsule.out.converter_qc_json
-        
-        // Separate the directories we want to filter out
-        converter_capsule.out.converter_results
-            .flatten()
-            .filter { it.isDirectory() }
-            .branch {
-                vasculature: it.name == 'vasculature'
-                matched_tiff_vals: it.name == 'matched_tiff_vals'
-                other: true
-            }
-            .set { converter_split }
-        
-        // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
-        motion_correction_input = converter_split.other
-        vasculature_dir = converter_split.vasculature
-        matched_tiff_vals_dir = converter_split.matched_tiff_vals   
-    } else {
-        motion_correction_input = ophys_data
-    }
+    converter_processing_json = converter.out.converter_processing_json
+    converter_qc_json = converter.out.converter_qc_json
+    
+    // Separate the directories we want to filter out
+    converter.out.converter_results
+        .flatten()
+        .filter { it.isDirectory() }
+        .branch {
+            vasculature: it.name == 'vasculature'
+            matched_tiff_vals: it.name == 'matched_tiff_vals'
+            other: true
+        }
+        .set { converter_split }
+    
+    // Use the 'other' branch which already excludes vasculature and matched_tiff_vals
+    motion_correction_input = converter_split.other
+    vasculature_dir = converter_split.vasculature
+    matched_tiff_vals_dir = converter_split.matched_tiff_vals   
 
     if (params.acquisition_data_type == "multiplane"){
         // Run motion correction for multiplane
@@ -126,28 +453,41 @@ workflow {
             ophys_mount_pophys_directory.collect(),
             converter_processing_json.flatten().collect().ifEmpty([]),
         )
-        z_stacks = converter_capsule.out.local_stacks
+        z_stacks = converter.out.local_stacks
 
-        // Run movie qc
         movie_qc(
             motion_correction.out.motion_results_all.flatten(),
             ophys_mount_jsons.collect(),
             z_stacks.collect().ifEmpty([])
         )
 
-        // Run decrosstalk split to prep for decrosstalk_roi_images
+        // Split the motion-corrected planes into pairs for decrosstalk
         decrosstalk_split_json(
             motion_correction.out.motion_results_all.collect(),
             ophys_mount_jsons.collect()
         )
 
-        // Run decrosstalk using ROI images
+        // Remove paired-plane crosstalk; extraction reads *decrosstalk.h5 when
+        // present. Each pair task stages only the motion-correction directories and
+        // converter outputs of the two planes its pair file names; both are
+        // matched by plane directory name.
+        def decrosstalk_inputs = decrosstalk_split_json.out.capsule_results
+            .flatten()
+            .filter { it.name ==~ /pair.*\.txt/ }
+            .combine(motion_correction.out.motion_results_all.flatten().collect().map { [it] })
+            .combine(converter.out.converter_results_all.flatten().collect().ifEmpty([]).map { [it] })
+            .map { pair_file, motion_dirs, converter_results ->
+                def planes = pair_file.readLines()*.trim().findAll { it }.collect { new File(it).name }
+                [
+                    pair_file,
+                    motion_dirs.findAll { it.name in planes },
+                    converter_results.findAll { it.parent.name in planes },
+                ]
+            }
         decrosstalk_roi_images(
-            decrosstalk_split_json.out.capsule_results.flatten(),
+            decrosstalk_inputs,
             ophys_mount_jsons.collect(),
             ophys_mount_pophys_directory.collect(),
-            motion_correction.out.motion_results_all.collect(),
-            use_s3_source ? converter_capsule.out.converter_results_all.collect() : Channel.empty().collect(),
             cellpose_data.collect().ifEmpty([])
         )
 
@@ -155,7 +495,6 @@ workflow {
         decrosstalk_qc_json = decrosstalk_roi_images.out.decrosstalk_qc_json
         decrosstalk_results_all = decrosstalk_roi_images.out.decrosstalk_results_all
 
-        // Run extraction Suite2P
         extraction(
             decrosstalk_roi_images.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
@@ -163,7 +502,7 @@ workflow {
         )
 
     } else {
-        // Run motion correction for single plane (adjusted input order)
+        // Run motion correction for single plane
         motion_correction(
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
@@ -171,7 +510,6 @@ workflow {
             converter_processing_json.flatten().collect().ifEmpty([]),
         )
 
-        // Run movie qc
         movie_qc(
             motion_correction.out.motion_results_all.flatten(),
             ophys_mount_jsons.collect(),
@@ -185,18 +523,16 @@ workflow {
         )
     }
 
-    // Run DF / F
+    // Run DF / F. Independent of the classifier.
     if (params.acquisition_data_type == "multiplane"){
-        dff_capsule(
+        dff(
             extraction.out.capsule_results.flatten(),
             ophys_mount_jsons.collect(),
-            // motion_correction.out.motion_results_csv.collect()
         )
     } else {
-        dff_capsule(
+        dff(
             extraction.out.capsule_results.collect(),
             ophys_mount_jsons.collect(),
-            // motion_correction.out.motion_results_csv.collect()
         )
     }
 
@@ -211,27 +547,35 @@ workflow {
     if (params.acquisition_data_type == "multiplane"){
         // Run Oasis Event detection
         oasis_event_detection(
-            dff_capsule.out.capsule_results.flatten(),
+            dff.out.capsule_results.flatten(),
             ophys_mount_jsons.collect()
         )
     } else {
         // Run Oasis Event detection
         oasis_event_detection(
-            dff_capsule.out.capsule_results.collect(),
+            dff.out.capsule_results.collect(),
             ophys_mount_jsons.collect()
         )
     }
 
     // Run Ophys NWB Packaging for Multiplane
-    // NWB reads no step's processing.json / quality_control.json; drop them to avoid an input name collision.
-    // flatten() before filter: each task emits a List, and filtering a List passes everything.
+    //
+    // The three per-step channels below glob <plane>/<step>/*, which includes
+    // each plane's processing.json / quality_control.json. Collected across
+    // planes, those names collide in one path input, and nwb does not read
+    // them (it globs for <plane>_*<part>, epoch_locations.json and the sync
+    // h5), so they are filtered out.
+    //
+    // A `path` output whose glob matches several files emits one List per
+    // task, and .filter { it.name in ... } on a List always passes, so each
+    // channel is flattened before filtering and collected after.
     def metadata_json = ['processing.json', 'quality_control.json']
-
-    // Upstream processing.json for NWB's dependency_graph; decrosstalk emits a List per pair, so flatten().
+    // Provenance travels separately from the flat scientific inputs to avoid
+    // collisions between identically named per-plane documents.
     def nwb_upstream_processing_json = motion_correction.out.motion_processing_json
         .mix(decrosstalk_processing_json)
         .mix(extraction.out.extraction_processing_json)
-        .mix(dff_capsule.out.dff_processing_json)
+        .mix(dff.out.dff_processing_json)
         .mix(classifier.out.classifier_processing_json)
         .mix(oasis_event_detection.out.oasis_processing_json)
         .flatten()
@@ -247,18 +591,31 @@ workflow {
         decrosstalk_results_all.flatten().filter { !(it.name in metadata_json) }.collect().ifEmpty([]),
         extraction.out.extraction_results_all.flatten().filter { !(it.name in metadata_json) }.collect(),
         classifier.out.classifer_h5.collect(),
-        dff_capsule.out.dff_results_all.collect(),
+        dff.out.dff_results_all.collect(),
         oasis_event_detection.out.events_h5.collect(),
         nwb_upstream_processing_json
-    )
+    )   
 
-    // Every step's processing.json / quality_control.json, flattened for the same reason.
+    // Aggregate every step's metadata into the run-level
+    // processing.json / quality_control.json.
+    //
+    // Every step writes bare processing.json / quality_control.json --
+    // write_standard_file() hardcodes those names -- so on a multiplane run
+    // each per-plane channel carries N identically-named files. Mixing them
+    // into two channels keeps this call short; the stageAs on the aggregator's
+    // inputs is what actually prevents Nextflow rejecting the task for
+    // duplicate input file names.
+    //
+    // The trailing .flatten() normalises the mix. Most of these emit one bare
+    // path per task, but decrosstalk handles a PAIR per task, so its depth-2
+    // globs match twice and it emits a List -- mixing the two shapes would
+    // hand stageAs a nested collection to number.
     def all_processing_json = converter_processing_json
         .mix(motion_correction.out.motion_processing_json)
         .mix(movie_qc.out.movie_qc_processing_json)
         .mix(decrosstalk_processing_json)
         .mix(extraction.out.extraction_processing_json)
-        .mix(dff_capsule.out.dff_processing_json)
+        .mix(dff.out.dff_processing_json)
         .mix(classifier.out.classifier_processing_json)
         .mix(oasis_event_detection.out.oasis_processing_json)
         .mix(ophys_nwb.out.nwb_processing_json)
@@ -269,14 +626,17 @@ workflow {
         .mix(movie_qc.out.movie_qc_qc_json)
         .mix(decrosstalk_qc_json)
         .mix(extraction.out.extraction_qc_json)
-        .mix(dff_capsule.out.dff_qc_json)
+        .mix(dff.out.dff_qc_json)
         .mix(classifier.out.classifier_qc_json)
         .mix(oasis_event_detection.out.oasis_qc_json)
         .mix(ophys_nwb.out.nwb_qc_json)
         .flatten()
 
-    // Run Pipeline Processing Metadata Aggregator
-    // ifEmpty([]) keeps it running, and failing loudly, when no step emitted metadata.
+    // ifEmpty([]) so an all-empty channel still runs the aggregator. Without
+    // it collect() emits nothing, the process is silently skipped, and the run
+    // "succeeds" with no run-level processing.json at all. With it, the
+    // aggregator runs and raises on zero metrics -- a loud failure beats a
+    // missing document.
     pipeline_processing_metadata_aggregator(
         ophys_mount_jsons.collect(),
         all_processing_json.collect().ifEmpty([]),
@@ -285,14 +645,12 @@ workflow {
 }
 
 
-// Process: aind-pophys-converter-capsule
-process converter_capsule {
-    tag 'capsule-2840051'
-	container "$REGISTRY_HOST/published/d05f6de4-c0fb-46af-8c9f-a4acb4081497:v12"
-    publishDir "$RESULTS_PATH", saveAs: publishRelativeSkipRunLevel
-
-    cpus 16
-    memory '128 GB'
+// converter: aind-pophys-converter
+process converter {
+    tag 'converter'
+    def container_name = params.stage_images['CONVERTER']
+    container container_name
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelativeSkipRunLevel
 
     input:
     path ophys_mount, name: 'capsule/data'
@@ -310,46 +668,40 @@ process converter_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=d05f6de4-c0fb-46af-8c9f-a4acb4081497
-    export CO_CPUS=16
-    export CO_MEMORY=137438953472
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2840051.git" capsule-repo
-    mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    ${libraryFunctions}
+    install_library "${params.versions['CONVERTER_LIBRARY_REPO']}" "${params.versions['CONVERTER_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running converter..."
     echo "Processing: \$(basename $ophys_mount)"
     cd capsule/code
-    chmod +x run
-    echo "converter_capsule parameters: --debug ${params.debug} --input_dir ${params.input_dir} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}"
-    ./run --debug ${params.debug} --input_dir ${params.input_dir} --output_dir ${params.output_dir} --temp_dir ${params.temp_dir}
+    echo "converter parameters: --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}"
+    run_library aind_pophys_converter.job --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}
     echo "[${task.tag}] completed!"
-    ls -a /results
+    ls -a ${task_output_dir}
     """
 }
 
-// capsule - aind-ophys-motion-correction multiplane
+// motion_correction: aind-ophys-motion-correction-library
 process motion_correction {
-    tag 'capsule-7474660'
-	container "$REGISTRY_HOST/published/91a8ed4d-3b9a-49c6-9283-3f16ea5482bf:v20"
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
-
-    cpus 16
-    memory '128 GB'
+    tag 'motion_correction'
+    def container_name = params.stage_images['MOTION_CORRECTION']
+    container container_name
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path ophys_mount
-    path ophys_jsons
-    path pophys_dir
-    // Upstream processing.json files share one name, so stageAs gives each its own directory.
-    path(upstream_processing_json, stageAs: 'processing_??/*')
+    path ophys_mount, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
+    path pophys_dir, stageAs: 'capsule/data/*'
+
+    path(upstream_processing_json, stageAs: 'capsule/data/processing_??/*')
 
     output:
     path 'capsule/results/*', emit: 'motion_results_all', type: 'dir'
@@ -363,61 +715,38 @@ process motion_correction {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=91a8ed4d-3b9a-49c6-9283-3f16ea5482bf
-    export CO_CPUS=16
-    export CO_MEMORY=137438953472
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
     
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    # Preserve the numbered directory stageAs gave each file; a flat cp would
-    # collapse every processing.json onto one name. The collector rglobs.
-    stage_nested() {
-        for f in "\$@"; do
-            [ -e "\$f" ] || continue
-            d="capsule/data/\$(dirname "\$f")"
-            mkdir -p "\$d"
-            cp -r "\$f" "\$d/"
-        done
-    }
-
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
-    stage_nested ${upstream_processing_json}
-
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v20.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-7474660.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${libraryFunctions}
+    install_library "${params.versions['MOTION_CORRECTION_LIBRARY_REPO']}" "${params.versions['MOTION_CORRECTION_LIBRARY_COMMIT']}"
     
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running motion_correction..."
     cd capsule/code
-    chmod +x run
     echo "motion_correction parameters: --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}"
-    ./run --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
+    run_library aind_ophys_motion_correction_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
     
     echo "[${task.tag}] completed!"
     """
 }
 
-// capsule - aind-ophys-movie-qc
+// movie_qc: aind-ophys-movie-qc-library
 process movie_qc {
-	tag 'capsule-0300037'
-	container "$REGISTRY_HOST/published/f52d9390-8569-49bb-9562-2d624b18ee56:v12"
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
-
-	cpus 16
-	memory '128 GB'
+	tag 'movie_qc'
+    def container_name = params.stage_images['MOVIE_QC']
+    container container_name
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
 
 	input:
-	path motion_results
-    path ophys_jsons
-    path zstacks
+	path motion_results, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/raw/*'
+    path zstacks, stageAs: 'capsule/data/zstacks/*'
 
 	output:
 	path 'capsule/results/*'
@@ -430,48 +759,38 @@ process movie_qc {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CPUS=16
-	export CO_MEMORY=137438953472
+	export CO_CPUS=${task.cpus}
+	export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
 	mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-	mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/zstacks && ln -s \$PWD/capsule/data/zstacks /zstacks
-	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+	mkdir -p capsule/data/raw
+    mkdir -p capsule/data/zstacks
+	mkdir -p capsule/results
+	mkdir -p capsule/scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_results} capsule/data
-    cp -r ${ophys_jsons} capsule/data/raw
-    if [ -n "${zstacks}" ] && [ "${zstacks}" != "[]" ]; then
-        cp -r ${zstacks} capsule/data/zstacks
-    fi
+    ${libraryFunctions}
+    install_library "${params.versions['MOVIE_QC_LIBRARY_REPO']}" "${params.versions['MOVIE_QC_LIBRARY_COMMIT']}"
 
-	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v12.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0300037.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
-
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running movie_qc..."
     cd capsule/code
-    chmod +x run
-    ./run
+    run_library aind_ophys_movie_qc_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
 }
 
-// capsule - aind-ophys-decrosstalk-split-session-json
+// decrosstalk_split_json: aind-ophys-decrosstalk-split-session-json-library
 process decrosstalk_split_json {
-    tag 'capsule-2670251'
-    container "$REGISTRY_HOST/published/cd0f7d02-d3e1-4a3d-943f-84de5c8f4ddc:v1"
+    tag 'decrosstalk_split_json'
+    def container_name = params.stage_images['DECROSSTALK_SPLIT']
+    container container_name
 
-    cpus 2
-    memory '16 GB'
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path motion_results
-    path ophys_jsons
+    path motion_results, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -481,49 +800,37 @@ process decrosstalk_split_json {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=cd0f7d02-d3e1-4a3d-943f-84de5c8f4ddc
-    export CO_CPUS=2
-    export CO_MEMORY=17179869184
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${motion_results} capsule/data
-    cp -r ${ophys_jsons} capsule/data
+    ${libraryFunctions}
+    install_library "${params.versions['DECROSSTALK_SPLIT_LIBRARY_REPO']}" "${params.versions['DECROSSTALK_SPLIT_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v1.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-2670251.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running decrosstalk_split..."
     cd capsule/code
-    chmod +x run
-    ./run
+    run_library aind_ophys_decrosstalk_split_session_json_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
 }
 
-// capsule - aind-ophys-decrosstalk-roi-images
+// decrosstalk_roi_images: aind-ophys-decrosstalk-roi-images-library
 process decrosstalk_roi_images {
-    tag 'capsule-1533578'
-	container "$REGISTRY_HOST/published/1383b25a-ecd2-4c56-8b7f-cde811c0b053:v16"
+    tag 'decrosstalk_roi_images'
+    def container_name = params.stage_images['DECROSSTALK_ROI_IMAGES']
+    container container_name
 
-    cpus 8
-    memory '64 GB'
-
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path decrosstalk_split
-    path ophys_jsons
-    path pophys_dir
-    path motion_results
-    path converter_files
+    tuple path(decrosstalk_split, stageAs: 'capsule/data/*'), path(motion_results, stageAs: 'capsule/data/*'), path(converter_files, stageAs: 'capsule/data/*')
+    path ophys_jsons, stageAs: 'capsule/data/*'
+    path pophys_dir, stageAs: 'capsule/data/*'
     path cellpose_data
 
     output:
@@ -537,55 +844,42 @@ process decrosstalk_roi_images {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=1383b25a-ecd2-4c56-8b7f-cde811c0b053
-    export CO_CPUS=8
-    export CO_MEMORY=68719476736
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${decrosstalk_split} capsule/data
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${pophys_dir} capsule/data
-    cp -r ${motion_results} capsule/data
-    cp -r ${converter_files} capsule/data
+    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
-    # Read-only asset: linked at its stable /data path, never copied.
-    # The capsule wrapper verifies each file and its SHA-256 before
-    # constructing Cellpose.
-    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
+    ${libraryFunctions}
+    install_library "${params.versions['DECROSSTALK_ROI_IMAGES_LIBRARY_REPO']}" "${params.versions['DECROSSTALK_ROI_IMAGES_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v16.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-1533578.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running decrosstalk_roi_images..."
     cd capsule/code
-    chmod +x run
-    ./run --debug ${params.debug}
+    export CELLPOSE_LOCAL_MODELS_PATH="\${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"
+    ${decrosstalkPairFunction}
+    stage_pair
+    run_library aind_ophys_decrosstalk_roi_images_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --debug ${params.debug}
 
     echo "[${task.tag}] completed!"
     """
 }
 
 
-// capsule - aind-ophys-extraction
+// extraction: aind-ophys-extraction-library
 process extraction {
-    tag 'capsule-9911715'
-	container "$REGISTRY_HOST/published/5e1d659c-e149-4a57-be83-12f5a448a0c9:v15"
+    tag 'extraction'
+    def container_name = params.stage_images['EXTRACTION']
+    container container_name
 
-    cpus 8
-    memory '64 GB'
-
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path extraction_input
-    path ophys_jsons
+    path extraction_input, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
     path cellpose_data
 
     output:
@@ -596,59 +890,46 @@ process extraction {
 
 
     script:
-    def suite2p_params_arg = params.containsKey('suite2p_params') && params.suite2p_params ? "--suite2p_params '${params.suite2p_params}'" : ""
-    def suite2p_ops_arg = params.containsKey('suite2p_ops') && params.suite2p_ops ? "--suite2p_ops ${params.suite2p_ops}" : ""
+    def suite2p_params_arg = params.containsKey('suite2p_params') && params.suite2p_params ? "--suite2p_params ${shell_quote(params.suite2p_params)}" : ""
+    def suite2p_ops_arg = params.containsKey('suite2p_ops') && params.suite2p_ops ? "--suite2p_ops ${shell_quote(params.suite2p_ops)}" : ""
     """
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=5e1d659c-e149-4a57-be83-12f5a448a0c9
-    export CO_CPUS=8
-    export CO_MEMORY=68719476736
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${extraction_input} capsule/data
-    cp -r ${ophys_jsons} capsule/data
+    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
-    # Read-only asset: linked at its stable /data path, never copied.
-    # The capsule wrapper verifies each file and its SHA-256 before
-    # constructing Cellpose.
-    ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models" # id: df0e5676-1354-4353-8b2c-f8062aa485db
+    ${libraryFunctions}
+    install_library "${params.versions['EXTRACTION_LIBRARY_REPO']}" "${params.versions['EXTRACTION_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v15.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9911715.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running extraction..."
     cd capsule/code
-    chmod +x run
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
-    ./run --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
+    export CELLPOSE_LOCAL_MODELS_PATH="\${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"
+    run_library aind_ophys_extraction_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
 
     echo "[${task.tag}] completed!"
     """
 }
 
-// capsule - aind-ophys-dff
-process dff_capsule {
-    tag 'capsule-6574773'
-	container "$REGISTRY_HOST/published/85987e27-601c-4863-811b-71e5b4bdea37:v7"
+// dff: aind-ophys-dff-library
+process dff {
+    tag 'dff'
+    def container_name = params.stage_images['DFF']
+    container container_name
 
-    cpus 4
-    memory '32 GB'
-
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path extraction_results
-    path ophys_mount_json
-    // path motion_correction_results
+    path extraction_results, stageAs: 'capsule/data/*'
+    path ophys_mount_json, stageAs: 'capsule/data/*'
 
     output:
     path 'capsule/results/*', emit: 'capsule_results'
@@ -661,47 +942,37 @@ process dff_capsule {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=85987e27-601c-4863-811b-71e5b4bdea37
-    export CO_CPUS=4
-    export CO_MEMORY=34359738368
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_json} capsule/data
-    cp -r ${extraction_results} capsule/data
+    ${libraryFunctions}
+    install_library "${params.versions['DFF_LIBRARY_REPO']}" "${params.versions['DFF_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v7.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-6574773.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running dff..."
     cd capsule/code
-    chmod +x run
-    echo "dff_capsule parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
-    ./run --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
+    echo "dff parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
+    run_library aind_ophys_dff_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
 
     echo "[${task.tag}] completed!"
     """
 }
 
-// capsule - aind-ophys-oasis-event-detection
+// oasis_event_detection: aind-ophys-oasis-event-detection-library
 process oasis_event_detection {
-    tag 'capsule-8957649'
-	container "$REGISTRY_HOST/published/c6394aab-0db7-47b2-90ba-864866d6755e:v11"
+    tag 'oasis_event_detection'
+    def container_name = params.stage_images['OASIS']
+    container container_name
 
-    cpus 4
-    memory '32 GB'
-
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path dff_results
-    path ophys_jsons
+    path dff_results, stageAs: 'capsule/data/*'
+    path ophys_jsons, stageAs: 'capsule/data/*'
 
     output:
     path 'capsule/results/*'
@@ -715,49 +986,41 @@ process oasis_event_detection {
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=c6394aab-0db7-47b2-90ba-864866d6755e
-    export CO_CPUS=4
-    export CO_MEMORY=34359738368
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_jsons} capsule/data
-    cp -r ${dff_results} capsule/data
+    ${libraryFunctions}
+    install_library "${params.versions['OASIS_LIBRARY_REPO']}" "${params.versions['OASIS_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] cloning git repo..."
-	git clone --branch v11.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8957649.git" capsule-repo
-	mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running oasis..."
     cd capsule/code
-    chmod +x run
-    ./run
+    run_library aind_ophys_oasis_event_detection_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
 
     echo "[${task.tag}] completed!"
     """
 }
 
-// capsule - aind-ophys-classifier
+// classifier: aind-ophys-classifier-library
 process classifier {
-	tag 'capsule-0630574'
-	container "$REGISTRY_HOST/published/3819d125-9f03-48f3-ba09-b44c84a7a2c7:v6"
+	tag 'classifier'
+    def container_name = params.stage_images['CLASSIFIER']
+    container container_name
+    cpus 16
+    memory '60 GB'
+    accelerator 1
+    label 'gpu'
 
-	cpus 16
-	memory '60 GB'
-	accelerator 1
-	label 'gpu'
-
-	publishDir "$RESULTS_PATH", saveAs: publishRelative
+	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
 	input:
-    path ophys_mount_jsons
-	path classifier_data
-	path extraction_results
+    path ophys_mount_jsons, stageAs: 'capsule/data/*'
+    path classifier_data, stageAs: 'capsule/data/*'
+    path extraction_results, stageAs: 'capsule/data/*'
 	path roinet_data
     
 	output:
@@ -769,65 +1032,57 @@ process classifier {
 
 	script:
 	def model_name_arg = params.containsKey('model-name') && params['model-name'] ? "--model_name ${params['model-name']}" : ""
+	def soma_classifier_arg = params.containsKey('soma-classifier-path') && params['soma-classifier-path'] ? "--soma_classifier_path ${params['soma-classifier-path']}" : ""
+	def dendrite_classifier_arg = params.containsKey('dendrite-classifier-path') && params['dendrite-classifier-path'] ? "--dendrite_classifier_path ${params['dendrite-classifier-path']}" : ""
 	"""
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=3819d125-9f03-48f3-ba09-b44c84a7a2c7
-	export CO_CPUS=16
-	export CO_MEMORY=64424509440
+	export CO_CPUS=${task.cpus}
+	export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
 	mkdir -p capsule
-	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
-
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_jsons} capsule/data
-    cp -r ${classifier_data} capsule/data
-    cp -r ${extraction_results} capsule/data
+	mkdir -p capsule/data
+	mkdir -p capsule/results
+	mkdir -p capsule/scratch
 
 	ln -s "/tmp/data/2p_roi_classifier" "capsule/data/2p_roi_classifier" # id: 57a10c5f-468f-4bb2-b3c6-7f4a80efa8ae
-	ln -s "/tmp/data/roinet" "capsule/data/roinet" # id: 7e4bd8f4-8881-4541-94b4-d1ac714d4a07
+	ln -s "/tmp/data/roinet" "capsule/data/roinet"
 
-	echo "[${task.tag}] cloning git repo..."
-	git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-0630574.git" capsule-repo
-	mv capsule-repo/code capsule/code
-	rm -rf capsule-repo
+    ${libraryFunctions}
+    install_library "${params.versions['CLASSIFIER_LIBRARY_REPO']}" "${params.versions['CLASSIFIER_LIBRARY_COMMIT']}"
 
-	echo "[${task.tag}] running capsule..."
+	echo "[${task.tag}] running classifier..."
 	cd capsule/code
-	chmod +x run
-	./run --input_dir ${params.input_dir} --output_dir ${params.output_dir} --tmp_dir ${params.temp_dir} --soma_classifier_path ${params['soma-classifier-path']} --dendrite_classifier_path ${params['dendrite-classifier-path']} --border_size ${params['border-size']} ${model_name_arg}
+    ${classifierModelFunction}
+    stage_roinet
+	run_library aind_ophys_classifier_library.job "\${ROINET_ARGS[@]}" --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} ${soma_classifier_arg} ${dendrite_classifier_arg} --border_size ${params['border-size']} ${model_name_arg}
 
 	echo "[${task.tag}] completed!"
 	"""
 }
 
 
-// capsule - aind-ophys-nwb
+// ophys_nwb: aind-ophys-nwb-library
 process ophys_nwb {
-	tag 'capsule-9383700'
-	container "$REGISTRY_HOST/published/8c436e95-8607-4752-8e9f-2b62024f9326:v17"
+	tag 'ophys_nwb'
+    def container_name = params.stage_images['NWB']
+    container container_name
 
-	cpus 4
-	memory '32 GB'
-
-	publishDir "$RESULTS_PATH", saveAs: publishRelative
+	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
 	input:
-    path schemas
-    path ophys_mount_jsons
-    path ophys_sync_file
-    path ophys_mount_pophys_directory
-    path motion_correction_results
-    path decrosstalk_results
-    path extraction_results
-	path classifer_h5
-	path dff_results
-	path event_detection_results
-    // Upstream processing.json files share one name, so stageAs gives each its own directory.
-    path(upstream_processing_json, stageAs: 'processing_??/*')
+    path schemas, stageAs: 'capsule/data/schemas/*'
+    path ophys_mount_jsons, stageAs: 'capsule/data/raw/*'
+    path ophys_sync_file, stageAs: 'capsule/data/raw/behavior/*'
+    path ophys_mount_pophys_directory, stageAs: 'capsule/data/raw/*'
+    path motion_correction_results, stageAs: 'capsule/data/processed/*'
+    path decrosstalk_results, stageAs: 'capsule/data/processed/*'
+    path extraction_results, stageAs: 'capsule/data/processed/*'
+	path classifer_h5, stageAs: 'capsule/data/processed/*'
+	path dff_results, stageAs: 'capsule/data/processed/*'
+	path event_detection_results, stageAs: 'capsule/data/processed/*'
+    path(upstream_processing_json, stageAs: 'capsule/data/processed/processing_??/*')
 
 	output:
 	path 'capsule/results/*'
@@ -839,133 +1094,82 @@ process ophys_nwb {
 	#!/usr/bin/env bash
 	set -e
 
-	export CO_CAPSULE_ID=8c436e95-8607-4752-8e9f-2b62024f9326
-	export CO_CPUS=4
-	export CO_MEMORY=34359738368
+	export CO_CPUS=${task.cpus}
+	export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
+    echo "I AM MAKING AN NWB"
 	mkdir -p capsule
-	mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-	mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-	mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
-    mkdir -p capsule/data/schemas && ln -s \$PWD/capsule/data/schemas /schemas
-    mkdir -p capsule/data/raw && ln -s \$PWD/capsule/data/raw /raw
-    mkdir -p capsule/data/raw/behavior && ln -s \$PWD/capsule/data/raw/behavior /behavior
-    mkdir -p capsule/data/nwb && ln -s \$PWD/capsule/data/nwb /nwb
-    mkdir -p capsule/data/processed && ln -s \$PWD/capsule/data/processed /processed
+	mkdir -p capsule/data
+	mkdir -p capsule/results
+	mkdir -p capsule/scratch
+    mkdir -p capsule/data/schemas
+    mkdir -p capsule/data/raw
+    mkdir -p capsule/data/raw/behavior
+    mkdir -p capsule/data/nwb
+    mkdir -p capsule/data/processed
 
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${schemas} capsule/data/schemas
-    cp -r ${ophys_mount_jsons} capsule/data/raw
-    if [ -n "${ophys_sync_file}" ] && [ "${ophys_sync_file}" != "[]" ]; then
-        cp -r ${ophys_sync_file} capsule/data/raw/behavior
-    fi
-    cp -r ${ophys_mount_pophys_directory} capsule/data/raw
-    cp -r ${motion_correction_results} capsule/data/processed
-    if [ -n "${decrosstalk_results}" ] && [ "${decrosstalk_results}" != "[]" ]; then
-        cp -r ${decrosstalk_results} capsule/data/processed
-    fi
-    cp -r ${extraction_results} capsule/data/processed
-    cp -r ${classifer_h5} capsule/data/processed
-    cp -r ${dff_results} capsule/data/processed
-    cp -r ${event_detection_results} capsule/data/processed
-
-    # Preserve the numbered directory stageAs gave each file; a flat cp would
-    # collapse every processing.json onto one name. The collector rglobs.
-    #
-    # These must land under data/processed/, not data/: this capsule resolves
-    # processed_dir = input_dir / "processed" and searches THAT, so documents
-    # staged one level up are invisible to it (verified from run bb739583,
-    # where NWB's dependency_graph came back empty for exactly this reason).
-    stage_nested() {
-        for f in "\$@"; do
-            [ -e "\$f" ] || continue
-            d="capsule/data/processed/\$(dirname "\$f")"
-            mkdir -p "\$d"
-            cp -r "\$f" "\$d/"
-        done
-    }
-    stage_nested ${upstream_processing_json}
     echo "[${task.tag}] staged \$(find capsule/data/processed -name processing.json | wc -l) upstream processing.json"
 
-	ln -s "/tmp/data/schemas" "capsule/data/schemas" # id: fb4b5cef-4505-4145-b8bd-e41d6863d7a9
+    ${libraryFunctions}
+    install_library "${params.versions['NWB_LIBRARY_REPO']}" "${params.versions['NWB_LIBRARY_COMMIT']}"
 
-	echo "[${task.tag}] cloning git repo..."
-    git clone --branch v17.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-9383700.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
-
-	echo "[${task.tag}] running capsule..."
+	echo "[${task.tag}] running nwb..."
 	cd capsule/code
-	chmod +x run
-	ls -R /data
-    ./run --input_dir ${params.input_dir} --output_dir ${params.output_dir}
+	ls -R ${task_input_dir}
+    for schema in ndx-aibs-behavior-ophys.namespace.yaml ndx-aibs-behavior-ophys.extension.yaml; do
+        test -f "../data/schemas/\${schema}" || { echo "missing NWB extension schema: ../data/schemas/\${schema}" >&2; exit 1; }
+    done
+    run_library aind_ophys_nwb_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --extension_namespace=../data/schemas/ndx-aibs-behavior-ophys.namespace.yaml
 
 	echo "[${task.tag}] completed!"
 	"""
 }
 
-// capsule - aind-metadata-manager-capsule
+// pipeline_processing_metadata_aggregator: aind-metadata-manager
 process pipeline_processing_metadata_aggregator {
-    tag 'capsule-8324994'
-	container "$REGISTRY_HOST/published/22261566-0b4f-42aa-bcaa-58efa55bf653:v6"
+    tag 'pipeline_processing_metadata_aggregator'
+    def container_name = params.stage_images['AGGREGATOR']
+    container container_name
 
     // data_description.json name embeds datetime.now() -> must regenerate every run (never cache)
     cache false
 
-    cpus 2
-    memory '16 GB'
-
-    // The run-level processing.json / quality_control.json publish at the results root.
-    publishDir "$RESULTS_PATH", saveAs: publishRelative
+    // This task's processing.json / quality_control.json are the run-level
+    // documents, and they sit directly under capsule/results/, so the shared
+    // saveAs publishes them at the results root -- where they belong.
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
 
     input:
-    path ophys_mount_jsons
-    path(processing_json, stageAs: 'processing_??/*')
-    path(quality_control_json, stageAs: 'quality_control_??/*')
+    path ophys_mount_jsons, stageAs: 'capsule/data/*'
+    path(processing_json, stageAs: 'capsule/data/processing_??/*')
+    path(quality_control_json, stageAs: 'capsule/data/quality_control_??/*')
 
     output:
     path 'capsule/results/*'
 
     script:
+    def processor_arg = params.containsKey('processor_full_name') ? "--processor_full_name ${shell_quote(strip_double_quotes(params.processor_full_name))}" : ''
+    def data_summary_arg = params.containsKey('data_summary') && params.data_summary ? "--data_summary ${shell_quote(strip_double_quotes(params.data_summary))}" : ''
     """
     #!/usr/bin/env bash
     set -e
 
-    export CO_CAPSULE_ID=22261566-0b4f-42aa-bcaa-58efa55bf653
-    export CO_CPUS=2
-    export CO_MEMORY=17179869184
+    export CO_CPUS=${task.cpus}
+    export CO_MEMORY=${task.memory ? task.memory.toBytes() : ''}
 
     mkdir -p capsule
-    mkdir -p capsule/data && ln -s \$PWD/capsule/data /data
-    mkdir -p capsule/results && ln -s \$PWD/capsule/results /results
-    mkdir -p capsule/scratch && ln -s \$PWD/capsule/scratch /scratch
+    mkdir -p capsule/data
+    mkdir -p capsule/results
+    mkdir -p capsule/scratch
 
-    # Preserve the numbered directory stageAs gave each file. A flat cp would
-    # collapse every processing.json back onto one name and keep only the last;
-    # aind-metadata-manager rglobs for them, so the nesting costs nothing.
-    stage_nested() {
-        for f in "\$@"; do
-            [ -e "\$f" ] || continue
-            d="capsule/data/\$(dirname "\$f")"
-            mkdir -p "\$d"
-            cp -r "\$f" "\$d/"
-        done
-    }
-
-    echo "[${task.tag}] copying data to capsule..."
-    cp -r ${ophys_mount_jsons} capsule/data
-    stage_nested ${processing_json}
-    stage_nested ${quality_control_json}
+    echo "[${task.tag}] using task-local staged inputs..."
     echo "[${task.tag}] staged \$(find capsule/data -name processing.json | wc -l) processing.json, \$(find capsule/data -name quality_control.json | wc -l) quality_control.json"
 
-    echo "[${task.tag}] cloning git repo..."
-    git clone --branch v6.0 "https://\$GIT_ACCESS_TOKEN@\$GIT_HOST/capsule-8324994.git" capsule-repo
-    mv capsule-repo/code capsule/code
-    rm -rf capsule-repo
+    ${libraryFunctions}
+    install_library "${params.versions['AGGREGATOR_LIBRARY_REPO']}" "${params.versions['AGGREGATOR_LIBRARY_COMMIT']}"
 
-    echo "[${task.tag}] running capsule..."
+    echo "[${task.tag}] running aggregator..."
     cd capsule/code
-    chmod +x run
-    ./run ${params.containsKey('processor_full_name') ? '--processor_full_name ' + (params.processor_full_name.toString().startsWith('"') ? params.processor_full_name : '"' + params.processor_full_name + '"') : ''} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${params.containsKey('data_summary') && params.data_summary ? '--data_summary "' + params.data_summary + '"' : ''} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
+    run_library aind_metadata_manager.metadata_manager --input_dir ${task_input_dir} --output_dir ${task_output_dir} ${processor_arg} ${params.containsKey('skip_ancillary_files') ? '--skip_ancillary_files ' + params.skip_ancillary_files : ''} ${params.containsKey('modality') ? '--modality ' + params.modality : ''} ${params.containsKey('aggregate_quality_control') ? '--aggregate_quality_control ' + params.aggregate_quality_control : ''} ${data_summary_arg} ${params.containsKey('verbose') ? '--verbose ' + params.verbose : ''} --pipeline_url "\$PIPELINE_URL" --pipeline_version "\$PIPELINE_VERSION"
     echo "[${task.tag}] completed!"
     """
 }

@@ -1,4 +1,20 @@
 /data/
+/results/
+/work/
+
+# Local Nextflow state and backend overrides
+pipeline/process_versions_custom.env
+pipeline/images_custom.env
+pipeline/.nextflow/
+pipeline/.nextflow.log*
+pipeline/work/
+pipeline/results/
+__pycache__/
+.image-work/
+.nextflow/
+
+# Sphinx build output
+/docs/build/
 
 # PyCharm folder
 .idea/
