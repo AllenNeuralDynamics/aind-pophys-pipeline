@@ -176,7 +176,7 @@ def image_stages = [
     'AGGREGATOR'
 ]
 // Every step runs ghcr.io/allenneuraldynamics/<image_name>:<container_tag>,
-// with image names from environment/images.json. The tag comes from
+// with image names from pipeline/images.json. The tag comes from
 // --container_tag (CLI or config), then the CONTAINER_TAG environment variable,
 // then PIPELINE_VERSION in nextflow.config, which each release sets, so a
 // released pipeline runs its released images. Development runs use the `dev`
@@ -202,9 +202,9 @@ def resolve_container_tag() {
 }
 
 def parse_stage_images(image_stages, container_tag) {
-    def catalog = new groovy.json.JsonSlurper().parse(file("${baseDir}/../environment/images.json").toFile())
+    def catalog = new groovy.json.JsonSlurper().parse(file("${baseDir}/images.json").toFile())
     if (catalog.keySet() != image_stages.toSet()) {
-        throw new IllegalArgumentException('environment/images.json must list exactly all 11 stages')
+        throw new IllegalArgumentException('pipeline/images.json must list exactly all 11 stages')
     }
     if (!(container_tag ==~ /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/)) {
         throw new IllegalArgumentException("Invalid container tag: ${container_tag}")

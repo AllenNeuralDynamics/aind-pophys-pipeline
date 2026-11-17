@@ -69,7 +69,7 @@ runs:
 * ``pipeline/process_versions.env``: the processing library repository and commit of each step
 * ``PIPELINE_VERSION`` in ``pipeline/nextflow.config``: the release version, which is also the tag
   of every step's image (``ghcr.io/allenneuraldynamics/<image_name>:<version>``, names in
-  ``environment/images.json``)
+  ``pipeline/images.json``)
 * ``environment/stages/<step>/requirements.lock``: the dependency versions built into each image
 
 Pull requests and pushes into ``dev`` build each step's image with the ``dev`` tag. Each release

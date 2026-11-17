@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ENV_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-IMAGES_JSON="$ENV_DIR/images.json"
+IMAGES_JSON="$ENV_DIR/../pipeline/images.json"
 ALL_IMAGES=$(jq -r 'keys_unsorted | join(",")' "$IMAGES_JSON")
 REGISTRY="${IMAGE_REGISTRY:-ghcr.io/allenneuraldynamics}"
 

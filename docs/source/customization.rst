@@ -84,7 +84,7 @@ Building images
 ~~~~~~~~~~~~~~~
 
 Every step runs ``ghcr.io/allenneuraldynamics/<image_name>:<tag>``, with image names from
-``environment/images.json``. The tag is ``--container_tag`` (CLI or config), then the
+``pipeline/images.json``. The tag is ``--container_tag`` (CLI or config), then the
 ``CONTAINER_TAG`` environment variable, then the release version (``PIPELINE_VERSION`` in
 ``pipeline/nextflow.config``). To run the images built from the ``dev`` branch:
 
@@ -100,7 +100,7 @@ the steps it names:
 
     DFF=ghcr.io/allenneuraldynamics/pophys-dff:my-build
 
-The images are built from ``environment/``. ``environment/images.json`` gives each step's
+The images are built from ``environment/``. ``pipeline/images.json`` gives each step's
 Dockerfile, image name and Python version, and ``environment/stages/<step>/requirements.lock``
 pins its dependencies. With Docker, ``jq`` and, for re-locking, ``uv``:
 

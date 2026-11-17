@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       images:
-        description: JSON list of steps to build (default - every step in environment/images.json)
+        description: JSON list of steps to build (default - every step in pipeline/images.json)
         required: false
         type: string
         default: ''
@@ -39,7 +39,7 @@ jobs:
           if [[ -n "$INPUT_IMAGES" ]]; then
             IMAGES="$INPUT_IMAGES"
           else
-            IMAGES=$(jq -c 'keys_unsorted' environment/images.json)
+            IMAGES=$(jq -c 'keys_unsorted' pipeline/images.json)
           fi
           echo "Images: $IMAGES"
           echo "images=$IMAGES" >> "$GITHUB_OUTPUT"

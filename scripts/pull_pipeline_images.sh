@@ -15,7 +15,7 @@
 #              machine without internet access; restore with
 #                for f in CACHE_DIR/*.tar.zst; do zstd -dc "$f" | docker load; done
 #
-# Images are ghcr.io/allenneuraldynamics/<image_name>:<tag> for each step in environment/images.json,
+# Images are ghcr.io/allenneuraldynamics/<image_name>:<tag> for each step in pipeline/images.json,
 # with any step overridden in pipeline/images_custom.env.
 
 set -euo pipefail
@@ -63,7 +63,7 @@ if [[ "$SAVE" == true ]] && ! command -v zstd >/dev/null 2>&1; then
 fi
 
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../pipeline" && pwd)"
-IMAGES_JSON="$PIPELINE_DIR/../environment/images.json"
+IMAGES_JSON="$PIPELINE_DIR/images.json"
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq not found in PATH" >&2; exit 127; }
 if [[ -z "$TAG" ]]; then
   TAG="$(sed -n 's/^ *PIPELINE_VERSION = "\([^"]*\)".*/\1/p' "$PIPELINE_DIR/nextflow.config" | head -1)"

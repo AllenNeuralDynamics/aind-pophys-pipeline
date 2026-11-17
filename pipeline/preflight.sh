@@ -50,8 +50,8 @@ if [ ! -f "$params_file" ]; then
     echo "Parameter file not found: ${params_file}" >&2
     exit 1
 fi
-if [ ! -f "${pipeline_path}/../environment/images.json" ]; then
-    echo "Image list not found: ${pipeline_path}/../environment/images.json" >&2
+if [ ! -f "${pipeline_path}/images.json" ]; then
+    echo "Image list not found: ${pipeline_path}/images.json" >&2
     exit 1
 fi
 
