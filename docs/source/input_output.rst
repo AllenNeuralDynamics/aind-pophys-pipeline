@@ -14,8 +14,8 @@ Public sessions in ``s3://aind-open-data`` can be read without AWS credentials b
 * ``multiplane-ophys_851711_2026-08-19_11-13-08``: an 8-plane mesoscope session, about 163 GB;
   run it with ``acquisition_data_type=multiplane``
 
-Nextflow copies an S3 session into the work directory before the Converter step, and its
-``pophys/`` folder a second time for the later steps. For a large session, download it once and
+Nextflow copies an S3 session into the work directory once per run, before the Converter step.
+For a large session, download it once and
 pass the directory instead: Nextflow links a local directory into each task without copying it,
 and the download serves every later run. With the AWS CLI:
 

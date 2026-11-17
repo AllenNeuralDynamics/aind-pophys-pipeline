@@ -192,16 +192,13 @@ def resolve_container_tag() {
         println "CONTAINER TAG (from ENV): ${env_tag}"
         return env_tag
     }
-    def config_file = file("${baseDir}/nextflow.config")
-    def matcher = config_file.exists() ? (config_file.text =~ /PIPELINE_VERSION = "([^"]+)"/) : null
-    if (!matcher || !matcher.find()) {
-        throw new IllegalArgumentException(
-            'Cannot determine container tag: set --container_tag, CONTAINER_TAG or PIPELINE_VERSION in nextflow.config'
-        )
+    if (params.containsKey('pipeline_version') && params.pipeline_version) {
+        println "CONTAINER TAG (from PIPELINE_VERSION): ${params.pipeline_version}"
+        return params.pipeline_version.toString()
     }
-    def version = matcher.group(1)
-    println "CONTAINER TAG (from nextflow.config PIPELINE_VERSION): ${version}"
-    version
+    throw new IllegalArgumentException(
+        'Cannot determine container tag: set --container_tag, CONTAINER_TAG or PIPELINE_VERSION in nextflow.config'
+    )
 }
 
 def parse_stage_images(image_stages, container_tag) {
@@ -371,7 +368,6 @@ workflow {
     // Declare all variables outside conditional blocks
     def ophys_data = Channel.empty()
     def ophys_mount_jsons = Channel.empty()
-    def ophys_mount_pophys_directory = Channel.empty()
     def z_stacks = Channel.empty()
     def vasculature_dir = Channel.empty()
     def matched_tiff_vals_dir = Channel.empty()
@@ -388,15 +384,14 @@ workflow {
     // backend configs bind the same folder into every task at /tmp/data.
     def data_root = System.getenv('DATA_PATH') ?: "${projectDir}/../data"
     def base_path = "${data_root}/"
-    // Data source setup
+    // Data source setup. The session is one input wherever a step needs its raw files, so
+    // Nextflow copies an S3 session once per run.
     if (use_s3_source) {
         ophys_data = Channel.fromPath(source, type: 'any')
         ophys_mount_jsons = Channel.fromPath("${source}/*.json", type: 'any')
-        ophys_mount_pophys_directory = Channel.fromPath("${source}/pophys", type: 'dir')
     } else {
         ophys_data = Channel.fromPath(source, type: 'dir', checkIfExists: true)
         ophys_mount_jsons = Channel.fromPath("${source}/*.json", type: 'any', checkIfExists: true)
-        ophys_mount_pophys_directory = Channel.fromPath("${source}/pophys", type: 'dir', checkIfExists: true)
     }
     
     def nwb_schemas = Channel.fromPath("${base_path}schemas/*", type: 'any', checkIfExists: true)
@@ -450,7 +445,7 @@ workflow {
         motion_correction(
             motion_correction_input.flatten(),
             ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
+            ophys_data.collect(),
             converter_processing_json.flatten().collect().ifEmpty([]),
         )
         z_stacks = converter.out.local_stacks
@@ -487,7 +482,7 @@ workflow {
         decrosstalk_roi_images(
             decrosstalk_inputs,
             ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
+            ophys_data.collect(),
             cellpose_data.collect().ifEmpty([])
         )
 
@@ -506,7 +501,7 @@ workflow {
         motion_correction(
             motion_correction_input.collect(),
             ophys_mount_jsons.collect(),
-            ophys_mount_pophys_directory.collect(),
+            ophys_data.collect(),
             converter_processing_json.flatten().collect().ifEmpty([]),
         )
 
@@ -586,7 +581,7 @@ workflow {
         nwb_schemas.collect(),
         ophys_mount_jsons.collect(),
         ophys_mount_sync_file.collect().ifEmpty([]),
-        ophys_mount_pophys_directory.collect(),
+        ophys_data.collect(),
         motion_correction.out.motion_results.flatten().filter { !(it.name in metadata_json) }.collect(),
         decrosstalk_results_all.flatten().filter { !(it.name in metadata_json) }.collect().ifEmpty([]),
         extraction.out.extraction_results_all.flatten().filter { !(it.name in metadata_json) }.collect(),
@@ -699,7 +694,7 @@ process motion_correction {
     input:
     path ophys_mount, stageAs: 'capsule/data/*'
     path ophys_jsons, stageAs: 'capsule/data/*'
-    path pophys_dir, stageAs: 'capsule/data/*'
+    path session, stageAs: 'capsule/session'
 
     path(upstream_processing_json, stageAs: 'capsule/data/processing_??/*')
 
@@ -722,6 +717,7 @@ process motion_correction {
     mkdir -p capsule/data
     mkdir -p capsule/results
     mkdir -p capsule/scratch
+    ln -s ../session/pophys capsule/data/pophys
 
     ${libraryFunctions}
     install_library "${params.versions['MOTION_CORRECTION_LIBRARY_REPO']}" "${params.versions['MOTION_CORRECTION_LIBRARY_COMMIT']}"
@@ -830,7 +826,7 @@ process decrosstalk_roi_images {
     input:
     tuple path(decrosstalk_split, stageAs: 'capsule/data/*'), path(motion_results, stageAs: 'capsule/data/*'), path(converter_files, stageAs: 'capsule/data/*')
     path ophys_jsons, stageAs: 'capsule/data/*'
-    path pophys_dir, stageAs: 'capsule/data/*'
+    path session, stageAs: 'capsule/session'
     path cellpose_data
 
     output:
@@ -851,6 +847,7 @@ process decrosstalk_roi_images {
     mkdir -p capsule/data
     mkdir -p capsule/results
     mkdir -p capsule/scratch
+    ln -s ../session/pophys capsule/data/pophys
 
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
@@ -1075,7 +1072,7 @@ process ophys_nwb {
     path schemas, stageAs: 'capsule/data/schemas/*'
     path ophys_mount_jsons, stageAs: 'capsule/data/raw/*'
     path ophys_sync_file, stageAs: 'capsule/data/raw/behavior/*'
-    path ophys_mount_pophys_directory, stageAs: 'capsule/data/raw/*'
+    path session, stageAs: 'capsule/session'
     path motion_correction_results, stageAs: 'capsule/data/processed/*'
     path decrosstalk_results, stageAs: 'capsule/data/processed/*'
     path extraction_results, stageAs: 'capsule/data/processed/*'
@@ -1106,6 +1103,7 @@ process ophys_nwb {
     mkdir -p capsule/data/raw/behavior
     mkdir -p capsule/data/nwb
     mkdir -p capsule/data/processed
+    ln -s ../../session/pophys capsule/data/raw/pophys
 
     echo "[${task.tag}] staged \$(find capsule/data/processed -name processing.json | wc -l) upstream processing.json"
 

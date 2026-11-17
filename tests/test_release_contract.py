@@ -19,11 +19,13 @@ class ContainerTagTests(unittest.TestCase):
         positions = [
             body.index("params.container_tag"),
             body.index("System.getenv('CONTAINER_TAG')"),
-            body.index('PIPELINE_VERSION = "([^"]+)"'),
+            body.index("params.pipeline_version"),
         ]
         self.assertEqual(positions, sorted(positions))
-        self.assertIn('file("${baseDir}/nextflow.config")', body)
         self.assertIn("throw new IllegalArgumentException", body)
+        for config in ("nextflow.config", "nextflow_slurm.config", "nextflow_local.config"):
+            text = (ROOT / "pipeline" / config).read_text()
+            self.assertIn("params.pipeline_version = env.PIPELINE_VERSION", text, config)
 
     def test_tag_is_resolved_before_images(self):
         self.assertLess(
