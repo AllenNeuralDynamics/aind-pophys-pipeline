@@ -41,7 +41,7 @@ class LaunchContractTests(unittest.TestCase):
             "Apptainer or Singularity executable not found",
             "Parameter file not found",
             "Image list not found",
-            "../environment/images.json",
+            "${pipeline_path}/images.json",
             "get no permission bits",
         ):
             self.assertIn(text, script)

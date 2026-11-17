@@ -4,7 +4,7 @@
 # Usage:
 #   image_info.sh <step> <field>
 #
-#   step:  a key of environment/images.json (CONVERTER, DFF, ...)
+#   step:  a key of pipeline/images.json (CONVERTER, DFF, ...)
 #   field: name       -> ghcr.io/allenneuraldynamics/<image_name>
 #          dockerfile -> Dockerfile_<x> (relative to environment/)
 #          python     -> the step's Python version
@@ -16,10 +16,10 @@
 # is used to decide whether an existing tag is up to date with environment/.
 set -euo pipefail
 
-STEP="${1:?step required (a key of environment/images.json)}"
+STEP="${1:?step required (a key of pipeline/images.json)}"
 FIELD="${2:?field required (name|dockerfile|python|stage_dir|hash)}"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
-IMAGES_JSON="$REPO_ROOT/environment/images.json"
+IMAGES_JSON="$REPO_ROOT/pipeline/images.json"
 
 if ! jq -e --arg s "$STEP" 'has($s)' "$IMAGES_JSON" >/dev/null; then
   echo "Unknown step: $STEP (valid: $(jq -r 'keys | join("|")' "$IMAGES_JSON"))" >&2

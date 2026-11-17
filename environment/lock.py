@@ -26,7 +26,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENVIRONMENT = ROOT / "environment"
-IMAGES = json.loads((ENVIRONMENT / "images.json").read_text())
+IMAGES = json.loads((ROOT / "pipeline" / "images.json").read_text())
 GPU_STEPS = {"CLASSIFIER"}
 
 

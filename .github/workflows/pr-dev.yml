@@ -35,7 +35,7 @@ jobs:
 
       - name: List images
         id: images
-        run: echo "images=$(jq -c 'keys' environment/images.json)" >> "$GITHUB_OUTPUT"
+        run: echo "images=$(jq -c 'keys' pipeline/images.json)" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
         with:

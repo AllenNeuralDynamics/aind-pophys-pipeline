@@ -519,7 +519,7 @@ class ImageContractTests(MainTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.recipes = json.loads((ENVIRONMENT / "images.json").read_text())
+        cls.recipes = json.loads((ROOT / "pipeline" / "images.json").read_text())
 
     def test_one_image_list_serves_every_backend(self):
         image_stages = re.findall(r"'([A-Z_]+)'", section(r"def image_stages = \[(.*?)\]", self.main))
@@ -530,7 +530,7 @@ class ImageContractTests(MainTestCase):
         parse = section(r"^def parse_stage_images\(.*?\) \{(.*?)^\}", self.main)
         self.assert_in_order(
             parse,
-            '"${baseDir}/../environment/images.json"',
+            '"${baseDir}/images.json"',
             "catalog.keySet() != image_stages.toSet()",
             'images[stage] = "ghcr.io/allenneuraldynamics/${entry.image_name}:${',
             'file("${baseDir}/images_custom.env")',

@@ -7,7 +7,7 @@ its dependencies needs no rebuild.
 
 | File | Purpose |
 | --- | --- |
-| `images.json` | Step name to Dockerfile, image name and Python version |
+| `../pipeline/images.json` | Step name to Dockerfile, image name and Python version; it sits in `pipeline/` because the pipeline reads it at run time |
 | `Dockerfile_python` | Image for every step except extraction |
 | `Dockerfile_extraction` | Extraction image: a conda CaImAn environment plus a pip overlay |
 | `stages/<step>/requirements.in` | The library's declared dependencies, written by `lock.py` |

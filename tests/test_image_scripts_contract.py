@@ -32,16 +32,16 @@ def run_with_docker_stub(command, root: Path):
 class ImageScriptTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.recipes = json.loads((ENVIRONMENT / "images.json").read_text())
+        cls.recipes = json.loads((ROOT / "pipeline" / "images.json").read_text())
 
     def pull(self, *args, custom=None):
         """Run pull_pipeline_images.sh in a copy of the repo layout; return the result and pulled images."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            for relative in ("scripts/pull_pipeline_images.sh", "environment/images.json"):
+            for relative in ("scripts/pull_pipeline_images.sh", "pipeline/images.json"):
                 (root / relative).parent.mkdir(exist_ok=True)
                 shutil.copy(ROOT / relative, root / relative)
-            (root / "pipeline").mkdir()
+            (root / "pipeline").mkdir(exist_ok=True)
             if custom is not None:
                 (root / "pipeline/images_custom.env").write_text(custom)
             script = root / "scripts/pull_pipeline_images.sh"
