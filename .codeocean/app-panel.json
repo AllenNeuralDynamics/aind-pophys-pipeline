@@ -433,6 +433,15 @@
 			"required": true
 		},
 		{
+			"id": "ContainerTag0001",
+			"name": "container_tag",
+			"param_name": "container_tag",
+			"description": "Image tag for every step; empty uses the release version, and dev selects the development images.",
+			"type": "text",
+			"value_type": "string",
+			"default_value": ""
+		},
+		{
 			"id": "qJPrXDS0DDvEvzoC",
 			"name": "input_dir",
 			"param_name": "input_dir",

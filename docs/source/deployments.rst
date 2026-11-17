@@ -100,9 +100,8 @@ files in ``WORKDIR``, then starts Nextflow with ``nextflow_slurm.config``.
 Arguments after the script name are passed to Nextflow. ``--ophys_mount_url`` gives the session,
 an S3 URL or an absolute directory (see :doc:`input_output`), and ``--acquisition_data_type``
 selects a multiplane session (the default is ``single``). Nextflow copies an S3 session into
-``WORKDIR`` before the Converter step, and its ``pophys/`` folder a second time for the later
-steps. Each step may run for up to a day, so give the head
-job more time for large sessions.
+``WORKDIR`` once per run, before the Converter step. Each step may run for up to a day, so give
+the head job more time for large sessions.
 
 The head job counts toward per-user job limits while it waits for its steps. On a partition whose
 QOS allows a user only one running job, the steps stay pending with ``QOSMaxJobsPerUserLimit``
@@ -123,10 +122,10 @@ A failed or cancelled run continues from its last completed tasks when resubmitt
        --output=pophys-%j.log "$PIPELINE_PATH/slurm_submit.sh" \
        --ophys_mount_url s3://aind-open-data/<session> --acquisition_data_type multiplane -resume
 
-Always resume a run whose session comes from S3. Nextflow keeps its copies of the session in
-``WORKDIR``, and ``-resume`` reuses them. Without ``-resume``, or with a different launch directory
+Always resume a run whose session comes from S3. Nextflow keeps its copy of the session in
+``WORKDIR``, and ``-resume`` reuses it. Without ``-resume``, or with a different launch directory
 or ``WORKDIR``, the session is copied again. Delete ``WORKDIR`` once the results are checked; it
-holds the session copies and every intermediate file.
+holds the session copy and every intermediate file.
 
 Run assets
 ~~~~~~~~~~

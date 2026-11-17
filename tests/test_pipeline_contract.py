@@ -307,7 +307,7 @@ class PipelineContractTests(MainTestCase):
                 "path(motion_results, stageAs: 'capsule/data/*'), "
                 "path(converter_files, stageAs: 'capsule/data/*')",
                 "path ophys_jsons, stageAs: 'capsule/data/*'",
-                "path pophys_dir, stageAs: 'capsule/data/*'",
+                "path session, stageAs: 'capsule/session'",
                 "path cellpose_data",
             ],
         )
@@ -315,7 +315,7 @@ class PipelineContractTests(MainTestCase):
         self.assertEqual(
             " ".join(call.split()),
             "decrosstalk_roi_images( decrosstalk_inputs, ophys_mount_jsons.collect(), "
-            "ophys_mount_pophys_directory.collect(), cellpose_data.collect().ifEmpty([]) )",
+            "ophys_data.collect(), cellpose_data.collect().ifEmpty([]) )",
         )
         channel = section(r"def decrosstalk_inputs = (.*?)^ {8}decrosstalk_roi_images\(", self.main)
         channel = " ".join(channel.split())
@@ -351,7 +351,7 @@ class PipelineContractTests(MainTestCase):
     def test_app_panel_and_parameter_file_list_only_parameters_main_reads(self):
         names = [p["param_name"] for p in self.panel]
         self.assertEqual(len(set(names)), len(names))
-        self.assertEqual(set(names), set(self.parameters) | {"ophys_mount_url"})
+        self.assertEqual(set(names), set(self.parameters) | {"ophys_mount_url", "container_tag"})
         for name in names:
             reference = re.escape(name)
             self.assertRegex(
