@@ -92,6 +92,34 @@ def groovy_script(main: str, name: str) -> str:
     return re.sub(r"\\(\\|\n)", lambda match: "" if match.group(1) == "\n" else "\\", body)
 
 
+def glob_regex(glob: str) -> re.Pattern:
+    """Translate a Nextflow (Java NIO) glob into a regex: ** crosses directories, * does not."""
+    pattern = ""
+    index = 0
+    while index < len(glob):
+        char = glob[index]
+        if glob.startswith("**", index):
+            pattern += ".*"
+            index += 2
+            continue
+        pattern += {"*": "[^/]*", "?": "[^/]", "{": "(?:", "}": ")", ",": "|"}.get(char, re.escape(char))
+        index += 1
+    return re.compile(rf"\A{pattern}\Z")
+
+
+def published(main: str, process: str, path: str) -> bool:
+    """Whether the process's publishDir would publish a task output at this path."""
+    block = process_block(main, process)
+    outputs = re.findall(r"^\s*path '([^']+)'", section(r"^\s*output:\n(.*?)^\s*script:", block), re.M)
+    if not any(glob_regex(glob).match(path) for glob in outputs):
+        return False
+    pattern = re.search(r"publishDir [^\n]*pattern: (\w+)", block)
+    if pattern is None:
+        return True
+    value = section(rf"^{pattern.group(1)} = '([^']+)'", main)
+    return glob_regex(value).match(path) is not None
+
+
 def run_bash(script: str, cwd: Path, **env: str) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["bash", "-e", "-c", script],
@@ -422,6 +450,34 @@ class PipelineContractTests(MainTestCase):
         )
         self.assertIn(".flatten().filter", self.main)
         self.assertIn("publishRelativeSkipRunLevel", self.main)
+
+    def test_plane_folders_are_published_file_by_file(self):
+        # Publishing a directory replaces an existing one on a POSIX results path,
+        # so a step that published plane_0/ would delete the earlier steps' folders.
+        steps = {
+            "converter": None,
+            "motion_correction": "motion_correction",
+            "movie_qc": "movie_qc",
+            "decrosstalk_roi_images": "decrosstalk",
+            "extraction": "extraction",
+            "dff": "dff",
+            "oasis_event_detection": "events",
+            "classifier": "classification",
+        }
+        for process, step in steps.items():
+            with self.subTest(process=process):
+                self.assertFalse(published(self.main, process, "capsule/results/plane_0"))
+                if step is None:
+                    self.assertTrue(published(self.main, process, "capsule/results/plane_0/plane_0.h5"))
+                    continue
+                for path in (f"plane_0/{step}/plane_0_{step}.h5", f"plane_0/{step}/plane_0_metrics.json",
+                             f"plane_0/{step}/plots", f"plane_0/{step}/processing.json"):
+                    self.assertTrue(published(self.main, process, f"capsule/results/{path}"), path)
+
+    def test_nwb_publishes_only_the_nwb_store(self):
+        self.assertTrue(published(self.main, "ophys_nwb", "capsule/results/pophys.nwb.zarr"))
+        self.assertFalse(published(self.main, "ophys_nwb", "capsule/results/nwb"))
+        self.assertFalse(published(self.main, "ophys_nwb", "capsule/results/nwb/processing.json"))
 
     def test_scientific_publication_is_durable_and_relative(self):
         for process in PROCESSES:
