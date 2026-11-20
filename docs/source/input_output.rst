@@ -73,7 +73,7 @@ The pipeline output is organized in the results directory (``RESULTS_PATH`` on S
 runs). Every per-plane step writes into a folder for each plane, named with the plane id:
 ``plane_0`` for a single-plane session, and ``<targeted structure>_<plane index>`` (for example
 ``VISp_0``) for a multiplane session. Each step folder also holds that step's ``processing.json``
-and, for every step except NWB packaging, its ``quality_control.json``.
+and ``quality_control.json``.
 
 .. code-block:: text
 
@@ -86,7 +86,7 @@ and, for every step except NWB packaging, its ``quality_control.json``.
    │   ├── dff/
    │   ├── classification/
    │   └── events/
-   ├── nwb/
+   ├── pophys.nwb.zarr
    ├── processing.json
    ├── quality_control.json
    └── data_description.json
@@ -170,14 +170,12 @@ Contains the Events output:
   (denoised fluorescence), each shaped ``(n_rois, n_frames)``, with the estimated model parameters
 * ``plots/``: one figure per ROI
 
-``nwb/``
-~~~~~~~~
-Contains the NWB packaging output:
-
-* ``pophys.nwb.zarr``: one NWB file in Zarr format, with a processing module per plane holding
-  the ROI and neuropil tables, projection and segmentation images, and the raw, neuropil,
-  neuropil-corrected, dF/F and event traces
-* ``processing.json``
+``pophys.nwb.zarr``
+~~~~~~~~~~~~~~~~~~
+The NWB packaging output: one NWB file in Zarr format, with a processing module per plane holding
+the ROI and neuropil tables, projection and segmentation images, and the raw, neuropil,
+neuropil-corrected, dF/F and event traces. Its processing record is merged into the run-level
+``processing.json``.
 
 Files can be read with `h5py <https://pypi.org/project/h5py/>`_ and
 `PyNWB <https://pynwb.readthedocs.io/>`_ with `hdmf-zarr <https://hdmf-zarr.readthedocs.io/>`_:
@@ -190,7 +188,7 @@ Files can be read with `h5py <https://pypi.org/project/h5py/>`_ and
    with h5py.File("results/VISp_0/dff/VISp_0_dff.h5", "r") as f:
        dff = f["data"][()]
 
-   with NWBZarrIO("results/nwb/pophys.nwb.zarr", mode="r") as io:
+   with NWBZarrIO("results/pophys.nwb.zarr", mode="r") as io:
        nwbfile = io.read()
 
 Additional Files

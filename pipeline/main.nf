@@ -335,6 +335,13 @@ stage_roinet() {
 // at that level. Keeping the relative path means an artifact published from a
 // nested glob lands at <plane>/<step>/..., and a directory match publishes its
 // subtree there.
+//
+// Publishing a directory replaces an existing one on a POSIX results path, so
+// no step publishes a plane directory: per-plane steps publish the entries of
+// their own <plane>/<step>/ folder, and the converter its plane files.
+CONVERTER_FILES = '{capsule/results/*.*,capsule/results/*/*}'
+STEP_FILES = 'capsule/results/*/*/**'
+NWB_FILES = 'capsule/results/*.nwb.zarr'
 CAPSULE_RESULTS = 'capsule/results/'
 RUN_LEVEL_DOCS = ['processing.json', 'quality_control.json']
 
@@ -645,7 +652,7 @@ process converter {
     tag 'converter'
     def container_name = params.stage_images['CONVERTER']
     container container_name
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelativeSkipRunLevel
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelativeSkipRunLevel, pattern: CONVERTER_FILES
 
     input:
     path ophys_mount, name: 'capsule/data'
@@ -689,7 +696,7 @@ process motion_correction {
     tag 'motion_correction'
     def container_name = params.stage_images['MOTION_CORRECTION']
     container container_name
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
 
     input:
     path ophys_mount, stageAs: 'capsule/data/*'
@@ -704,6 +711,7 @@ process motion_correction {
     path 'capsule/results/*/*/processing.json', emit: 'motion_processing_json'
     path 'capsule/results/*/*/quality_control.json', emit: 'motion_qc_json', optional: true
     path 'capsule/results/*/motion_correction/*', emit: 'motion_results'
+    path 'capsule/results/*/*/*', optional: true
 
     script:
     """
@@ -736,7 +744,7 @@ process movie_qc {
 	tag 'movie_qc'
     def container_name = params.stage_images['MOVIE_QC']
     container container_name
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
 
 
 	input:
@@ -749,6 +757,7 @@ process movie_qc {
 	path 'capsule/results/*/*/processing.json', emit: 'movie_qc_processing_json', optional: true
 	path 'capsule/results/*/*/quality_control.json', emit: 'movie_qc_qc_json', optional: true
 	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png'
+	path 'capsule/results/*/*/*', optional: true
 
 	script:
 	"""
@@ -821,7 +830,7 @@ process decrosstalk_roi_images {
     def container_name = params.stage_images['DECROSSTALK_ROI_IMAGES']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
 
     input:
     tuple path(decrosstalk_split, stageAs: 'capsule/data/*'), path(motion_results, stageAs: 'capsule/data/*'), path(converter_files, stageAs: 'capsule/data/*')
@@ -834,6 +843,7 @@ process decrosstalk_roi_images {
     path 'capsule/results/*/*/processing.json', emit: 'decrosstalk_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'decrosstalk_qc_json', optional: true
     path 'capsule/results/*/decrosstalk/*', emit: 'decrosstalk_results_all'
+    path 'capsule/results/*/*/*', optional: true
     
     script:
     """
@@ -872,7 +882,7 @@ process extraction {
     def container_name = params.stage_images['EXTRACTION']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
 
     input:
     path extraction_input, stageAs: 'capsule/data/*'
@@ -884,6 +894,7 @@ process extraction {
     path 'capsule/results/*/*/processing.json', emit: 'extraction_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'extraction_qc_json', optional: true
     path 'capsule/results/*/extraction/*', emit: 'extraction_results_all'
+    path 'capsule/results/*/*/*', optional: true
 
 
     script:
@@ -922,7 +933,7 @@ process dff {
     def container_name = params.stage_images['DFF']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
 
     input:
     path extraction_results, stageAs: 'capsule/data/*'
@@ -933,6 +944,7 @@ process dff {
     path 'capsule/results/*/*/processing.json', emit: 'dff_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'dff_qc_json', optional: true
     path 'capsule/results/*/dff/*.h5', emit: 'dff_results_all'
+    path 'capsule/results/*/*/*', optional: true
 
     script:
     """
@@ -965,7 +977,7 @@ process oasis_event_detection {
     def container_name = params.stage_images['OASIS']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
 
     input:
     path dff_results, stageAs: 'capsule/data/*'
@@ -977,6 +989,7 @@ process oasis_event_detection {
     path 'capsule/results/*/*/processing.json', emit: 'oasis_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'oasis_qc_json', optional: true
     path 'capsule/results/*/events/*.h5', emit: 'events_h5'
+    path 'capsule/results/*/*/*', optional: true
 
     script:
     """
@@ -1012,7 +1025,7 @@ process classifier {
     accelerator 1
     label 'gpu'
 
-	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
 
 	input:
     path ophys_mount_jsons, stageAs: 'capsule/data/*'
@@ -1026,6 +1039,7 @@ process classifier {
     path 'capsule/results/*/classification/*classification.h5', emit: 'classifer_h5'
 	path 'capsule/results/*/*/*.png', emit: 'classifier_png'
 	path 'capsule/results/*'
+	path 'capsule/results/*/*/*', optional: true
 
 	script:
 	def model_name_arg = params.containsKey('model-name') && params['model-name'] ? "--model_name ${params['model-name']}" : ""
@@ -1066,7 +1080,7 @@ process ophys_nwb {
     def container_name = params.stage_images['NWB']
     container container_name
 
-	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative
+	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: NWB_FILES
 
 	input:
     path schemas, stageAs: 'capsule/data/schemas/*'
