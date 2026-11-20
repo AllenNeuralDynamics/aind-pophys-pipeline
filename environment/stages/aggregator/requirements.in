@@ -1,0 +1,6 @@
+aind-data-schema>=2.9
+pydantic>=2.7,<2.12
+pydantic-settings
+tzlocal
+aind-data-schema==2.9.0
+aind-data-schema-models==6.2.0

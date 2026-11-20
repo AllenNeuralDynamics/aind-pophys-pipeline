@@ -1,0 +1,2 @@
+# Suite2p fork with save_cellpose_output, pinned by commit.
+suite2p @ git+https://github.com/j-friedrich/suite2p.git@ae0e9313b881f1d4bb51d7461f4796532a76e8aa

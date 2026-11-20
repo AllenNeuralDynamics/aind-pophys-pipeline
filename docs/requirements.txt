@@ -1,0 +1,7 @@
+sphinx
+furo
+sphinx-design
+numpydoc
+sphinxcontrib-jquery
+sphinxcontrib-mermaid>=1.0.0
+myst-parser

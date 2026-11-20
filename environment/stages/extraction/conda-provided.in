@@ -1,0 +1,3 @@
+# The conda distribution reports 4.7.0, which is not a PyPI release.
+# Its only Python dependency is numpy, explicitly resolved by the library input.
+opencv-python

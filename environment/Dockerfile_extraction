@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1
+# Conda pre-pip builds and the reviewed pip overlay are locked separately.
+# The extraction library itself is installed by each task at run time, without
+# build isolation, using the build tools in /opt/build-tools.
+FROM mambaorg/micromamba:2.3.2@sha256:955819619f303e2aa1dc1ba89beefe7f326a378b3d0782a4a0d28b1cf11b68b6 AS runtime-base
+USER root
+ENV CAIMAN_TEMP=/scratch \
+    PATH=/opt/conda/bin:$PATH \
+    MPLBACKEND=Agg \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
+    bash ca-certificates git time procps libgomp1 libglib2.0-0t64 libgl1 \
+    && ps --version \
+    && mkdir -p /opt/image
+COPY stages/extraction/conda-linux-64.lock /opt/conda-linux-64.lock
+RUN --mount=type=cache,target=/opt/conda/pkgs \
+    micromamba install --yes --always-copy --name base --file /opt/conda-linux-64.lock
+
+FROM runtime-base AS dependencies
+RUN --mount=type=cache,target=/var/lib/apt/lists \
+    --mount=type=cache,target=/var/cache/apt \
+    apt-get update && apt-get install -y --no-install-recommends build-essential
+COPY builder-requirements.txt /opt/builder-requirements.txt
+RUN python -m venv /opt/build && /opt/build/bin/pip install --no-cache-dir -r /opt/builder-requirements.txt
+COPY stages/extraction/requirements.lock /opt/requirements.lock
+COPY stages/extraction/build.constraints /opt/build.constraints
+COPY stages/extraction/overlay-policy.json /opt/image/overlay-policy.json
+COPY conda-overlay-check.py /opt/image/conda-overlay-check.py
+RUN python /opt/image/conda-overlay-check.py prepare \
+    --policy /opt/image/overlay-policy.json --lock /opt/requirements.lock --output /opt/pip-overlay.lock
+RUN /opt/build/bin/pip wheel --no-cache-dir --no-deps --build-constraint /opt/build.constraints \
+    -r /opt/pip-overlay.lock -w /wheels
+
+FROM runtime-base AS runtime
+COPY builder-requirements.txt runtime-check.py conda-overlay-check.py /opt/image/
+COPY stages/extraction/overlay-policy.json /opt/image/overlay-policy.json
+RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
+    python /opt/image/conda-overlay-check.py install --policy /opt/image/overlay-policy.json \
+    && python /opt/image/conda-overlay-check.py verify --policy /opt/image/overlay-policy.json
+RUN python -m pip check \
+    && python /opt/image/runtime-check.py extraction \
+    && python -m pip list --format=json > /opt/image/packages.json
+# Build tools for installing the processing library at run time, kept apart from the
+# step's dependencies, whose locks may pin older setuptools or packaging.
+RUN grep -E '^(packaging|setuptools|setuptools-scm|tomli)==' /opt/image/builder-requirements.txt > /tmp/build-tools.txt \
+    && python -m pip install --no-cache-dir --no-deps --target /opt/build-tools -r /tmp/build-tools.txt \
+    && rm /tmp/build-tools.txt \
+    && PYTHONPATH=/opt/build-tools python -c "import packaging.licenses, setuptools, setuptools_scm"
+ENTRYPOINT []
+CMD ["bash"]
