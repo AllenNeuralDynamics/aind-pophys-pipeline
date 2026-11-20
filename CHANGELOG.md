@@ -1,3 +1,15 @@
+# [4.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v3.0.0...v4.0.0) (2026-11-20)
+
+
+* feat(pipeline)!: one main.nf for Code Ocean, SLURM and local runs (#68) ([686bd50](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/686bd50162a49633ea04b3b3712132dd6e046f44)), closes [#68](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/68)
+
+
+### BREAKING CHANGES
+
+* the session is passed as --ophys_mount_url and has no default; process_versions_custom.env keys are <STEP>_LIBRARY_REPO and <STEP>_LIBRARY_COMMIT; upgrade_legacy_metadata is no longer a parameter; step capsules are no longer used.
+
+
+
 # [3.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v2.1.0...v3.0.0) (2026-11-05)
 
 
@@ -41,20 +53,6 @@
 ### Bug Fixes
 
 * **converter-capsule:** bump to COv10, to fix platform.json check now only applies to multiplane sessions. ([6d3f9de](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/6d3f9de5e858d34cbfdfe9612ea1d603d9433f6a))
-
-
-
-# [1.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v0.1.0...v1.0.0) (2026-03-19)
-
-
-### Documentation
-
-* update reference to aind-metadata-manager-capsule ([04e8cf9](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/04e8cf9ceafac42e2f8174b27de9253109eaa65b))
-
-
-### BREAKING CHANGES
-
-* Breaking is in reference to the previous commit 8443918. This is required to trigger the versioning workflow for the previous commit due to a bug in the third-party github workflow.
 
 
 
