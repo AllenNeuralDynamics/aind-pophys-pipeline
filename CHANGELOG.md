@@ -1,3 +1,12 @@
+## [4.0.1](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v4.0.0...v4.0.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **pipeline:** complete SLURM and local results with relative input names ([#74](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/74)) ([48a5299](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/48a52995a5a1fc53c40c0ad72bf945a8aad08c3b)), closes [#56](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/56) [#60](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/60) [#56](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/56) [#57](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/issues/57)
+
+
+
 # [4.0.0](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v3.0.0...v4.0.0) (2026-11-20)
 
 
@@ -44,15 +53,6 @@
 ### BREAKING CHANGES
 
 * extraction init default changed from 'sparsery' to 'mean'
-
-
-
-## [1.0.1](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/compare/v1.0.0...v1.0.1) (2026-03-20)
-
-
-### Bug Fixes
-
-* **converter-capsule:** bump to COv10, to fix platform.json check now only applies to multiplane sessions. ([6d3f9de](https://github.com/AllenNeuralDynamics/aind-pophys-pipeline/commit/6d3f9de5e858d34cbfdfe9612ea1d603d9433f6a))
 
 
 
