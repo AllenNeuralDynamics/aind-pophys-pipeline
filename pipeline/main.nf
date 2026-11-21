@@ -262,6 +262,16 @@ run_library() {
 }
 '''
 
+// SLURM and local runs: hardlink the task's results into publish/ (see
+// POSIX_PUBLISH). Runs in capsule/code.
+def publishFunction = '''
+link_results_for_publishing() {
+    local results="${1:-../results}"
+    mkdir -p ../../publish
+    cp -al "${results}/." ../../publish/
+}
+'''
+
 // Decrosstalk: turn the staged pair<k>.txt into a pair<k>/ directory of plane
 // links, which the library's pair discovery reads. Runs in capsule/code.
 def decrosstalkPairFunction = '''
@@ -336,19 +346,22 @@ stage_roinet() {
 // nested glob lands at <plane>/<step>/..., and a directory match publishes its
 // subtree there.
 //
-// Publishing a directory replaces an existing one on a POSIX results path, so
-// no step publishes a plane directory: per-plane steps publish the entries of
-// their own <plane>/<step>/ folder, and the converter its plane files.
-CONVERTER_FILES = '{capsule/results/*.*,capsule/results/*/*}'
-STEP_FILES = 'capsule/results/*/*/**'
+// Publishing a directory replaces an existing one on a POSIX results path, and
+// Nextflow publishes only the outermost of a task's nested outputs, so a step
+// whose plane folder is an output publishes that whole folder over the earlier
+// steps' folders. Code Ocean publishes to S3, which merges them. SLURM and local
+// tasks instead hardlink their results into publish/, where each step's files are
+// declared without their plane folder, and publish only from there.
+POSIX_PUBLISH = backend != 'codeocean'
+PUBLISHED_FILES = POSIX_PUBLISH ? 'publish/**' : null
 NWB_FILES = 'capsule/results/*.nwb.zarr'
+PUBLISH_ROOT = 'publish/'
 CAPSULE_RESULTS = 'capsule/results/'
 RUN_LEVEL_DOCS = ['processing.json', 'quality_control.json']
 
 publishRelative = { String filename ->
-    filename.startsWith(CAPSULE_RESULTS)
-        ? filename.substring(CAPSULE_RESULTS.length())
-        : filename
+    def root = [CAPSULE_RESULTS, PUBLISH_ROOT].find { filename.startsWith(it) }
+    root ? filename.substring(root.length()) : filename
 }
 
 // For a step that writes its own processing.json / quality_control.json at
@@ -652,7 +665,7 @@ process converter {
     tag 'converter'
     def container_name = params.stage_images['CONVERTER']
     container container_name
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelativeSkipRunLevel, pattern: CONVERTER_FILES
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelativeSkipRunLevel, pattern: PUBLISHED_FILES
 
     input:
     path ophys_mount, name: 'capsule/data'
@@ -664,6 +677,8 @@ process converter {
     path 'capsule/results/*/*local*', emit: 'local_stacks', optional: true
     path 'capsule/results/processing.json', emit: 'converter_processing_json', optional: true
     path 'capsule/results/quality_control.json', emit: 'converter_qc_json', optional: true
+    path 'publish/*.*', optional: true
+    path 'publish/*/*', optional: true
 
     script:
     """
@@ -679,6 +694,7 @@ process converter {
     mkdir -p capsule/scratch
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['CONVERTER_LIBRARY_REPO']}" "${params.versions['CONVERTER_LIBRARY_COMMIT']}"
 
     echo "[${task.tag}] running converter..."
@@ -686,6 +702,7 @@ process converter {
     cd capsule/code
     echo "converter parameters: --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}"
     run_library aind_pophys_converter.job --debug ${params.debug} --input_dir ${task_input_dir} --output_dir ${task_output_dir} --temp_dir ${task_temp_dir}
+    ${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
     echo "[${task.tag}] completed!"
     ls -a ${task_output_dir}
     """
@@ -696,7 +713,7 @@ process motion_correction {
     tag 'motion_correction'
     def container_name = params.stage_images['MOTION_CORRECTION']
     container container_name
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: PUBLISHED_FILES
 
     input:
     path ophys_mount, stageAs: 'capsule/data/*'
@@ -711,7 +728,7 @@ process motion_correction {
     path 'capsule/results/*/*/processing.json', emit: 'motion_processing_json'
     path 'capsule/results/*/*/quality_control.json', emit: 'motion_qc_json', optional: true
     path 'capsule/results/*/motion_correction/*', emit: 'motion_results'
-    path 'capsule/results/*/*/*', optional: true
+    path 'publish/*/*/*', optional: true
 
     script:
     """
@@ -728,12 +745,14 @@ process motion_correction {
     ln -s ../session/pophys capsule/data/pophys
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['MOTION_CORRECTION_LIBRARY_REPO']}" "${params.versions['MOTION_CORRECTION_LIBRARY_COMMIT']}"
     
     echo "[${task.tag}] running motion_correction..."
     cd capsule/code
     echo "motion_correction parameters: --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}"
     run_library aind_ophys_motion_correction_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --do_registration ${params.do_registration} --data_type ${params.data_type} --batch_size ${params.batch_size} --maxregshift ${params.maxregshift} --maxregshiftNR ${params.maxregshiftNR} --align_by_chan ${params.align_by_chan} --smooth_sigma_time ${params.smooth_sigma_time} --smooth_sigma ${params.smooth_sigma} --nonrigid ${params.nonrigid} --snr_thresh ${params.snr_thresh} --debug ${params.debug}
+    ${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
     
     echo "[${task.tag}] completed!"
     """
@@ -744,7 +763,7 @@ process movie_qc {
 	tag 'movie_qc'
     def container_name = params.stage_images['MOVIE_QC']
     container container_name
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: PUBLISHED_FILES
 
 
 	input:
@@ -757,7 +776,7 @@ process movie_qc {
 	path 'capsule/results/*/*/processing.json', emit: 'movie_qc_processing_json', optional: true
 	path 'capsule/results/*/*/quality_control.json', emit: 'movie_qc_qc_json', optional: true
 	path 'capsule/results/*/*/*.png', emit: 'movie_qc_png'
-	path 'capsule/results/*/*/*', optional: true
+	path 'publish/*/*/*', optional: true
 
 	script:
 	"""
@@ -775,11 +794,13 @@ process movie_qc {
 	mkdir -p capsule/scratch
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['MOVIE_QC_LIBRARY_REPO']}" "${params.versions['MOVIE_QC_LIBRARY_COMMIT']}"
 
     echo "[${task.tag}] running movie_qc..."
     cd capsule/code
     run_library aind_ophys_movie_qc_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
+    ${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
 
     echo "[${task.tag}] completed!"
     """
@@ -830,7 +851,7 @@ process decrosstalk_roi_images {
     def container_name = params.stage_images['DECROSSTALK_ROI_IMAGES']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: PUBLISHED_FILES
 
     input:
     tuple path(decrosstalk_split, stageAs: 'capsule/data/*'), path(motion_results, stageAs: 'capsule/data/*'), path(converter_files, stageAs: 'capsule/data/*')
@@ -843,7 +864,7 @@ process decrosstalk_roi_images {
     path 'capsule/results/*/*/processing.json', emit: 'decrosstalk_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'decrosstalk_qc_json', optional: true
     path 'capsule/results/*/decrosstalk/*', emit: 'decrosstalk_results_all'
-    path 'capsule/results/*/*/*', optional: true
+    path 'publish/*/*/*', optional: true
     
     script:
     """
@@ -862,6 +883,7 @@ process decrosstalk_roi_images {
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['DECROSSTALK_ROI_IMAGES_LIBRARY_REPO']}" "${params.versions['DECROSSTALK_ROI_IMAGES_LIBRARY_COMMIT']}"
 
     echo "[${task.tag}] running decrosstalk_roi_images..."
@@ -870,6 +892,7 @@ process decrosstalk_roi_images {
     ${decrosstalkPairFunction}
     stage_pair
     run_library aind_ophys_decrosstalk_roi_images_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --debug ${params.debug}
+    ${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
 
     echo "[${task.tag}] completed!"
     """
@@ -882,7 +905,7 @@ process extraction {
     def container_name = params.stage_images['EXTRACTION']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: PUBLISHED_FILES
 
     input:
     path extraction_input, stageAs: 'capsule/data/*'
@@ -894,7 +917,7 @@ process extraction {
     path 'capsule/results/*/*/processing.json', emit: 'extraction_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'extraction_qc_json', optional: true
     path 'capsule/results/*/extraction/*', emit: 'extraction_results_all'
-    path 'capsule/results/*/*/*', optional: true
+    path 'publish/*/*/*', optional: true
 
 
     script:
@@ -915,6 +938,7 @@ process extraction {
     ln -s "/tmp/data/cellpose_models" "capsule/data/cellpose_models"
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['EXTRACTION_LIBRARY_REPO']}" "${params.versions['EXTRACTION_LIBRARY_COMMIT']}"
 
     echo "[${task.tag}] running extraction..."
@@ -922,6 +946,7 @@ process extraction {
     echo "extraction parameters: --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap}"
     export CELLPOSE_LOCAL_MODELS_PATH="\${CELLPOSE_MODEL_DIR:-../data/cellpose_models}"
     run_library aind_ophys_extraction_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} --diameter ${params.diameter} --cellprob_threshold ${params.cellprob_threshold} --init ${params.init} --functional_chan ${params.functional_chan} --threshold_scaling ${params.threshold_scaling} --max_overlap ${params.max_overlap} --soma_crop ${params.soma_crop} --allow_overlap ${params.allow_overlap} ${suite2p_params_arg} ${suite2p_ops_arg}
+    ${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
 
     echo "[${task.tag}] completed!"
     """
@@ -933,7 +958,7 @@ process dff {
     def container_name = params.stage_images['DFF']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: PUBLISHED_FILES
 
     input:
     path extraction_results, stageAs: 'capsule/data/*'
@@ -944,7 +969,7 @@ process dff {
     path 'capsule/results/*/*/processing.json', emit: 'dff_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'dff_qc_json', optional: true
     path 'capsule/results/*/dff/*.h5', emit: 'dff_results_all'
-    path 'capsule/results/*/*/*', optional: true
+    path 'publish/*/*/*', optional: true
 
     script:
     """
@@ -960,12 +985,14 @@ process dff {
     mkdir -p capsule/scratch
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['DFF_LIBRARY_REPO']}" "${params.versions['DFF_LIBRARY_COMMIT']}"
 
     echo "[${task.tag}] running dff..."
     cd capsule/code
     echo "dff parameters: --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'"
     run_library aind_ophys_dff_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir} --method ${params.method} --long_window ${params.long_window} --short_window ${params.short_window} --inactive_percentile ${params.inactive_percentile} --noise_method ${params.noise_method} --sigma_anneal_steps ${params.sigma_anneal_steps} --triexp_config_overrides '${params.triexp_config_overrides}'
+    ${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
 
     echo "[${task.tag}] completed!"
     """
@@ -977,7 +1004,7 @@ process oasis_event_detection {
     def container_name = params.stage_images['OASIS']
     container container_name
 
-    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
+    publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: PUBLISHED_FILES
 
     input:
     path dff_results, stageAs: 'capsule/data/*'
@@ -989,7 +1016,7 @@ process oasis_event_detection {
     path 'capsule/results/*/*/processing.json', emit: 'oasis_processing_json', optional: true
     path 'capsule/results/*/*/quality_control.json', emit: 'oasis_qc_json', optional: true
     path 'capsule/results/*/events/*.h5', emit: 'events_h5'
-    path 'capsule/results/*/*/*', optional: true
+    path 'publish/*/*/*', optional: true
 
     script:
     """
@@ -1005,11 +1032,13 @@ process oasis_event_detection {
     mkdir -p capsule/scratch
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['OASIS_LIBRARY_REPO']}" "${params.versions['OASIS_LIBRARY_COMMIT']}"
 
     echo "[${task.tag}] running oasis..."
     cd capsule/code
     run_library aind_ophys_oasis_event_detection_library.job --input_dir ${task_input_dir} --output_dir ${task_output_dir}
+    ${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
 
     echo "[${task.tag}] completed!"
     """
@@ -1025,7 +1054,7 @@ process classifier {
     accelerator 1
     label 'gpu'
 
-	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: STEP_FILES
+	publishDir "$RESULTS_PATH", mode: 'copy', saveAs: publishRelative, pattern: PUBLISHED_FILES
 
 	input:
     path ophys_mount_jsons, stageAs: 'capsule/data/*'
@@ -1039,7 +1068,7 @@ process classifier {
     path 'capsule/results/*/classification/*classification.h5', emit: 'classifer_h5'
 	path 'capsule/results/*/*/*.png', emit: 'classifier_png'
 	path 'capsule/results/*'
-	path 'capsule/results/*/*/*', optional: true
+	path 'publish/*/*/*', optional: true
 
 	script:
 	def model_name_arg = params.containsKey('model-name') && params['model-name'] ? "--model_name ${params['model-name']}" : ""
@@ -1061,6 +1090,7 @@ process classifier {
 	ln -s "/tmp/data/roinet" "capsule/data/roinet"
 
     ${libraryFunctions}
+    ${publishFunction}
     install_library "${params.versions['CLASSIFIER_LIBRARY_REPO']}" "${params.versions['CLASSIFIER_LIBRARY_COMMIT']}"
 
 	echo "[${task.tag}] running classifier..."
@@ -1068,6 +1098,7 @@ process classifier {
     ${classifierModelFunction}
     stage_roinet
 	run_library aind_ophys_classifier_library.job "\${ROINET_ARGS[@]}" --input_dir ${task_input_dir} --output_dir ${task_output_dir} --tmp_dir ${task_temp_dir} ${soma_classifier_arg} ${dendrite_classifier_arg} --border_size ${params['border-size']} ${model_name_arg}
+	${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}
 
 	echo "[${task.tag}] completed!"
 	"""

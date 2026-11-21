@@ -107,17 +107,80 @@ def glob_regex(glob: str) -> re.Pattern:
     return re.compile(rf"\A{pattern}\Z")
 
 
-def published(main: str, process: str, path: str) -> bool:
-    """Whether the process's publishDir would publish a task output at this path."""
+RUN_LEVEL_DOCS = ("processing.json", "quality_control.json")
+STEP_FOLDERS = {  # per-plane process: the folder it writes under each plane
+    "motion_correction": "motion_correction",
+    "movie_qc": "movie_qc",
+    "decrosstalk_roi_images": "decrosstalk",
+    "extraction": "extraction",
+    "dff": "dff",
+    "oasis_event_detection": "events",
+    "classifier": "classification",
+}
+
+
+def task_results(process: str) -> set:
+    """Files a single-plane task writes under capsule/results/."""
+    if process == "converter":
+        return {"plane_0/plane_0.h5", "plane_0/plane_0_z_stack_local.h5", *RUN_LEVEL_DOCS}
+    if process == "ophys_nwb":
+        return {"nwb/processing.json", "pophys.nwb.zarr/.zgroup"}
+    step = STEP_FOLDERS[process]
+    return {f"plane_0/{step}/{name}" for name in (
+        f"plane_0_{step}.h5", "plane_0_metrics.json", "plane_0_summary.png", "plots/roi_0.png",
+        *RUN_LEVEL_DOCS)}
+
+
+def publish_pattern(main: str, block: str, backend: str):
+    name = re.search(r"publishDir [^\n]*pattern: (\w+)", block)
+    if name is None:
+        return None
+    value = section(rf"^{name.group(1)} = ([^\n]+)$", main).strip()
+    posix_only = re.fullmatch(r"POSIX_PUBLISH \? '([^']+)' : null", value)
+    if posix_only:
+        return posix_only.group(1) if backend != "codeocean" else None
+    return section(r"\A'([^']+)'\Z", value)
+
+
+def publish_task(main: str, process: str, backend: str) -> list:
+    """(destination, files) pairs one task publishes, as Nextflow 24.10 PublishDir does:
+    declared outputs, reduced to the outermost paths, filtered by pattern, renamed by saveAs."""
     block = process_block(main, process)
-    outputs = re.findall(r"^\s*path '([^']+)'", section(r"^\s*output:\n(.*?)^\s*script:", block), re.M)
-    if not any(glob_regex(glob).match(path) for glob in outputs):
-        return False
-    pattern = re.search(r"publishDir [^\n]*pattern: (\w+)", block)
-    if pattern is None:
-        return True
-    value = section(rf"^{pattern.group(1)} = '([^']+)'", main)
-    return glob_regex(value).match(path) is not None
+    files = {f"capsule/results/{name}" for name in task_results(process)}
+    if backend != "codeocean" and "${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}" in block:
+        files |= {f"publish/{name}" for name in task_results(process)}
+    dirs = {str(parent) for name in files for parent in Path(name).parents if str(parent) != "."}
+    outputs = re.findall(r"^\s*path '([^']+)'([^\n]*)", section(r"^\s*output:\n(.*?)^\s*script:", block), re.M)
+    declared = set()
+    for glob, options in outputs:
+        candidates = dirs if "type: 'dir'" in options else files | dirs
+        declared |= {path for path in candidates if glob_regex(glob).match(path)}
+    outermost = {path for path in declared
+                 if not any(str(parent) in declared for parent in Path(path).parents)}
+    pattern = publish_pattern(main, block, backend)
+    skip_run_level = "saveAs: publishRelativeSkipRunLevel" in block
+    published = []
+    for path in sorted(outermost):
+        if pattern and not glob_regex(pattern).match(path):
+            continue
+        target = re.sub(r"\A(capsule/results|publish)/", "", path)
+        if skip_run_level and target in RUN_LEVEL_DOCS:
+            continue
+        contents = sorted(name[len(path) + 1:] for name in files if name.startswith(path + "/"))
+        published.append((target, contents or [""]))
+    return published
+
+
+def publish_run(main: str, backend: str) -> set:
+    """Results-directory files after a single-plane run publishes every step in order.
+    A POSIX results path replaces an existing directory; S3 merges keys."""
+    results = set()
+    for process in ("converter", *STEP_FOLDERS, "ophys_nwb"):
+        for target, contents in publish_task(main, process, backend):
+            if contents != [""] and backend != "codeocean":
+                results = {name for name in results if not name.startswith(target + "/")}
+            results |= {f"{target}/{name}".rstrip("/") for name in contents}
+    return results
 
 
 def run_bash(script: str, cwd: Path, **env: str) -> subprocess.CompletedProcess:
@@ -451,33 +514,32 @@ class PipelineContractTests(MainTestCase):
         self.assertIn(".flatten().filter", self.main)
         self.assertIn("publishRelativeSkipRunLevel", self.main)
 
-    def test_plane_folders_are_published_file_by_file(self):
-        # Publishing a directory replaces an existing one on a POSIX results path,
-        # so a step that published plane_0/ would delete the earlier steps' folders.
-        steps = {
-            "converter": None,
-            "motion_correction": "motion_correction",
-            "movie_qc": "movie_qc",
-            "decrosstalk_roi_images": "decrosstalk",
-            "extraction": "extraction",
-            "dff": "dff",
-            "oasis_event_detection": "events",
-            "classifier": "classification",
-        }
-        for process, step in steps.items():
-            with self.subTest(process=process):
-                self.assertFalse(published(self.main, process, "capsule/results/plane_0"))
-                if step is None:
-                    self.assertTrue(published(self.main, process, "capsule/results/plane_0/plane_0.h5"))
-                    continue
-                for path in (f"plane_0/{step}/plane_0_{step}.h5", f"plane_0/{step}/plane_0_metrics.json",
-                             f"plane_0/{step}/plots", f"plane_0/{step}/processing.json"):
-                    self.assertTrue(published(self.main, process, f"capsule/results/{path}"), path)
+    def test_every_step_file_reaches_the_results_on_each_backend(self):
+        expected = {name for process in ("converter", *STEP_FOLDERS) for name in task_results(process)
+                    if name not in RUN_LEVEL_DOCS} | {"pophys.nwb.zarr/.zgroup"}
+        for backend in ("codeocean", "slurm", "local"):
+            with self.subTest(backend=backend):
+                self.assertEqual(publish_run(self.main, backend), expected)
 
-    def test_nwb_publishes_only_the_nwb_store(self):
-        self.assertTrue(published(self.main, "ophys_nwb", "capsule/results/pophys.nwb.zarr"))
-        self.assertFalse(published(self.main, "ophys_nwb", "capsule/results/nwb"))
-        self.assertFalse(published(self.main, "ophys_nwb", "capsule/results/nwb/processing.json"))
+    def test_posix_publishing_is_keyed_to_the_backend(self):
+        self.assertIn("POSIX_PUBLISH = backend != 'codeocean'", self.main)
+        for process in ("converter", *STEP_FOLDERS):
+            with self.subTest(process=process):
+                self.assertIn("${POSIX_PUBLISH ? 'link_results_for_publishing' : ''}",
+                              process_block(self.main, process))
+
+    def test_link_results_for_publishing_hardlinks_the_task_results(self):
+        function = groovy_script(self.main, "publishFunction")
+        with tempfile.TemporaryDirectory() as tmp:
+            task = Path(tmp)
+            (task / "capsule/results/plane_0/dff").mkdir(parents=True)
+            (task / "capsule/code").mkdir()
+            source = task / "capsule/results/plane_0/dff/plane_0_dff.h5"
+            source.write_text("x")
+            result = run_bash(f"{function}\nlink_results_for_publishing ../results", task / "capsule/code")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            linked = task / "publish/plane_0/dff/plane_0_dff.h5"
+            self.assertEqual(linked.stat().st_ino, source.stat().st_ino)
 
     def test_scientific_publication_is_durable_and_relative(self):
         for process in PROCESSES:
