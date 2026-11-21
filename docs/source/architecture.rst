@@ -57,8 +57,11 @@ packaging and Metadata merge run once per session.
 
 **Output**: Each step's results are published to the results directory under their relative
 paths, so every plane has one folder holding all of its steps' outputs (see
-:doc:`input_output`). Each step's ``processing.json`` and ``quality_control.json`` are also passed
-to the Metadata merge step, which writes the run-level documents.
+:doc:`input_output`). On SLURM and local runs each task first hardlinks its results into a
+``publish/`` folder in its work directory and publishes the files from there, so that steps add to
+a plane folder instead of replacing it. Each step's ``processing.json`` and
+``quality_control.json`` are also passed to the Metadata merge step, which writes the run-level
+documents.
 
 Version Control
 ~~~~~~~~~~~~~~~
